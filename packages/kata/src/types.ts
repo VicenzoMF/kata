@@ -16,11 +16,8 @@ export type Slot = Singleton<unknown> | Scoped<unknown>
 
 export type Registry = Readonly<Record<string, Slot>>
 
-export type ResolvedValue<S> = S extends Singleton<infer T>
-  ? T
-  : S extends Scoped<infer T>
-    ? T
-    : never
+export type ResolvedValue<S> =
+  S extends Singleton<infer T> ? T : S extends Scoped<infer T> ? T : never
 
 export type SingletonKeys<R extends Registry> = {
   [K in keyof R]: R[K] extends Singleton<unknown> ? K : never

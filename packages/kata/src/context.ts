@@ -2,14 +2,7 @@ import type { Hono } from 'hono'
 import { Hono as HonoApp } from 'hono'
 import type { z } from 'zod'
 
-import type {
-  Registry,
-  ResolvedValue,
-  ScopedKeys,
-  Scoped,
-  Singleton,
-  SingletonKeys,
-} from './types'
+import type { Registry, ResolvedValue, Scoped, ScopedKeys, Singleton } from './types'
 
 // ────────────────────────────────────────────────────────────────────────────
 // Slot constructors (top-level — used to build the registry)
@@ -112,10 +105,7 @@ export function defineContext<const R extends Registry>(registry: R) {
     return { __kata: 'middleware', provides: config.provides, handler: config.handler }
   }
 
-  function defineRoute<
-    const I extends InputSchemas,
-    const O extends z.ZodTypeAny,
-  >(config: {
+  function defineRoute<const I extends InputSchemas, const O extends z.ZodTypeAny>(config: {
     method: HttpMethod
     path: string
     use?: readonly Middleware<R>[]
@@ -263,62 +253,54 @@ async function readInputs<I extends InputSchemas>(
   return { ok: true, value: parsed as InferInput<I> }
 }
 
-function registerRoute<R extends Registry>(
-  app: Hono,
-  registry: R,
-  route: Route<R>,
-): void {
+function registerRoute<R extends Registry>(app: Hono, registry: R, route: Route<R>): void {
   const method = route.method.toLowerCase() as Lowercase<HttpMethod>
   // Hono router: app.get(path, ...handlers)
   const register = (app as unknown as Record<string, (path: string, ...h: unknown[]) => unknown>)[
     method
   ]
   if (!register) throw new Error(`kata: Hono does not support method '${route.method}'`)
-  register.call(
-    app,
-    route.path,
-    async (c: import('hono').Context) => {
-      // 1. Run middleware chain manually (Hono's native middleware would also work,
-      //    but threading the kata context is cleaner this way).
-      let i = 0
-      let shortCircuit: Response | undefined
-      const runChain = async (): Promise<void> => {
-        if (i >= route.use.length) {
-          // 2. Validate input
-          const inputResult = await readInputs(route.input, c)
-          if (!inputResult.ok) {
-            shortCircuit = c.json({ error: 'validation_failed', issues: inputResult.issues }, 422)
-            return
-          }
-          // 3. Run handler
-          const handlerCtx = makeRouteContext(registry, c, inputResult.value)
-          const result = await route.handler(handlerCtx)
-          if (result instanceof Response) {
-            shortCircuit = result
-            return
-          }
-          // 4. Validate output (ADR-0003)
-          const outputResult = route.output.safeParse(result)
-          if (!outputResult.success) {
-            console.error(
-              `kata: output schema mismatch in ${route.method} ${route.path}`,
-              outputResult.error.issues,
-            )
-            shortCircuit = c.json({ error: 'internal_output_shape_mismatch' }, 500)
-            return
-          }
-          shortCircuit = c.json(outputResult.data as never)
+  register.call(app, route.path, async (c: import('hono').Context) => {
+    // 1. Run middleware chain manually (Hono's native middleware would also work,
+    //    but threading the kata context is cleaner this way).
+    let i = 0
+    let shortCircuit: Response | undefined
+    const runChain = async (): Promise<void> => {
+      if (i >= route.use.length) {
+        // 2. Validate input
+        const inputResult = await readInputs(route.input, c)
+        if (!inputResult.ok) {
+          shortCircuit = c.json({ error: 'validation_failed', issues: inputResult.issues }, 422)
           return
         }
-        const mw = route.use[i++]!
-        const mwCtx = makeMiddlewareContext(registry, c)
-        const result = await mw.handler(mwCtx, runChain)
+        // 3. Run handler
+        const handlerCtx = makeRouteContext(registry, c, inputResult.value)
+        const result = await route.handler(handlerCtx)
         if (result instanceof Response) {
           shortCircuit = result
+          return
         }
+        // 4. Validate output (ADR-0003)
+        const outputResult = route.output.safeParse(result)
+        if (!outputResult.success) {
+          console.error(
+            `kata: output schema mismatch in ${route.method} ${route.path}`,
+            outputResult.error.issues,
+          )
+          shortCircuit = c.json({ error: 'internal_output_shape_mismatch' }, 500)
+          return
+        }
+        shortCircuit = c.json(outputResult.data as never)
+        return
       }
-      await runChain()
-      return shortCircuit
-    },
-  )
+      const mw = route.use[i++]!
+      const mwCtx = makeMiddlewareContext(registry, c)
+      const result = await mw.handler(mwCtx, runChain)
+      if (result instanceof Response) {
+        shortCircuit = result
+      }
+    }
+    await runChain()
+    return shortCircuit
+  })
 }
