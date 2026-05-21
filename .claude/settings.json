@@ -7,5 +7,18 @@
       "Bash(git push *--no-verify*)",
       "Bash(SKIP=*)"
     ]
+  },
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Write|Edit|MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash $CLAUDE_PROJECT_DIR/.claude/hooks/post-tool-use.sh"
+          }
+        ]
+      }
+    ]
   }
 }
