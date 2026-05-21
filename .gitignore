@@ -1,0 +1,20 @@
+node_modules/
+dist/
+build/
+coverage/
+.turbo/
+
+*.log
+.DS_Store
+
+.env
+.env.*
+!.env.example
+
+# Pageboy MCP local docs index (machine-local, not project artifact)
+data/
+
+# IDE / OS
+.vscode/
+.idea/
+*.swp
