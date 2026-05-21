@@ -18,3 +18,9 @@ data/
 .vscode/
 .idea/
 *.swp
+
+# Lefthook personal overrides
+lefthook-local.yml
+
+# Claude Code per-user overrides
+.claude/settings.local.json

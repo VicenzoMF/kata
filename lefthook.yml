@@ -1,0 +1,22 @@
+# Local feedback layer — runs format/lint/typecheck on every commit.
+# Article reference: "feedback speed determines quality".
+#
+# Humans can bypass any check with `git commit --no-verify`.
+# Agents cannot — `.claude/settings.json` deny rule blocks the flag.
+
+pre-commit:
+  parallel: false # format must finish before lint reads the file
+  commands:
+    01-format-write:
+      glob: '*.{ts,tsx,js,jsx,json}'
+      run: pnpm exec biome check --write --no-errors-on-unmatched {staged_files}
+      stage_fixed: true
+    02-lint:
+      glob: '*.{ts,tsx,js,jsx}'
+      run: pnpm exec oxlint {staged_files}
+    03-typecheck:
+      # typecheck is project-wide (incremental TS); scoping to staged files is
+      # unreliable since one file's change can break unrelated ones.
+      run: pnpm typecheck
+
+# Personal overrides go in lefthook-local.yml (gitignored).
