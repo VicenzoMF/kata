@@ -1,0 +1,68 @@
+# API E2E for the users module.
+# Mirrors the six smoke paths verified manually at bootstrap.
+#
+# Run with the server already listening on :3000:
+#   pnpm --filter=hello dev    # in another terminal
+#   pnpm --filter=hello hurl
+#
+# CI invokes this in #46 via start-server + wait-on + hurl.
+
+# 1. GET /users/none — unknown id, expect 404 + not_found envelope.
+GET http://localhost:3000/users/none
+HTTP 404
+[Asserts]
+jsonpath "$.error" == "not_found"
+
+
+# 2. POST /users — valid body, capture the created id.
+POST http://localhost:3000/users
+Content-Type: application/json
+{
+  "name": "Hurl Tester",
+  "email": "hurl@example.com"
+}
+HTTP 200
+[Captures]
+created_id: jsonpath "$.id"
+[Asserts]
+jsonpath "$.id" matches "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+jsonpath "$.name" == "Hurl Tester"
+jsonpath "$.email" == "hurl@example.com"
+
+
+# 3. GET /users/{captured-id} — round-trip the user we just created.
+GET http://localhost:3000/users/{{created_id}}
+HTTP 200
+[Asserts]
+jsonpath "$.id" == "{{created_id}}"
+jsonpath "$.name" == "Hurl Tester"
+
+
+# 4. POST /users — invalid body, expect 422 with Zod issues array.
+POST http://localhost:3000/users
+Content-Type: application/json
+{
+  "name": "",
+  "email": "not-an-email"
+}
+HTTP 422
+[Asserts]
+jsonpath "$.error" == "validation_failed"
+jsonpath "$.issues.body" count >= 2
+
+
+# 5. GET /me — no auth header, middleware short-circuits with 401.
+GET http://localhost:3000/me
+HTTP 401
+[Asserts]
+jsonpath "$.error" == "unauthorized"
+
+
+# 6. GET /me — with x-user-id header, scoped slot populated by middleware.
+GET http://localhost:3000/me
+X-User-Id: 42
+HTTP 200
+[Asserts]
+jsonpath "$.id" == "42"
+jsonpath "$.name" == "User-42"
+jsonpath "$.email" == "user-42@example.test"
