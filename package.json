@@ -9,6 +9,15 @@
   "scripts": {
     "build": "pnpm -r --filter=./packages/* build",
     "typecheck": "pnpm -r typecheck",
+    "format": "biome check --write .",
+    "format:check": "biome check .",
+    "lint": "oxlint",
+    "lint:fix": "oxlint --fix",
+    "check": "pnpm format:check && pnpm lint && pnpm typecheck",
     "dev:hello": "pnpm --filter=hello dev"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^2.4.15",
+    "oxlint": "^1.66.0"
   }
 }

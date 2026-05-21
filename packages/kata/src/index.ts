@@ -1,4 +1,3 @@
-export { defineContext, singleton, scoped } from './context'
 export type {
   AppConfig,
   HttpMethod,
@@ -11,11 +10,12 @@ export type {
   RouteContext,
   RouteHandlerReturn,
 } from './context'
+export { defineContext, scoped, singleton } from './context'
 export type {
   Registry,
   ResolvedValue,
-  ScopedKeys,
   Scoped,
+  ScopedKeys,
   Singleton,
   SingletonKeys,
   Slot,
