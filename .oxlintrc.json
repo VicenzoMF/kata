@@ -15,5 +15,13 @@
     "no-console": "off",
     "no-underscore-dangle": ["error", { "allow": ["__value", "__kind", "__kata"] }]
   },
-  "ignorePatterns": ["**/node_modules", "**/dist", "data/**"]
+  "ignorePatterns": ["**/node_modules", "**/dist", "data/**"],
+  "overrides": [
+    {
+      "files": ["**/*.config.ts", "**/*.config.js", "**/vitest.workspace.ts"],
+      "rules": {
+        "import/no-default-export": "off"
+      }
+    }
+  ]
 }

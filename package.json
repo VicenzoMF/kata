@@ -14,12 +14,17 @@
     "format:check": "biome check .",
     "lint": "oxlint",
     "lint:fix": "oxlint --fix",
-    "check": "pnpm format:check && pnpm lint && pnpm typecheck",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:cov": "vitest run --coverage",
+    "check": "pnpm format:check && pnpm lint && pnpm typecheck && pnpm test",
     "dev:hello": "pnpm --filter=hello dev"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.4.15",
+    "@vitest/coverage-v8": "^4.1.7",
     "lefthook": "^2.1.8",
-    "oxlint": "^1.66.0"
+    "oxlint": "^1.66.0",
+    "vitest": "^4.1.7"
   }
 }
