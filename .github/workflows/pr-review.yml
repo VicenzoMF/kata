@@ -1,0 +1,109 @@
+name: pr-review
+
+# Triggers the multi-agent Kata PR review when someone comments exactly
+# `/review` on a PR. Invokes anthropics/claude-code-action with the in-repo
+# `/kata-pr-review` skill. Foundation port from Relay's pr-review.yml; see
+# .claude/skills/kata-pr-review/SKILL.md for the orchestration shape.
+#
+# Auth: prefers CLAUDE_CODE_OAUTH_TOKEN (Claude Code Max/Pro subscription —
+# no per-token API billing). Falls back to ANTHROPIC_API_KEY if OAuth secret
+# is not configured. Set up locally with `claude setup-token`, then add the
+# token as a repository secret.
+#
+# Author guard: only repo OWNER, MEMBER, or COLLABORATOR can trigger.
+
+on:
+  issue_comment:
+    types: [created]
+
+# Concurrency: cancel an in-flight review when a new /review lands on the
+# same PR. The group is conditional on the comment body so that the bot's
+# own follow-up comments (issue_comment.created events that aren't /review)
+# get a unique noop group keyed by run_id and cannot cancel the active run.
+concurrency:
+  group: ${{ github.event.comment.body == '/review' && format('pr-review-{0}', github.event.issue.number) || format('pr-review-noop-{0}', github.run_id) }}
+  cancel-in-progress: true
+
+jobs:
+  review:
+    if: >-
+      github.event.issue.pull_request != null &&
+      github.event.comment.body == '/review' &&
+      (
+        github.event.comment.author_association == 'OWNER' ||
+        github.event.comment.author_association == 'MEMBER' ||
+        github.event.comment.author_association == 'COLLABORATOR'
+      )
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      pull-requests: write
+      issues: write
+      id-token: write
+
+    steps:
+      - name: Resolve PR head SHA
+        id: pr
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          PR_NUMBER="${{ github.event.issue.number }}"
+          HEAD_SHA=$(gh api "repos/${{ github.repository }}/pulls/${PR_NUMBER}" --jq .head.sha)
+          HEAD_REF=$(gh api "repos/${{ github.repository }}/pulls/${PR_NUMBER}" --jq .head.ref)
+          echo "head_sha=${HEAD_SHA}" >> "$GITHUB_OUTPUT"
+          echo "head_ref=${HEAD_REF}" >> "$GITHUB_OUTPUT"
+          echo "pr_number=${PR_NUMBER}" >> "$GITHUB_OUTPUT"
+
+      - name: Checkout PR head
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ steps.pr.outputs.head_sha }}
+          fetch-depth: 0
+
+      - name: Acknowledge /review trigger
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh pr comment "${{ steps.pr.outputs.pr_number }}" --body "$(cat <<EOF
+          <!-- kata-review:trigger -->
+          🤖 Kata PR review started by @${{ github.event.comment.user.login }} at \`${{ steps.pr.outputs.head_sha }}\`.
+          Sub-reviewers dispatched in parallel; consolidator will post the summary in a few minutes.
+          EOF
+          )"
+
+      - name: Run Kata PR review skill
+        uses: anthropics/claude-code-action@v1
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+
+          prompt: |
+            You are running the /kata-pr-review skill in CI on PR #${{ steps.pr.outputs.pr_number }}
+            (head ${{ steps.pr.outputs.head_sha }}, branch ${{ steps.pr.outputs.head_ref }}).
+
+            Trigger user: @${{ github.event.comment.user.login }}
+            Repository: ${{ github.repository }}
+
+            Follow the skill's Step 1–4 exactly. Do not deviate from the Universal Rules.
+            Pass these PR coordinates through to every sub-agent's prompt instead of
+            re-discovering them via `gh pr view` (the values above are authoritative).
+
+            When done, return only the final one-line summary the skill specifies
+            ("Posted Kata PR review on PR #N: <url>"). No prose.
+
+          claude_args: |
+            --allowedTools "Read,Grep,Glob,Bash(gh:*),Bash(git:*),Bash(jq:*),Agent"
+
+      - name: Note failure
+        if: failure()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh pr comment "${{ steps.pr.outputs.pr_number }}" --body "$(cat <<EOF
+          <!-- kata-review:trigger -->
+          ❌ Kata PR review failed at SHA \`${{ steps.pr.outputs.head_sha }}\`.
+          See the workflow logs: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          EOF
+          )"
