@@ -17,7 +17,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:cov": "vitest run --coverage",
-    "check": "pnpm format:check && pnpm lint && pnpm typecheck && pnpm test",
+    "test:hooks": "bash .codex/hooks/lib/extract-write-paths.test.sh && bash .codex/hooks/acceptance.test.sh",
+    "check": "pnpm format:check && pnpm lint && pnpm typecheck && pnpm test && pnpm test:hooks",
     "dev:hello": "pnpm --filter=hello dev"
   },
   "devDependencies": {

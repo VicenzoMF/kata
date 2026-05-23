@@ -1,0 +1,37 @@
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash|apply_patch",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash ${CODEX_PROJECT_DIR:-$PWD}/.codex/hooks/pre-tool-use.sh"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Bash|apply_patch",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash ${CODEX_PROJECT_DIR:-$PWD}/.codex/hooks/post-tool-use.sh"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash ${CODEX_PROJECT_DIR:-$PWD}/.codex/hooks/stop.sh",
+            "timeout": 180
+          }
+        ]
+      }
+    ]
+  }
+}
