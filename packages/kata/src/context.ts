@@ -2,6 +2,8 @@ import type { Hono } from 'hono'
 import { Hono as HonoApp } from 'hono'
 import type { z } from 'zod'
 
+import type { FieldIssue } from './errors'
+import { formatZodIssues } from './errors'
 import type { Registry, ResolvedValue, Scoped, ScopedKeys, Singleton } from './types'
 
 // ────────────────────────────────────────────────────────────────────────────
@@ -213,7 +215,9 @@ function makeRouteContext<R extends Registry, I extends InputSchemas>(
 async function readInputs<I extends InputSchemas>(
   input: I,
   c: import('hono').Context,
-): Promise<{ ok: true; value: InferInput<I> } | { ok: false; issues: unknown }> {
+): Promise<
+  { ok: true; value: InferInput<I> } | { ok: false; issues: Record<string, FieldIssue[]> }
+> {
   const raw: Record<string, unknown> = {}
   if (input.params) raw['params'] = c.req.param()
   if (input.query) raw['query'] = c.req.query()
@@ -231,7 +235,7 @@ async function readInputs<I extends InputSchemas>(
   }
 
   const parsed: Record<string, unknown> = {}
-  const issues: Record<string, unknown> = {}
+  const issues: Record<string, FieldIssue[]> = {}
   let failed = false
 
   for (const key of ['params', 'query', 'body', 'headers'] as const) {
@@ -242,7 +246,7 @@ async function readInputs<I extends InputSchemas>(
     }
     const result = schema.safeParse(raw[key])
     if (!result.success) {
-      issues[key] = result.error.issues
+      issues[key] = formatZodIssues(result.error)
       failed = true
     } else {
       parsed[key] = result.data

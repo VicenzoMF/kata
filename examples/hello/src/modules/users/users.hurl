@@ -38,7 +38,7 @@ jsonpath "$.id" == "{{created_id}}"
 jsonpath "$.name" == "Hurl Tester"
 
 
-# 4. POST /users — invalid body, expect 422 with Zod issues array.
+# 4. POST /users — invalid body, expect 422 with the normalised issue shape.
 POST http://localhost:3000/users
 Content-Type: application/json
 {
@@ -48,7 +48,13 @@ Content-Type: application/json
 HTTP 422
 [Asserts]
 jsonpath "$.error" == "validation_failed"
-jsonpath "$.issues.body" count >= 2
+jsonpath "$.issues.body" count == 2
+jsonpath "$.issues.body[0].path" == "name"
+jsonpath "$.issues.body[0].code" == "too_small"
+jsonpath "$.issues.body[0].message" exists
+jsonpath "$.issues.body[1].path" == "email"
+jsonpath "$.issues.body[1].code" == "invalid_string"
+jsonpath "$.issues.body[1].message" == "Invalid email"
 
 
 # 5. GET /me — no auth header, middleware short-circuits with 401.
