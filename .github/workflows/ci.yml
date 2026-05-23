@@ -1,0 +1,60 @@
+name: ci
+
+# Remote feedback layer for issue #46. Local Lefthook + PostToolUse hook are
+# best-effort; this workflow is the gate that catches anything they miss
+# before a PR can merge into main.
+#
+# Required check: configure branch protection on `main` to require the `ci`
+# job to pass (Settings → Branches, or `gh api repos/:owner/:repo/branches/main/protection`).
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  ci:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+
+    env:
+      HURL_VERSION: 8.0.1
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - run: pnpm typecheck
+
+      - run: pnpm lint
+
+      - run: pnpm test
+
+      - name: Install hurl
+        run: |
+          curl -fsSL -o /tmp/hurl.deb \
+            "https://github.com/Orange-OpenSource/hurl/releases/download/${HURL_VERSION}/hurl_${HURL_VERSION}_amd64.deb"
+          sudo dpkg -i /tmp/hurl.deb
+          hurl --version
+
+      - name: Run hurl E2E
+        run: |
+          pnpm --filter=hello start &
+          SERVER_PID=$!
+          npx --yes wait-on tcp:3000 --timeout 30000
+          pnpm --filter=hello hurl
+          kill "$SERVER_PID" 2>/dev/null || true
