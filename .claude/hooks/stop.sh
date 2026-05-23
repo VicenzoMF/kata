@@ -79,7 +79,7 @@ SERVER_PID=$!
 
 # Wait up to 10s for the server to accept connections.
 for _ in $(seq 1 50); do
-  if curl -sf "http://localhost:$PORT/users/none" >/dev/null 2>&1; then
+  if curl -s -o /dev/null "http://localhost:$PORT/users/none" >/dev/null 2>&1; then
     break
   fi
   if ! kill -0 "$SERVER_PID" 2>/dev/null; then
@@ -90,7 +90,7 @@ $(cat "$SERVER_LOG")"
   sleep 0.2
 done
 
-if ! curl -sf "http://localhost:$PORT/users/none" >/dev/null 2>&1; then
+if ! curl -s -o /dev/null "http://localhost:$PORT/users/none" >/dev/null 2>&1; then
   block "kata harness — examples/hello did not become ready on :$PORT within 10s.
 
 server log:
