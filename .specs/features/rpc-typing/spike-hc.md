@@ -8,6 +8,11 @@
 - **Fixture (the acceptance artifact):** [`poc/hc-spike.poc.ts`](./poc/hc-spike.poc.ts) —
   a type-only file that compiles green and whose `@ts-expect-error` / `Expect<Equal<…>>`
   lines are executable assertions (mutate any one → `tsc` fails; proven below).
+- **Status:** ✅ Implemented in PR [#81](https://github.com/VicenzoMF/kata/pull/81)
+  (#13/#14/#15) — `createApp` now returns the parametric type, `KataApp` is
+  exported, and [`examples/hello-client`](../../../examples/hello-client) is the
+  permanent type fixture. Kept as the original research record: present-tense
+  "today" below refers to the pre-#13 state.
 
 ---
 

@@ -93,4 +93,4 @@ Treat them as roadmap, not as available API:
 - [Expand README with usage walkthrough](https://github.com/VicenzoMF/kata/issues/33) (#33)
 - [Cookbook: migrating from NestJS to Kata](https://github.com/VicenzoMF/kata/issues/34) (#34)
 - [Second example: multi-domain e-commerce slice](https://github.com/VicenzoMF/kata/issues/36) (#36)
-- [RPC client example](https://github.com/VicenzoMF/kata/issues/15) (#15)
+- [RPC client — typed `hc<typeof app>`, end to end](../../examples/hello-client) — shipped (#15)

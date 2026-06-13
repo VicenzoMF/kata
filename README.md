@@ -14,8 +14,9 @@ contract-complete: declared input and output schemas, validated at runtime.
 
 Pre-release (`0.0.0`). The core — `defineContext`, `defineRoute`,
 `defineMiddleware`, `createApp` — and a worked example ([`examples/hello`](examples/hello))
-are in place. The `kata verify` lint harness is in progress. Decisions live in
-[`docs/adr/`](docs/adr/).
+are in place, including **end-to-end typed RPC clients** (`hc<typeof app>`, with a
+runnable [`examples/hello-client`](examples/hello-client)). The `kata verify` lint
+harness is in progress. Decisions live in [`docs/adr/`](docs/adr/).
 
 ## Thesis (TL;DR)
 
@@ -277,6 +278,37 @@ curl -s localhost:3000/users/none
 curl -s localhost:3000/me                      # 401 {"error":"unauthorized"}
 curl -s localhost:3000/me -H 'x-user-id: 42'   # 200 {"id":"42","name":"User-42",…}
 ```
+
+## Typed RPC client — `hc<typeof app>`
+
+`createApp` returns a **parametric** Hono app whose type carries every route, so
+Hono's [RPC client](https://hono.dev/docs/guides/rpc) infers paths, request
+bodies, and responses straight from your Zod schemas — **no codegen, no shared
+runtime**. The server exports one type:
+
+```ts
+// server side — createApp derives the route schema; export the app's type
+export const app = createApp({ modules: [users] })
+export type AppType = typeof app // ≡ KataApp<[typeof users]>
+```
+
+A client imports **only that type** and is fully typed end to end:
+
+```ts
+import { hc } from 'hono/client'
+import type { AppType } from 'server' // the only thing the client needs
+
+const client = hc<AppType>('http://localhost:3000')
+
+const res = await client.users.$post({ json: { name: 'Ada', email: 'ada@x.io' } })
+const user = await res.json() // { id: string; name: string; email: string }
+
+await client.users.$post({ json: { name: 'no-email' } }) // ✗ compile error
+```
+
+The DI registry never reaches the wire, so the client's Hono `Env` stays
+`BlankEnv`. [`examples/hello-client`](examples/hello-client) is a runnable,
+type-checked demonstration (its compile-time proofs run in CI).
 
 ## When validation fails — the 422 envelope
 
