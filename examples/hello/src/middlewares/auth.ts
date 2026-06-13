@@ -8,7 +8,7 @@ export const fakeAuth = defineMiddleware({
   provides: ['currentUser'] as const,
   handler: async (c, next) => {
     const userId = c.header('x-user-id')
-    if (!userId) return c.json({ error: 'unauthorized' }, 401)
+    if (!userId) return c.error('unauthorized', 'Missing x-user-id header', { status: 401 })
 
     c.set('currentUser', {
       id: userId,

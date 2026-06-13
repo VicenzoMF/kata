@@ -11,8 +11,8 @@ export type {
   RouteHandlerReturn,
 } from './context'
 export { defineContext, scoped, singleton } from './context'
-export type { FieldIssue } from './errors'
-export { formatZodIssues } from './errors'
+export type { ErrorBody, ErrorExtra, FieldIssue, FieldIssues } from './errors'
+export { buildErrorBody, formatZodIssues } from './errors'
 export type {
   Registry,
   ResolvedValue,
