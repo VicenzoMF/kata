@@ -184,9 +184,11 @@ Every route declares mandatory `input` and `output` schemas
 ([ADR-0003](docs/adr/0003-mandatory-input-output-schemas.md)) — omitting either
 is a TypeScript error. Inside the handler, `c.input` is fully typed from the
 input schemas, and a handler may either **return a value** (validated against
-`output`, then serialized) or **return `c.json(...)`** to short-circuit with a
-custom status. Routes that read a scoped slot list the providing middleware in
-`use:`.
+`output`, then serialized) or **return `c.json(...)` / `c.error(...)`** to set a
+custom status. `output` may be a single schema (the 200 body) or a status→schema
+map — `{ 200: UserSchema, 404: ErrorBodySchema }` — that types and validates each
+status ([ADR-0011](docs/adr/0011-multi-status-output-schemas.md)). Routes that
+read a scoped slot list the providing middleware in `use:`.
 
 ```ts
 import { z } from 'zod'
