@@ -55,10 +55,10 @@ export const requireUser = defineMiddleware({
   handler: async (c, next) => {
     const header = c.header('authorization')
     const token = header?.startsWith('Bearer ') ? header.slice('Bearer '.length) : undefined
-    if (!token) return c.json({ error: 'unauthorized' }, 401)
+    if (!token) return c.error('unauthorized', 'Missing bearer token', { status: 401 })
 
     const user = await verifyToken(token)
-    if (!user) return c.json({ error: 'unauthorized' }, 401)
+    if (!user) return c.error('unauthorized', 'Invalid or expired token', { status: 401 })
 
     c.set('currentUser', user)
     await next()
@@ -71,9 +71,9 @@ export const requireUser = defineMiddleware({
 > banned, so narrow `unknown` payloads with a Zod schema before trusting them.
 
 `provides: ['currentUser'] as const` is load-bearing: the `as const` keeps the
-literal key types so the type system (and the planned
-`kata/middleware-provides-mismatch` lint rule) can check that a middleware
-actually `set`s everything it claims to provide.
+literal key types so the type system and the `kata/middleware-provides-mismatch`
+lint rule can check that a middleware actually `set`s everything it claims to
+provide.
 
 ## 3. Consume it in a route
 
@@ -108,7 +108,7 @@ This mirrors the `GET /me` cases asserted in
 
 ```http
 GET /me
-→ 401  { "error": "unauthorized" }
+→ 401  { "error": "unauthorized", "message": "Missing bearer token" }
 
 GET /me
 Authorization: Bearer <valid-token>
@@ -132,7 +132,7 @@ export const requireAdmin = defineMiddleware({
   provides: [] as const, // reads currentUser, provides nothing
   handler: async (c, next) => {
     const user = c.get('currentUser') // requires requireUser to run first
-    if (user.role !== 'admin') return c.json({ error: 'forbidden' }, 403)
+    if (user.role !== 'admin') return c.error('forbidden', 'Admin role required', { status: 403 })
     await next()
   },
 })
@@ -158,7 +158,7 @@ export const requireUser = defineMiddleware({
   provides: ['currentUser', 'tenantId'] as const,
   handler: async (c, next) => {
     const user = await verifyToken(/* ... */)
-    if (!user) return c.json({ error: 'unauthorized' }, 401)
+    if (!user) return c.error('unauthorized', 'Invalid or expired token', { status: 401 })
     c.set('currentUser', user)
     c.set('tenantId', user.tenantId)
     await next()
@@ -173,7 +173,7 @@ export const requireUser = defineMiddleware({
 - **Statically verifiable.** Because every read is `c.get('currentUser')` and
   every provider declares `provides: ['currentUser']`, the harness can prove that
   no route reads `currentUser` without an auth middleware in its chain — the
-  planned `kata/scoped-slot-not-provided` rule (ADR-0004, _Companion rules_).
+  `kata/scoped-slot-not-provided` rule (ADR-0004, _Companion rules_).
 - **Explicit failure.** An auth middleware that fails short-circuits with a
   `Response`; it cannot fall through and leave the slot unset.
 
@@ -182,10 +182,11 @@ export const requireUser = defineMiddleware({
 - **Reading a scoped slot with no provider throws at runtime.** If a handler
   calls `c.get('currentUser')` but no middleware in `use:` set it, Kata throws
   `kata: scoped slot 'currentUser' read before being set. Did the providing
-  middleware run?`. The planned lint rule turns this into a build-time error.
+  middleware run?`. The `kata/scoped-slot-not-provided` lint rule turns this into
+  a build-time error.
 - **`c.set` and `c.header` are middleware-only.** The route handler context has
-  `c.get`, `c.input`, `c.json`, and `c.raw` — but no `set` (handlers consume
-  slots, they don't fill them) and no `header` shortcut (read headers via an
-  `input.headers` schema, or `c.raw.req.header(...)`).
+  `c.get`, `c.input`, `c.json`, `c.error`, and `c.raw` — but no `set` (handlers
+  consume slots, they don't fill them) and no `header` shortcut (read headers via
+  an `input.headers` schema, or `c.raw.req.header(...)`).
 - **Don't read scoped slots at module load.** They only exist inside a request
   (planned `kata/scoped-read-outside-request` rule).

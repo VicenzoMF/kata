@@ -103,7 +103,7 @@ export const getUserRoute = defineRoute({
   output: UserSchema,
   handler: async (c) => {
     const user = await findUser(c.get('db'), c.input.params.id)
-    if (!user) return c.json({ error: 'not_found' }, 404)
+    if (!user) return c.error('not_found', 'User not found', { status: 404 })
     return user
   },
 })
@@ -175,11 +175,13 @@ export const withTransaction = defineMiddleware({
 })
 ```
 
-Robust commit-on-success / rollback-on-failure depends on the handler's outcome
-being observable to the middleware. Until the global error boundary lands
-([#62](https://github.com/VicenzoMF/kata/issues/62)), have handlers return a
-`Response` for failures (they don't throw past the middleware) and commit after
-`await next()`.
+Robust commit-on-success / rollback-on-failure depends on the middleware seeing
+the handler's outcome — and the global error boundary
+([#62](https://github.com/VicenzoMF/kata/issues/62)) makes that outcome visible:
+wrap `await next()` in `try/catch` to roll back (and rethrow) on a throw, and
+roll back any transaction the handler left un-committed. The
+[`examples/shop` transaction middleware](../../examples/shop/src/middlewares/transaction.ts)
+shows the full pattern.
 
 ## Gotchas
 
@@ -193,4 +195,4 @@ being observable to the middleware. Until the global error boundary lands
   `process.env` out of handlers and services so they stay pure and testable.
 - **`c.get('db')` only compiles if `'db'` is in `defineContext`.** An unregistered
   key is both a type error and a runtime throw (`kata: key 'db' not registered in
-  defineContext`) — the planned `kata/context-key-not-registered` rule.
+  defineContext`) — and the `kata/context-key-not-registered` lint rule flags it too.
