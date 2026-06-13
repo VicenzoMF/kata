@@ -15,9 +15,9 @@ Everything else — your own 4xx — you return explicitly from the handler.
 ## The 422 validation envelope
 
 When request input fails its schema, Kata never calls your handler. It responds
-`422` with a fixed shape: a top-level `error` discriminator plus an `issues`
-object **keyed by the input section** (`params` / `query` / `body` / `headers`),
-each holding an array of field issues.
+`422` with a fixed shape: a top-level `error` discriminator, a human-readable
+`message`, and an `issues` object **keyed by the input section** (`params` /
+`query` / `body` / `headers`), each holding an array of field issues.
 
 For the `POST /users` body `{ "name": "", "email": "not-an-email" }` against
 `CreateUserBodySchema`, the response is exactly (asserted in
@@ -26,6 +26,7 @@ For the `POST /users` body `{ "name": "", "email": "not-an-email" }` against
 ```json
 {
   "error": "validation_failed",
+  "message": "Request input validation failed",
   "issues": {
     "body": [
       { "path": "name",  "code": "too_small",      "message": "..." },
@@ -59,15 +60,18 @@ Notes:
 ## Returning your own 4xx
 
 For domain errors (not found, forbidden, conflict…), **return a `Response`** from
-the handler with `c.json(body, status)`. Returning a `Response` short-circuits
-the route: Kata sends it as-is and does **not** validate it against the `output`
-schema — which is precisely why an error body may differ from your success shape.
+the handler. The idiomatic way is `c.error(code, message, { status })`, which
+builds Kata's unified envelope (see [below](#the-unified-error-envelope-cerror));
+`c.json(body, status)` is the escape hatch for a custom shape. Either way,
+returning a `Response` short-circuits the route: Kata sends it as-is and does
+**not** validate it against the `output` schema — which is precisely why an error
+body may differ from your success shape.
 
 ```ts
 // not found — mirrors examples/hello
 handler: async (c) => {
   const user = await findUser(c.get('db'), c.input.params.id)
-  if (!user) return c.json({ error: 'not_found' }, 404)
+  if (!user) return c.error('not_found', 'User not found', { status: 404 })
   return user // a plain value IS validated against `output`
 }
 ```
@@ -76,7 +80,7 @@ The same applies inside middleware (e.g. the `401` in [auth.md](./auth.md)).
 The distinction to keep straight:
 
 - **return a value** → validated against `output`, sent as `200`.
-- **return `c.json(body, status)`** → sent verbatim, any status, not validated.
+- **return `c.error(...)` / `c.json(body, status)`** → sent verbatim, any status, not validated.
 
 ## Reusing the framework's issue formatter
 
@@ -91,10 +95,10 @@ import { formatZodIssues } from 'kata'
 handler: async (c) => {
   const parsed = WebhookSchema.safeParse(await c.raw.req.json())
   if (!parsed.success) {
-    return c.json(
-      { error: 'validation_failed', issues: { body: formatZodIssues(parsed.error) } },
-      422,
-    )
+    return c.error('validation_failed', 'Request input validation failed', {
+      status: 422,
+      issues: { body: formatZodIssues(parsed.error) },
+    })
   }
   // … parsed.data is typed
 }
@@ -106,17 +110,23 @@ ones, so clients parse a single shape.
 ## Output validation (the 500 envelope)
 
 After your handler returns a **value**, Kata runs it through the route's `output`
-schema. A mismatch is a server bug, so it logs the Zod issues to `console.error`
-and responds:
+schema. How a mismatch is handled is set by the `outputValidation` mode
+([ADR-0009](../adr/0009-output-validation-mode.md)): `strict` (log + `500`),
+`log` (log, but send the handler's data through unchanged), or `off` (skip
+validation). It defaults to `strict` outside production and `log` in production,
+and is overridable via `createApp({ outputValidation })` or the
+`KATA_OUTPUT_VALIDATION` env var.
+
+In `strict` mode the Zod issues are logged to `console.error` and the response is:
 
 ```json
-{ "error": "internal_output_shape_mismatch" }
+{ "error": "internal_output_shape_mismatch", "message": "Response did not match the declared output schema" }
 ```
 
-with status `500`. This catches "handler returned _almost_ the right shape"
-before it reaches a client. The dev-vs-prod behaviour (throw loudly in
-development, log in production) is being formalised in
-[#17](https://github.com/VicenzoMF/kata/issues/17).
+with status `500` — catching "handler returned _almost_ the right shape" before
+it reaches a client. In `log` mode the issues are still logged, but the handler's
+data is sent through, so a shape bug in production degrades to a log line rather
+than a failed response.
 
 ## What's automatic vs. what you write
 
@@ -124,34 +134,36 @@ development, log in production) is being formalised in
 |---|---|---|
 | Input fails its schema | `422` | Kata (automatic) |
 | Handler returns a value matching `output` | `200` | Kata |
-| Handler returns `c.json(body, status)` | your `status` | you |
+| Handler returns `c.error(...)` / `c.json(body, status)` | your `status` | you |
 | Handler return value fails `output` | `500` | Kata (automatic) |
-| Handler **throws** | generic `500` | Hono (see below — _not_ the envelope yet) |
+| Handler **throws** | `500` | Kata's error boundary — unified `internal_error` envelope |
 
-## Planned: a unified error envelope
+## The unified error envelope: `c.error`
 
-Today error bodies are deliberately small and ad-hoc — `{ error: 'not_found' }`,
-`{ error: 'unauthorized' }`. A single envelope shape and a `c.error` helper are
-**planned, not shipped**:
+For domain errors, prefer `c.error(code, message, extra?)` over a hand-rolled
+`c.json`. It builds Kata's single error envelope — the `{ error, message,
+issues? }` shape every 4xx/5xx Kata produces
+([ADR-0008](../adr/0008-unified-error-response-envelope.md)):
 
 ```ts
-// Planned — tracked in #18, do NOT use yet.
-return c.error('not_found', 'No user with that id', { id })
-// → { "error": "not_found", "message": "No user with that id", "code": ... }
+return c.error('not_found', 'No user with that id', { status: 404 })
+// → 404  { "error": "not_found", "message": "No user with that id" }
 ```
 
-See [#18 — ADR + impl: unified error response envelope](https://github.com/VicenzoMF/kata/issues/18).
-Until it ships, return `c.json(body, status)` with your own small shape (keeping
-a top-level `error` string keeps you forward-compatible).
+`c.error` is available on both the route and middleware contexts. The `code`
+argument becomes the wire `error` field; `status` defaults to `400`; attach
+structured field errors via `extra.issues` (the same `FieldIssue[]` shape as the
+422 envelope above). Like any returned `Response`, it short-circuits the route
+and is **not** checked against `output`.
 
 ## Gotchas
 
-- **Throwing from a handler does _not_ produce the envelope today.** There is no
-  global try/catch around handlers yet, so an uncaught throw becomes Hono's
-  generic `500`, not a Kata envelope. For controlled failures, **return a
-  `Response`** instead of throwing. A global error boundary that catches throws
-  and renders the envelope is tracked in
-  [#62](https://github.com/VicenzoMF/kata/issues/62).
+- **A thrown error becomes an opaque `500`.** Kata's global error boundary
+  catches any throw that escapes a handler or middleware and serialises it as a
+  unified `{ "error": "internal_error", "message": "Internal server error" }`
+  envelope (status `500`) — never Hono's default text/HTML page, and never
+  leaking the underlying message. Prefer `c.error(...)` for failures the client
+  should understand, and reserve throwing for genuine bugs.
 - **`output` is a single success schema.** Error `Response`s bypass it, so you
   don't need to widen `output` to cover them. If a route genuinely has multiple
   _success_ shapes, widen `output` to a union for now; per-status output schemas

@@ -336,7 +336,8 @@ exactly like a singleton.
 
 The one rule with no NestJS equivalent: the providing middleware must be in the
 route's `use:` chain. Reading a scoped slot that no middleware set throws at
-runtime (and is a planned lint error). Full treatment in [auth.md](./auth.md).
+runtime (and is caught by the `kata/scoped-slot-not-provided` lint rule). Full
+treatment in [auth.md](./auth.md).
 
 ## Guards, interceptors → middleware
 

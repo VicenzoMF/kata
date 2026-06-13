@@ -81,16 +81,21 @@ These are enforced project-wide — the snippets obey them so you can paste them
 ## Planned API referenced in this cookbook
 
 These recipes occasionally point at framework work that is **not yet shipped**.
-Treat them as roadmap, not as available API:
+Treat it as roadmap, not as available API:
 
-- A unified `c.error(code, message, extra?)` helper + error-envelope ADR — [#18](https://github.com/VicenzoMF/kata/issues/18).
-- A global error boundary that turns handler throws into the envelope — [#62](https://github.com/VicenzoMF/kata/issues/62).
-- Output-validation mode (dev = throw, prod = log) — [#17](https://github.com/VicenzoMF/kata/issues/17).
 - Multi-status output schemas (e.g. `200: User, 404: ErrorShape`) — [#19](https://github.com/VicenzoMF/kata/issues/19).
+
+> **Recently shipped** — now documented as available API in these recipes: the
+> unified `c.error` helper + error envelope
+> ([#18](https://github.com/VicenzoMF/kata/issues/18),
+> [ADR-0008](../adr/0008-unified-error-response-envelope.md)), the global error
+> boundary ([#62](https://github.com/VicenzoMF/kata/issues/62)), and
+> output-validation mode ([#17](https://github.com/VicenzoMF/kata/issues/17),
+> [ADR-0009](../adr/0009-output-validation-mode.md)).
 
 ## See also
 
-- [Expand README with usage walkthrough](https://github.com/VicenzoMF/kata/issues/33) (#33)
-- [Cookbook: migrating from NestJS to Kata](https://github.com/VicenzoMF/kata/issues/34) (#34)
-- [Second example: multi-domain e-commerce slice](https://github.com/VicenzoMF/kata/issues/36) (#36)
+- [README usage walkthrough](../../README.md) — shipped (#33)
+- [Migrating from NestJS to Kata](./migrating-from-nestjs.md) — shipped (#34)
+- [Multi-domain e-commerce example](../../examples/shop) — shipped (#36)
 - [RPC client — typed `hc<typeof app>`, end to end](../../examples/hello-client) — shipped (#15)
