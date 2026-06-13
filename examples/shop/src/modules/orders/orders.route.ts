@@ -26,7 +26,16 @@ export const checkoutRoute = defineRoute({
       const envelope = describeCheckoutFailure(result)
       return c.error(envelope.code, envelope.message, { status: envelope.status })
     }
-    tx.commit()
+    const committed = tx.commit()
+    if (!committed.ok) {
+      // A concurrent checkout changed this product between our read and commit;
+      // the tx rolled itself back (no oversell). Ask the client to retry.
+      return c.error(
+        'stock_conflict',
+        `Stock for "${committed.conflict}" changed during checkout — please retry`,
+        { status: 409 },
+      )
+    }
     // 201 Created. Returning a Response short-circuits the pipeline (skipping
     // output validation) — the framework's only way to set a non-200 status.
     return c.json(result.order, 201)

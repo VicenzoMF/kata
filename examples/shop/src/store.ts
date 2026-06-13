@@ -23,12 +23,26 @@ export type Store = {
 export type TransactionStatus = 'open' | 'committed' | 'rolled-back'
 
 /**
+ * Outcome of {@link Transaction.commit}. `{ ok: false }` means the commit was
+ * refused because a product this transaction read was changed by a concurrent
+ * writer between read and commit (an optimistic-concurrency conflict); the
+ * staged writes are discarded rather than overwriting the other writer.
+ */
+export type CommitResult = { ok: true } | { ok: false; conflict: string }
+
+/**
  * A per-request unit of work over the {@link Store} — the scoped slot from
  * ADR-0004. Reads see the committed store *plus* this transaction's own staged
  * writes; writes are buffered and only flushed to the store by {@link commit},
  * in a single synchronous pass. If `commit` is never called the staged writes
  * are discarded, so a handler that fails partway never persists a partial
- * change. The orders module uses this to make checkout atomic.
+ * change.
+ *
+ * `commit` is also optimistic: it refuses (returns `{ ok: false }`) if a product
+ * this transaction read was changed underneath it, so two concurrent checkouts
+ * can never both decrement the same unit (no lost update / oversell) — a
+ * guarantee that survives swapping this stub for a real async datastore. The
+ * orders module uses this to make checkout atomic.
  */
 export type Transaction = {
   readonly id: string
@@ -38,8 +52,11 @@ export type Transaction = {
   putProduct(product: Product): void
   putOrder(order: Order): void
   setCart(userId: string, lines: CartLine[]): void
-  /** Flush staged writes to the store atomically. Throws if already settled. */
-  commit(): void
+  /**
+   * Flush staged writes atomically. Returns `{ ok: false, conflict }` instead of
+   * overwriting a concurrent change. Throws only if already settled.
+   */
+  commit(): CommitResult
   /** Discard staged writes. Safe to call on an already-settled transaction. */
   rollback(): void
 }
@@ -61,6 +78,9 @@ function createTransaction(data: StoreData): Transaction {
   const stagedProducts = new Map<string, Product>()
   const stagedCarts = new Map<string, CartLine[]>()
   const stagedOrders = new Map<string, Order>()
+  // Committed `stock` each product had when this tx first read it. commit() uses
+  // it for the optimistic-concurrency check below.
+  const readVersions = new Map<string, number>()
   let status: TransactionStatus = 'open'
 
   const assertOpen = (): void => {
@@ -74,7 +94,11 @@ function createTransaction(data: StoreData): Transaction {
     get status() {
       return status
     },
-    getProduct: (id) => stagedProducts.get(id) ?? data.products.get(id),
+    getProduct: (id) => {
+      const committed = data.products.get(id)
+      if (committed && !readVersions.has(id)) readVersions.set(id, committed.stock)
+      return stagedProducts.get(id) ?? committed
+    },
     getCart: (userId) =>
       stagedCarts.has(userId) ? (stagedCarts.get(userId) ?? []) : (data.carts.get(userId) ?? []),
     putProduct: (product) => {
@@ -91,16 +115,30 @@ function createTransaction(data: StoreData): Transaction {
     },
     commit: () => {
       assertOpen()
-      // Validate invariants before touching the store so commit is all-or-nothing.
+      // Invariant: never persist negative stock (a staging bug, not a race).
       for (const product of stagedProducts.values()) {
         if (product.stock < 0) {
           throw new Error(`kata-shop: refusing to commit negative stock for '${product.id}'`)
+        }
+      }
+      // Optimistic concurrency: if a product we read was changed by another
+      // committed transaction since, our staged write is based on a stale value
+      // — abort instead of overwriting it (which would oversell).
+      for (const product of stagedProducts.values()) {
+        const base = readVersions.get(product.id)
+        if (base !== undefined && data.products.get(product.id)?.stock !== base) {
+          stagedProducts.clear()
+          stagedCarts.clear()
+          stagedOrders.clear()
+          status = 'rolled-back'
+          return { ok: false, conflict: product.id }
         }
       }
       for (const [id, product] of stagedProducts) data.products.set(id, product)
       for (const [userId, lines] of stagedCarts) data.carts.set(userId, lines)
       for (const [id, order] of stagedOrders) data.orders.set(id, order)
       status = 'committed'
+      return { ok: true }
     },
     rollback: () => {
       if (status !== 'open') return

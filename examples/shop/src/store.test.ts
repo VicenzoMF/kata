@@ -20,7 +20,7 @@ describe('store transactions', () => {
     expect(store.getProduct('p1')?.stock).toBe(5) // committed value
     expect(tx.getProduct('p1')?.stock).toBe(0) // tx sees its own staged write
 
-    tx.commit()
+    expect(tx.commit()).toEqual({ ok: true })
     expect(store.getProduct('p1')?.stock).toBe(0)
     expect(tx.status).toBe('committed')
   })
@@ -59,7 +59,7 @@ describe('store transactions', () => {
     expect(() => tx.putProduct(product())).toThrow(/already committed/)
   })
 
-  it('concurrent transactions are isolated until commit', () => {
+  it('reads are isolated until commit', () => {
     const store = createStore([product()])
     const a = store.begin()
     const b = store.begin()
@@ -68,5 +68,21 @@ describe('store transactions', () => {
     expect(b.getProduct('p1')?.stock).toBe(5) // b cannot see a's uncommitted write
     a.commit()
     expect(b.getProduct('p1')?.stock).toBe(2) // but reads the committed store underneath
+  })
+
+  it('refuses a stale write at commit — optimistic concurrency, no lost update', () => {
+    const store = createStore([product({ stock: 1 })])
+    const a = store.begin()
+    const b = store.begin()
+
+    expect(a.getProduct('p1')?.stock).toBe(1) // both read the same committed base
+    expect(b.getProduct('p1')?.stock).toBe(1)
+    a.putProduct(product({ stock: 0 })) // a sells the last unit: 1 -> 0
+    b.putProduct(product({ stock: 0 })) // b decrements off the now-stale read of 1
+
+    expect(a.commit()).toEqual({ ok: true })
+    expect(b.commit()).toEqual({ ok: false, conflict: 'p1' }) // lost update refused
+    expect(store.getProduct('p1')?.stock).toBe(0) // only one decrement applied — never oversold
+    expect(b.status).toBe('rolled-back')
   })
 })

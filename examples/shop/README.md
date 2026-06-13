@@ -25,8 +25,10 @@ a per-request **transaction** scoped slot powering an atomic checkout.
   work and provides it as the `tx` slot. Checkout stages stock decrements, the
   new order, and the cart clear on `tx`, then commits. Any failure (empty cart,
   missing product, insufficient stock) returns early; the middleware rolls back,
-  so a partial order never persists. See `src/store.ts` and
-  `src/modules/orders/orders.service.ts`.
+  so a partial order never persists. `commit()` is optimistic — if a concurrent
+  checkout changed a product between read and commit, it is refused and the
+  loser gets a `409` to retry, so two checkouts can never oversell the same
+  unit. See `src/store.ts` and `src/modules/orders/orders.service.ts`.
 - **Mandatory input/output schemas (ADR-0003)** and the **unified error
   envelope (ADR-0008)** on every route.
 
