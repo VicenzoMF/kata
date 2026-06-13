@@ -7,6 +7,7 @@ import { buildErrorBody, formatZodIssues } from './errors'
 import { type Logger, logRequest, resolveLogger } from './logger'
 import { type OutputValidationMode, resolveOutputValidationMode } from './output-validation'
 import { REQUEST_ID_HEADER, resolveRequestId } from './request-id'
+import type { KataApp } from './rpc'
 import type { Registry, ResolvedValue, Scoped, ScopedKeys, Singleton } from './types'
 
 // ────────────────────────────────────────────────────────────────────────────
@@ -93,20 +94,35 @@ export type RouteContext<R extends Registry, I extends InputSchemas> = {
 
 export type RouteHandlerReturn<O extends z.ZodTypeAny> = z.infer<O> | Response
 
-export type Route<R extends Registry> = {
+export type Route<
+  R extends Registry,
+  M extends HttpMethod = HttpMethod,
+  P extends string = string,
+  I extends InputSchemas = InputSchemas,
+  O extends z.ZodTypeAny = z.ZodTypeAny,
+> = {
   readonly __kata: 'route'
-  readonly method: HttpMethod
-  readonly path: string
+  readonly method: M
+  readonly path: P
   readonly use: readonly Middleware<R>[]
-  readonly input: InputSchemas
-  readonly output: z.ZodTypeAny
+  readonly input: I
+  readonly output: O
+  // The stored handler stays loose in its input (`InputSchemas`, not the route's
+  // own `I`). Keeping `I`/`O` out of every contravariant position makes `Route`
+  // covariant in M/P/I/O, so a concrete route remains assignable to `Route<R>`
+  // (and to `RpcModule`) — which is what lets `createApp` collect the modules
+  // tuple. The precise per-route handler type is still enforced at the
+  // `defineRoute` call site below, the only place it actually matters.
   readonly handler: (c: RouteContext<R, InputSchemas>) => Promise<unknown> | unknown
 }
 
 export type Module<R extends Registry> = Readonly<Record<string, Route<R>>>
 
-export type AppConfig<R extends Registry> = {
-  modules: readonly Module<R>[]
+export type AppConfig<
+  R extends Registry,
+  Mods extends readonly Module<R>[] = readonly Module<R>[],
+> = {
+  modules: Mods
   /**
    * Per-request logging (issue #63). When `true` (the default) and a `logger`
    * singleton is registered, every request is logged — method, path, status,
@@ -138,14 +154,19 @@ export function defineContext<const R extends Registry>(registry: R) {
     return { __kata: 'middleware', provides: config.provides, handler: config.handler }
   }
 
-  function defineRoute<const I extends InputSchemas, const O extends z.ZodTypeAny>(config: {
-    method: HttpMethod
-    path: string
+  function defineRoute<
+    const M extends HttpMethod,
+    const P extends string,
+    const I extends InputSchemas,
+    const O extends z.ZodTypeAny,
+  >(config: {
+    method: M
+    path: P
     use?: readonly Middleware<R>[]
     input: I
     output: O
     handler: (c: RouteContext<R, I>) => Promise<RouteHandlerReturn<O>> | RouteHandlerReturn<O>
-  }): Route<R> {
+  }): Route<R, M, P, I, O> {
     return {
       __kata: 'route',
       method: config.method,
@@ -157,8 +178,14 @@ export function defineContext<const R extends Registry>(registry: R) {
     }
   }
 
-  function createApp(config: AppConfig<R>): Hono {
-    return buildHonoApp(registry, config)
+  function createApp<const Mods extends readonly Module<R>[]>(
+    config: AppConfig<R, Mods>,
+  ): KataApp<Mods> {
+    // The runtime loop registers exactly the routes `Mods` declares, so casting
+    // the built `Hono` to the schema derived from `Mods` is sound (issue #13) —
+    // it is the single hand-maintained bridge between the runtime and the type
+    // layer. `examples/hello-client` type-checks this bridge in CI (spike item 5).
+    return buildHonoApp(registry, config) as unknown as KataApp<Mods>
   }
 
   return { registry, defineMiddleware, defineRoute, createApp } as const
