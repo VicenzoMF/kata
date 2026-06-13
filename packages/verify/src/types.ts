@@ -54,6 +54,13 @@ export type Project = {
   readonly root: string
   readonly files: readonly SourceFile[]
   readonly registryKeys: ReadonlySet<string> | null
+  /**
+   * The subset of {@link registryKeys} declared as request-scoped slots
+   * (`scoped<T>()`). `null` when the registry is indeterminate; `undefined` when
+   * a caller did not compute it. Either way, scoped-slot rules no-op, keeping the
+   * false-positive rate at zero (ADR-0004).
+   */
+  readonly scopedKeys?: ReadonlySet<string> | null
 }
 
 export type Rule = {

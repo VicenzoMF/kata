@@ -80,20 +80,24 @@ export const listRoute = defineRoute({
     rmSync(fixture, { recursive: true, force: true })
   })
 
-  it('detects both the missing output schema and the unregistered key', () => {
+  it('detects the missing output schema, the unregistered key, and the inline schema', () => {
+    // meRoute's `output: z.object({})` is both a present output (so no
+    // missing-output issue there) and an inline schema (kata/inline-schema);
+    // listRoute is missing `output` entirely; meRoute reads an unregistered key.
     const result = runVerify(fixture)
     const ruleNames = result.issues.map((issue) => issue.rule).sort()
     expect(ruleNames).toEqual([
       'kata/context-key-not-registered',
+      'kata/inline-schema',
       'kata/no-route-without-output-schema',
     ])
-    expect(result.errorCount).toBe(2)
+    expect(result.errorCount).toBe(3)
   })
 
   it('exits 1 in human mode', () => {
     const { output, exitCode } = runCli([], fixture)
     expect(exitCode).toBe(1)
-    expect(output).toContain('2 problems (2 errors)')
+    expect(output).toContain('3 problems (3 errors)')
   })
 
   it('emits PostToolUse-injectable JSON and exits 0 in --json mode (acceptance #3)', () => {
@@ -109,6 +113,7 @@ export const listRoute = defineRoute({
     const context = payload.hookSpecificOutput?.additionalContext ?? ''
     expect(context).toContain("c.get('currentUserr')")
     expect(context).toContain("missing the required 'output' schema")
+    expect(context).toContain('built inline with z.object')
   })
 
   it('detects an injected typo well within the 100ms budget (acceptance #5)', () => {

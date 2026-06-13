@@ -11,5 +11,13 @@ export const CreateUserBodySchema = z.object({
   email: z.string().email(),
 })
 
+export const GetUserParamsSchema = z.object({
+  id: z.string(),
+})
+
+export const BoomResponseSchema = z.object({
+  ok: z.literal(true),
+})
+
 export type User = z.infer<typeof UserSchema>
 export type CreateUserBody = z.infer<typeof CreateUserBodySchema>

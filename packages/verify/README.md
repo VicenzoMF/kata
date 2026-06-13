@@ -10,6 +10,7 @@ either as a human-readable report or as JSON for a Claude Code PostToolUse hook.
 ```sh
 kata verify [path]          # human-readable report (exit 1 on any error)
 kata verify [path] --json   # PostToolUse hook JSON on stdout (always exit 0)
+kata verify [path] --watch  # re-check on every file change (Ctrl-C to stop)
 kata verify --help
 ```
 
@@ -28,11 +29,23 @@ pnpm --filter=@kata/verify exec kata-verify ../../examples/hello
 | Rule | ADR | What it catches |
 |---|---|---|
 | `kata/no-route-without-output-schema` | [0003](../../docs/adr/0003-mandatory-input-output-schemas.md) | a `defineRoute({ … })` in a `*.route.ts` with no `output` schema |
+| `kata/no-route-without-input-schema` | [0003](../../docs/adr/0003-mandatory-input-output-schemas.md) | a `defineRoute({ … })` with no `input` field (an empty `input: {}` is fine) |
+| `kata/inline-schema` | [0005](../../docs/adr/0005-dtos-in-separate-schema-file.md) | a Zod schema built inline (`z.object(…)`) in a `*.route.ts` / `*.service.ts` instead of a `*.schema.ts` |
+| `kata/scoped-slot-not-provided` | [0004](../../docs/adr/0004-di-via-scoped-slots.md) | a handler reading `c.get('slot')` for a scoped slot with no providing middleware in its `use:` chain |
+| `kata/middleware-provides-mismatch` | [0004](../../docs/adr/0004-di-via-scoped-slots.md) | a `defineMiddleware` whose `provides: ['x']` lists a slot its handler never `c.set`s |
 | `kata/context-key-not-registered` | [0004](../../docs/adr/0004-di-via-scoped-slots.md) | `c.get('key')` where `'key'` is not declared in `defineContext({ … })` |
 
-Both rules are intentionally conservative: any construct they cannot statically
-prove (a spread config, a dynamic `c.get` key, an indeterminate registry) is
-left alone, so the false-positive rate stays at zero on conforming code.
+Every rule is intentionally conservative: any construct it cannot statically
+prove (a spread config, a dynamic `c.get`/`c.set` key, an indeterminate registry,
+or an unresolvable `use:` entry) is left alone, so the false-positive rate stays
+at zero on conforming code.
+
+## Watch mode
+
+`kata verify --watch` keeps the process alive and re-checks on every change under
+`src/`. Only the file that changed is re-read; the rest of the project is held in
+memory, so the rebuilt report stays fast even though cross-file rules (the
+registry, scoped-slot, and provides checks) re-evaluate the whole project.
 
 ## Hook integration
 

@@ -34,9 +34,10 @@ export function collectSourceFiles(dir: string, root: string): SourceFile[] {
 
 /**
  * Source files the rules care about: `.ts`, excluding tests, DTO schema files
- * (no routes or `c.get` reads live there), and declaration files.
+ * (no routes or `c.get` reads live there), and declaration files. Exported so
+ * watch mode applies the identical filter when a single file changes.
  */
-function isAnalysable(name: string): boolean {
+export function isAnalysable(name: string): boolean {
   if (!name.endsWith('.ts')) return false
   if (name.endsWith('.d.ts')) return false
   if (name.endsWith('.test.ts')) return false
