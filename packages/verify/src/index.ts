@@ -1,10 +1,10 @@
 /** Public API of `@kata/verify`. */
 export type { CliResult } from './cli'
-export { runCli } from './cli'
+export { resolveTarget, runCli } from './cli'
 export { formatHookOutput, formatHuman, renderIssue } from './format'
-export { extractRegistryKeys } from './registry'
+export { extractRegistryKeys, extractScopedKeys } from './registry'
 export { rules } from './rules'
-export { runVerify } from './runner'
+export { buildProject, runVerify, verifyProject } from './runner'
 export type {
   HookOutput,
   Issue,
@@ -14,3 +14,5 @@ export type {
   SourceFile,
   VerifyResult,
 } from './types'
+export type { WatchOptions, WatchRenderer, WatchSession } from './watch'
+export { createWatchSession, watchProject } from './watch'

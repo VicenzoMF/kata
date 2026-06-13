@@ -62,3 +62,51 @@ export function hasProperty(object: ts.ObjectLiteralExpression, key: string): bo
 export function hasSpread(object: ts.ObjectLiteralExpression): boolean {
   return object.properties.some((member) => ts.isSpreadAssignment(member))
 }
+
+/**
+ * A function literal that can appear as a config value — `handler: (c) => ...`,
+ * `handler: function (c) {}`, or the method shorthand `handler(c) {}`. Used by
+ * rules that inspect middleware / route handler bodies.
+ */
+export type FunctionLike = ts.ArrowFunction | ts.FunctionExpression | ts.MethodDeclaration
+
+/** Strip `as const` / `satisfies T` / parenthesis wrappers from an expression. */
+export function unwrapExpression(node: ts.Expression): ts.Expression {
+  let current = node
+  while (
+    ts.isAsExpression(current) ||
+    ts.isSatisfiesExpression(current) ||
+    ts.isParenthesizedExpression(current)
+  ) {
+    current = current.expression
+  }
+  return current
+}
+
+/**
+ * The function-literal value of object-literal property `name` (an arrow,
+ * function expression, or method shorthand). `undefined` when the property is
+ * absent or its value is not a function literal — callers that inspect handler
+ * bodies bail in that case.
+ */
+export function functionProperty(
+  object: ts.ObjectLiteralExpression,
+  name: string,
+): FunctionLike | undefined {
+  for (const member of object.properties) {
+    if (ts.isMethodDeclaration(member) && propertyName(member) === name) return member
+    if (ts.isPropertyAssignment(member) && propertyName(member) === name) {
+      const value = unwrapExpression(member.initializer)
+      if (ts.isArrowFunction(value) || ts.isFunctionExpression(value)) return value
+      return undefined
+    }
+  }
+  return undefined
+}
+
+/** Name of a function's first parameter, or `undefined` if it is destructured or absent. */
+export function firstParameterName(fn: FunctionLike): string | undefined {
+  const first = fn.parameters[0]
+  if (!first || !ts.isIdentifier(first.name)) return undefined
+  return first.name.text
+}
