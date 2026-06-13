@@ -7,7 +7,12 @@
 import { access, mkdir, writeFile } from 'node:fs/promises'
 import { dirname, join, resolve } from 'node:path'
 
-import { renderClaudeSettings, renderCodexHooks } from './generators'
+import {
+  renderAgentsMd,
+  renderClaudeMd,
+  renderClaudeSettings,
+  renderCodexHooks,
+} from './generators'
 
 export type InitOptions = {
   /** Project root to scaffold into. Defaults to `process.cwd()`. */
@@ -35,10 +40,13 @@ type Target = {
   render: () => string
 }
 
-/** The harness configs `kata init` writes — issue #27 then #28. */
+/** The harness files `kata init` writes — Claude settings (#27, #29), Codex
+ *  hooks (#28), and the AGENTS.md / CLAUDE.md instruction pair (#31). */
 const TARGETS: readonly Target[] = [
   { path: '.claude/settings.json', render: renderClaudeSettings },
   { path: '.codex/hooks.json', render: renderCodexHooks },
+  { path: 'AGENTS.md', render: renderAgentsMd },
+  { path: 'CLAUDE.md', render: renderClaudeMd },
 ]
 
 async function exists(path: string): Promise<boolean> {

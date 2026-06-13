@@ -29,8 +29,10 @@ Options:
   -h, --help         Show this help
 
 \`kata init\` writes:
-  .claude/settings.json    Claude Code hooks → \`kata verify --json\` (#27)
+  .claude/settings.json    Claude Code hooks + config-tampering bans (#27, #29)
   .codex/hooks.json        Codex hooks → \`kata verify --json\` (#28)
+  AGENTS.md                Canonical agent instructions, Codex + Claude (#31)
+  CLAUDE.md                Claude entrypoint → imports AGENTS.md (#31)
 `
 
 export function parseArgs(argv: readonly string[]): ParsedArgs {

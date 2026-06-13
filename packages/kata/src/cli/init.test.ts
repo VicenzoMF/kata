@@ -4,11 +4,18 @@ import { dirname, isAbsolute, join } from 'node:path'
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
-import { renderClaudeSettings, renderCodexHooks } from './generators'
+import {
+  renderAgentsMd,
+  renderClaudeMd,
+  renderClaudeSettings,
+  renderCodexHooks,
+} from './generators'
 import { type FileStatus, type InitResult, init } from './init'
 
 const CLAUDE = '.claude/settings.json'
 const CODEX = '.codex/hooks.json'
+const AGENTS_MD = 'AGENTS.md'
+const CLAUDE_MD = 'CLAUDE.md'
 
 let dir = ''
 
@@ -51,11 +58,22 @@ describe('init()', () => {
     expect(await exists(join(dir, CODEX))).toBe(true)
   })
 
+  it('creates the AGENTS.md / CLAUDE.md instruction pair (#31)', async () => {
+    const result = await init({ cwd: dir })
+
+    expect(statusOf(result, AGENTS_MD)).toBe('created')
+    expect(statusOf(result, CLAUDE_MD)).toBe('created')
+    expect(await exists(join(dir, AGENTS_MD))).toBe(true)
+    expect(await readFile(join(dir, CLAUDE_MD), 'utf8')).toContain('@AGENTS.md')
+  })
+
   it('writes exactly what the generators render', async () => {
     await init({ cwd: dir })
 
     expect(await readFile(join(dir, CLAUDE), 'utf8')).toBe(renderClaudeSettings())
     expect(await readFile(join(dir, CODEX), 'utf8')).toBe(renderCodexHooks())
+    expect(await readFile(join(dir, AGENTS_MD), 'utf8')).toBe(renderAgentsMd())
+    expect(await readFile(join(dir, CLAUDE_MD), 'utf8')).toBe(renderClaudeMd())
   })
 
   it('creates the .claude and .codex parent directories', async () => {
@@ -96,5 +114,7 @@ describe('init()', () => {
 
     expect(statusOf(second, CLAUDE)).toBe('skipped')
     expect(statusOf(second, CODEX)).toBe('skipped')
+    expect(statusOf(second, AGENTS_MD)).toBe('skipped')
+    expect(statusOf(second, CLAUDE_MD)).toBe('skipped')
   })
 })
