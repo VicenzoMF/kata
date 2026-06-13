@@ -8,11 +8,13 @@
 # CI invokes this in #46 via start-server + wait-on + hurl.
 
 # 1. GET /users/none — unknown id, expect 404 + not_found envelope (ADR-0008).
+#    Every kata response — success or error — carries a correlation id (#63).
 GET http://localhost:3000/users/none
 HTTP 404
 [Asserts]
 jsonpath "$.error" == "not_found"
 jsonpath "$.message" exists
+header "X-Request-Id" exists
 
 
 # 2. POST /users — valid body, capture the created id.
@@ -67,14 +69,17 @@ jsonpath "$.error" == "unauthorized"
 jsonpath "$.message" exists
 
 
-# 6. GET /me — with x-user-id header, scoped slot populated by middleware.
+# 6. GET /me — with x-user-id header, scoped slot populated by middleware. Also
+#    sends an inbound x-request-id; the runtime reuses it and echoes it back (#63).
 GET http://localhost:3000/me
 X-User-Id: 42
+X-Request-Id: e2e-trace-1
 HTTP 200
 [Asserts]
 jsonpath "$.id" == "42"
 jsonpath "$.name" == "User-42"
 jsonpath "$.email" == "user-42@example.test"
+header "X-Request-Id" == "e2e-trace-1"
 
 
 # 7. GET /boom — handler throws; the global error boundary (#62) returns the

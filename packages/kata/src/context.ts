@@ -4,6 +4,9 @@ import type { z } from 'zod'
 
 import type { ErrorExtra, FieldIssue } from './errors'
 import { buildErrorBody, formatZodIssues } from './errors'
+import { type Logger, logRequest, resolveLogger } from './logger'
+import { type OutputValidationMode, resolveOutputValidationMode } from './output-validation'
+import { REQUEST_ID_HEADER, resolveRequestId } from './request-id'
 import type { Registry, ResolvedValue, Scoped, ScopedKeys, Singleton } from './types'
 
 // ────────────────────────────────────────────────────────────────────────────
@@ -33,6 +36,14 @@ export type MiddlewareContext<R extends Registry> = {
   json<T>(value: T, status?: number): Response
   /** Return a unified error response (ADR-0008). Defaults to status 400. */
   error(code: string, message: string, extra?: ErrorExtra): Response
+  /**
+   * Correlation id for this request (issue #63): the inbound `x-request-id`
+   * when well-formed, otherwise a freshly generated UUID. It is framework-owned
+   * request context — like `raw`, not a user DI value — so it is a first-class
+   * field here rather than a scoped slot; ADR-0004 governs the slot mechanism,
+   * and this single sealed value does not reintroduce ad-hoc request state.
+   */
+  requestId: string
 }
 
 export type Middleware<R extends Registry> = {
@@ -76,6 +87,8 @@ export type RouteContext<R extends Registry, I extends InputSchemas> = {
   json<T>(value: T, status?: number): Response
   /** Return a unified error response (ADR-0008). Defaults to status 400. */
   error(code: string, message: string, extra?: ErrorExtra): Response
+  /** Correlation id for this request (issue #63). See {@link MiddlewareContext.requestId}. */
+  requestId: string
 }
 
 export type RouteHandlerReturn<O extends z.ZodTypeAny> = z.infer<O> | Response
@@ -94,6 +107,20 @@ export type Module<R extends Registry> = Readonly<Record<string, Route<R>>>
 
 export type AppConfig<R extends Registry> = {
   modules: readonly Module<R>[]
+  /**
+   * Per-request logging (issue #63). When `true` (the default) and a `logger`
+   * singleton is registered, every request is logged — method, path, status,
+   * duration, request id — through it. A no-op when no usable logger is
+   * registered; set `false` to silence it explicitly.
+   */
+  requestLogging?: boolean
+  /**
+   * How an output-schema mismatch is handled (issue #17, ADR-0009): `strict`
+   * (log + 500), `log` (log + send the handler's data through), or `off` (skip
+   * validation). Defaults to `strict` outside production and `log` in
+   * production; overridable here or via the `KATA_OUTPUT_VALIDATION` env var.
+   */
+  outputValidation?: OutputValidationMode
 }
 
 // ────────────────────────────────────────────────────────────────────────────
@@ -141,11 +168,30 @@ export function defineContext<const R extends Registry>(registry: R) {
 // Runtime — build Hono app from modules
 // ────────────────────────────────────────────────────────────────────────────
 
+/** Per-app runtime options resolved once at `createApp` and shared by routes. */
+type RuntimeOptions = {
+  logger: Logger | undefined
+  requestLogging: boolean
+  outputValidation: OutputValidationMode
+}
+
+function resolveRuntimeOptions<R extends Registry>(
+  registry: R,
+  config: AppConfig<R>,
+): RuntimeOptions {
+  return {
+    logger: resolveLogger(registry),
+    requestLogging: config.requestLogging ?? true,
+    outputValidation: resolveOutputValidationMode(config.outputValidation),
+  }
+}
+
 function buildHonoApp<R extends Registry>(registry: R, config: AppConfig<R>): Hono {
   const app = new HonoApp()
+  const options = resolveRuntimeOptions(registry, config)
   for (const mod of config.modules) {
     for (const route of Object.values(mod)) {
-      registerRoute(app, registry, route)
+      registerRoute(app, registry, route, options)
     }
   }
   // Global fallback (#62): anything that escapes the route pipeline — a raw
@@ -188,6 +234,7 @@ function errorResponse(
 function makeMiddlewareContext<R extends Registry>(
   registry: R,
   c: import('hono').Context,
+  requestId: string,
 ): MiddlewareContext<R> {
   const store = getScopedStore(c)
   return {
@@ -213,6 +260,7 @@ function makeMiddlewareContext<R extends Registry>(
     header: (name) => c.req.header(name),
     json: (value, status) => c.json(value as never, (status ?? 200) as never),
     error: (code, message, extra) => errorResponse(c, code, message, extra),
+    requestId,
   }
 }
 
@@ -220,6 +268,7 @@ function makeRouteContext<R extends Registry, I extends InputSchemas>(
   registry: R,
   c: import('hono').Context,
   input: InferInput<I>,
+  requestId: string,
 ): RouteContext<R, I> {
   const store = getScopedStore(c)
   return {
@@ -238,6 +287,7 @@ function makeRouteContext<R extends Registry, I extends InputSchemas>(
     raw: c,
     json: (value, status) => c.json(value as never, (status ?? 200) as never),
     error: (code, message, extra) => errorResponse(c, code, message, extra),
+    requestId,
   }
 }
 
@@ -286,7 +336,87 @@ async function readInputs<I extends InputSchemas>(
   return { ok: true, value: parsed as InferInput<I> }
 }
 
-function registerRoute<R extends Registry>(app: Hono, registry: R, route: Route<R>): void {
+/**
+ * Validate the handler's return value against the route's `output` schema and
+ * build the success response, honouring the configured mode (ADR-0003,
+ * ADR-0009):
+ * - `off` — no validation; the data is sent as-is.
+ * - `strict` — a mismatch is logged and becomes a 500 (the body never violates
+ *   its declared contract).
+ * - `log` — a mismatch is logged but the handler's data is sent through anyway.
+ */
+function buildOutputResponse<R extends Registry>(
+  c: import('hono').Context,
+  route: Route<R>,
+  result: unknown,
+  mode: OutputValidationMode,
+): Response {
+  if (mode === 'off') {
+    return c.json(result as never)
+  }
+  const outputResult = route.output.safeParse(result)
+  if (outputResult.success) {
+    return c.json(outputResult.data as never)
+  }
+  // Mismatch: log the issues server-side regardless of mode — the same
+  // diagnostic strict has always emitted.
+  console.error(
+    `kata: output schema mismatch in ${route.method} ${route.path}`,
+    outputResult.error.issues,
+  )
+  if (mode === 'strict') {
+    return errorResponse(
+      c,
+      'internal_output_shape_mismatch',
+      'Response did not match the declared output schema',
+      { status: 500 },
+    )
+  }
+  // mode === 'log': keep serving — send the handler's data through unchanged.
+  return c.json(result as never)
+}
+
+/**
+ * Final step of every request (issue #63): echo the correlation id on the
+ * response header and emit the per-request log line. Runs for every outcome —
+ * success, validation failure, middleware short-circuit, or the 5xx boundary.
+ */
+function finalizeResponse<R extends Registry>(
+  route: Route<R>,
+  requestId: string,
+  startedAt: number,
+  response: Response | undefined,
+  options: RuntimeOptions,
+): Response | undefined {
+  if (response) {
+    // kata returns a response detached from `c.res` (see middlewares/from-hono.ts),
+    // so the header is set on this object directly. Some responses — e.g. one
+    // returned straight from `fetch` — have immutable headers; skip rather than
+    // throw if so.
+    try {
+      response.headers.set(REQUEST_ID_HEADER, requestId)
+    } catch {
+      // immutable headers — leave the response untouched
+    }
+  }
+  if (options.requestLogging && options.logger) {
+    logRequest(options.logger, {
+      requestId,
+      method: route.method,
+      path: route.path,
+      status: response?.status ?? 404,
+      durationMs: Date.now() - startedAt,
+    })
+  }
+  return response
+}
+
+function registerRoute<R extends Registry>(
+  app: Hono,
+  registry: R,
+  route: Route<R>,
+  options: RuntimeOptions,
+): void {
   const method = route.method.toLowerCase() as Lowercase<HttpMethod>
   // Hono router: app.get(path, ...handlers)
   const register = (app as unknown as Record<string, (path: string, ...h: unknown[]) => unknown>)[
@@ -294,6 +424,8 @@ function registerRoute<R extends Registry>(app: Hono, registry: R, route: Route<
   ]
   if (!register) throw new Error(`kata: Hono does not support method '${route.method}'`)
   register.call(app, route.path, async (c: import('hono').Context) => {
+    const requestId = resolveRequestId(c.req.header(REQUEST_ID_HEADER))
+    const startedAt = Date.now()
     // 1. Run middleware chain manually (Hono's native middleware would also work,
     //    but threading the kata context is cleaner this way).
     let i = 0
@@ -310,32 +442,18 @@ function registerRoute<R extends Registry>(app: Hono, registry: R, route: Route<
           return
         }
         // 3. Run handler
-        const handlerCtx = makeRouteContext(registry, c, inputResult.value)
+        const handlerCtx = makeRouteContext(registry, c, inputResult.value, requestId)
         const result = await route.handler(handlerCtx)
         if (result instanceof Response) {
           shortCircuit = result
           return
         }
-        // 4. Validate output (ADR-0003)
-        const outputResult = route.output.safeParse(result)
-        if (!outputResult.success) {
-          console.error(
-            `kata: output schema mismatch in ${route.method} ${route.path}`,
-            outputResult.error.issues,
-          )
-          shortCircuit = errorResponse(
-            c,
-            'internal_output_shape_mismatch',
-            'Response did not match the declared output schema',
-            { status: 500 },
-          )
-          return
-        }
-        shortCircuit = c.json(outputResult.data as never)
+        // 4. Validate output per the configured mode (ADR-0003, ADR-0009)
+        shortCircuit = buildOutputResponse(c, route, result, options.outputValidation)
         return
       }
       const mw = route.use[i++]!
-      const mwCtx = makeMiddlewareContext(registry, c)
+      const mwCtx = makeMiddlewareContext(registry, c, requestId)
       const result = await mw.handler(mwCtx, runChain)
       if (result instanceof Response) {
         shortCircuit = result
@@ -349,8 +467,9 @@ function registerRoute<R extends Registry>(app: Hono, registry: R, route: Route<
       await runChain()
     } catch (err) {
       console.error(`kata: unhandled error in ${route.method} ${route.path}`, err)
-      return errorResponse(c, 'internal_error', 'Internal server error', { status: 500 })
+      shortCircuit = errorResponse(c, 'internal_error', 'Internal server error', { status: 500 })
     }
-    return shortCircuit
+    // 5. Echo the correlation id and emit the per-request log line (issue #63).
+    return finalizeResponse(route, requestId, startedAt, shortCircuit, options)
   })
 }

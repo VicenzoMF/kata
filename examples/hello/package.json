@@ -7,7 +7,7 @@
     "dev": "tsx watch src/main.ts",
     "start": "tsx src/main.ts",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "hurl": "hurl --test --color src/modules/users/users.hurl src/modules/echo/echo.hurl"
+    "hurl": "hurl --test --color src/modules/users/users.hurl src/modules/echo/echo.hurl src/modules/diag/diag.hurl"
   },
   "dependencies": {
     "@hono/node-server": "^1.13",
