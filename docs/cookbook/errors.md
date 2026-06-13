@@ -153,8 +153,9 @@ return c.error('not_found', 'No user with that id', { status: 404 })
 `c.error` is available on both the route and middleware contexts. The `code`
 argument becomes the wire `error` field; `status` defaults to `400`; attach
 structured field errors via `extra.issues` (the same `FieldIssue[]` shape as the
-422 envelope above). Like any returned `Response`, it short-circuits the route
-and is **not** checked against `output`.
+422 envelope above). With a single `output` schema, a returned `Response`
+(`c.error` included) short-circuits the route and is **not** checked against it;
+declare a status→schema map (see _Gotchas_) to type and validate error bodies too.
 
 ## Gotchas
 
@@ -164,10 +165,13 @@ and is **not** checked against `output`.
   envelope (status `500`) — never Hono's default text/HTML page, and never
   leaking the underlying message. Prefer `c.error(...)` for failures the client
   should understand, and reserve throwing for genuine bugs.
-- **`output` is a single success schema.** Error `Response`s bypass it, so you
-  don't need to widen `output` to cover them. If a route genuinely has multiple
-  _success_ shapes, widen `output` to a union for now; per-status output schemas
-  (`200: User, 404: ErrorShape`) are tracked in
-  [#19](https://github.com/VicenzoMF/kata/issues/19).
+- **`output` can be a single schema or a status→schema map (ADR-0011).** A single
+  schema is the 200 body, and returned `Response`s bypass it. To type _and_
+  validate other statuses, declare a map —
+  `output: { 200: UserSchema, 404: ErrorBodySchema }` (Kata ships `ErrorBodySchema`
+  for the unified envelope). Then a plain return is the 200 body, `c.json(body, 201)`
+  is validated against `output[201]`, and a `c.error(...)` whose status is declared
+  is validated against that status's schema. Undeclared statuses still pass through.
+  `hc<typeof app>` narrows responses by status: `InferResponseType<call, 404>`.
 - **A malformed JSON body reads as `undefined`**, then fails its `body` schema —
   so it surfaces as a normal `422`, not a parse crash.

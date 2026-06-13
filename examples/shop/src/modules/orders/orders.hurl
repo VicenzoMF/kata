@@ -42,7 +42,9 @@ HTTP 200
 [Asserts]
 jsonpath "$.totalCents" == 2000
 
-# 5. POST /orders — checkout succeeds: 201 Created, paid order.
+# 5. POST /orders — checkout succeeds: 201 Created, paid order. The route declares
+#    output { 201: OrderSchema, 409: ErrorBodySchema, 422: ErrorBodySchema } (ADR-0011),
+#    so this 201 body is now validated against OrderSchema (previously unvalidated).
 POST http://localhost:3000/orders
 X-User-Id: u-order
 HTTP 201

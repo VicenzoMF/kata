@@ -1,4 +1,4 @@
-import type { z } from 'zod'
+import { z } from 'zod'
 
 export type FieldIssue = {
   path: string
@@ -7,6 +7,19 @@ export type FieldIssue = {
   expected?: unknown
   received?: unknown
 }
+
+/**
+ * Zod mirror of {@link FieldIssue} (ADR-0011). Used to compose
+ * {@link ErrorBodySchema}; declare it behind an error status in a route's
+ * `output` map when the structured-issues shape matters.
+ */
+export const FieldIssueSchema = z.object({
+  path: z.string(),
+  message: z.string(),
+  code: z.string(),
+  expected: z.unknown().optional(),
+  received: z.unknown().optional(),
+})
 
 /** Structured field errors, keyed by input source (params / query / body / headers). */
 export type FieldIssues = Record<string, FieldIssue[]>
@@ -22,6 +35,19 @@ export type ErrorBody = {
   message: string
   issues?: FieldIssues
 }
+
+/**
+ * Zod schema for {@link ErrorBody} — the canonical thing to put behind a 4xx/5xx
+ * status in a route's `output` map (ADR-0011), so the ADR-0008 envelope produced
+ * by `c.error(...)` is both typed for the RPC client and runtime-validated.
+ * `z.infer<typeof ErrorBodySchema>` is assignable to {@link ErrorBody}; an app
+ * may substitute a stricter refinement (e.g. a literal `error` code) per route.
+ */
+export const ErrorBodySchema = z.object({
+  error: z.string(),
+  message: z.string(),
+  issues: z.record(z.string(), z.array(FieldIssueSchema)).optional(),
+})
 
 /** Optional extras for {@link buildErrorBody} / `c.error`. Closed and typed (ADR-0008, Alt. C). */
 export type ErrorExtra = {

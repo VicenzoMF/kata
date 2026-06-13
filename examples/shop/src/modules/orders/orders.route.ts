@@ -1,3 +1,4 @@
+import { ErrorBodySchema } from 'kata'
 import { z } from 'zod'
 
 import { defineRoute } from '../../context'
@@ -18,7 +19,11 @@ export const checkoutRoute = defineRoute({
   path: '/orders',
   use: [requireAuth, withTransaction],
   input: {},
-  output: OrderSchema,
+  // Multi-status output (ADR-0011): success is 201 (not 200), with the order
+  // validated against `OrderSchema`; the business failures map to the unified
+  // error envelope at 409 / 422. (The 401 from `requireAuth` is a middleware
+  // short-circuit — it never reaches the handler, so it is not declared here.)
+  output: { 201: OrderSchema, 409: ErrorBodySchema, 422: ErrorBodySchema },
   handler: (c) => {
     const tx = c.get('tx')
     const result = checkout(tx, c.get('currentUser').id)
@@ -36,8 +41,9 @@ export const checkoutRoute = defineRoute({
         { status: 409 },
       )
     }
-    // 201 Created. Returning a Response short-circuits the pipeline (skipping
-    // output validation) — the framework's only way to set a non-200 status.
+    // 201 Created. With the status→schema map above (ADR-0011), this body is now
+    // validated against `output[201]` (OrderSchema) before it leaves the pipeline
+    // — a non-200 success is no longer an unvalidated escape hatch.
     return c.json(result.order, 201)
   },
 })

@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import { z } from 'zod'
 
-import { buildErrorBody, formatZodIssues } from './errors'
+import type { ErrorBody } from './errors'
+import { buildErrorBody, ErrorBodySchema, FieldIssueSchema, formatZodIssues } from './errors'
 
 function issuesOf(schema: z.ZodTypeAny, value: unknown) {
   const result = schema.safeParse(value)
@@ -87,5 +88,40 @@ describe('buildErrorBody()', () => {
     const body = buildErrorBody('internal_error', 'Internal server error', { status: 500 })
     expect(body).not.toHaveProperty('status')
     expect(body).toEqual({ error: 'internal_error', message: 'Internal server error' })
+  })
+})
+
+describe('ErrorBodySchema (ADR-0011)', () => {
+  it('accepts the envelope buildErrorBody produces without issues', () => {
+    const parsed = ErrorBodySchema.safeParse(buildErrorBody('not_found', 'User not found'))
+    expect(parsed.success).toBe(true)
+  })
+
+  it('accepts the envelope with structured issues attached', () => {
+    const issues = {
+      body: formatZodIssues(z.object({ email: z.string().email() }).safeParse({}).error!),
+    }
+    const envelope = buildErrorBody('validation_failed', 'Request input validation failed', {
+      issues,
+    })
+    expect(ErrorBodySchema.safeParse(envelope).success).toBe(true)
+  })
+
+  it('rejects a body missing the required `message`', () => {
+    expect(ErrorBodySchema.safeParse({ error: 'not_found' }).success).toBe(false)
+  })
+
+  it('its inferred type is assignable to ErrorBody', () => {
+    // The cast is the proof: if `z.infer<typeof ErrorBodySchema>` drifted from
+    // `ErrorBody`, this line would fail `tsc` (the package typecheck).
+    const asErrorBody: ErrorBody = ErrorBodySchema.parse({ error: 'x', message: 'y' })
+    expect(asErrorBody).toEqual({ error: 'x', message: 'y' })
+  })
+})
+
+describe('FieldIssueSchema (ADR-0011)', () => {
+  it('round-trips a formatZodIssues entry', () => {
+    const [issue] = formatZodIssues(z.object({ name: z.string() }).safeParse({ name: 1 }).error!)
+    expect(FieldIssueSchema.safeParse(issue).success).toBe(true)
   })
 })

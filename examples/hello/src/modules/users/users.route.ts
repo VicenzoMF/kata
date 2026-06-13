@@ -1,3 +1,5 @@
+import { ErrorBodySchema } from 'kata'
+
 import { defineRoute } from '../../context'
 import { fakeAuth } from '../../middlewares/auth'
 
@@ -9,11 +11,17 @@ import {
 } from './users.schema'
 import { createUser, getUser } from './users.service'
 
+/**
+ * Multi-status output (ADR-0011): the 200 success body is `UserSchema`; a miss
+ * returns the unified error envelope (ADR-0008) at 404, declared with Kata's
+ * `ErrorBodySchema`. Both bodies are now contract-validated at runtime, and
+ * `hc<typeof app>` infers `InferResponseType<call, 200 | 404>` per status.
+ */
 export const getUserRoute = defineRoute({
   method: 'GET',
   path: '/users/:id',
   input: { params: GetUserParamsSchema },
-  output: UserSchema,
+  output: { 200: UserSchema, 404: ErrorBodySchema },
   handler: async (c) => {
     const user = await getUser(c.input.params.id)
     if (!user) return c.error('not_found', 'User not found', { status: 404 })
