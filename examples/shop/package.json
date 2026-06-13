@@ -1,0 +1,23 @@
+{
+  "name": "shop",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/main.ts",
+    "start": "tsx src/main.ts",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "hurl": "hurl --test --color src/modules/products/products.hurl src/modules/cart/cart.hurl src/modules/orders/orders.hurl"
+  },
+  "dependencies": {
+    "@hono/node-server": "^1.13",
+    "hono": "^4",
+    "kata": "workspace:*",
+    "zod": "^3"
+  },
+  "devDependencies": {
+    "@types/node": "^20",
+    "tsx": "^4.19",
+    "typescript": "^5.6"
+  }
+}
