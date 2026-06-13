@@ -13,8 +13,11 @@ export type {
 export { defineContext, scoped, singleton } from './context'
 export type { ErrorBody, ErrorExtra, FieldIssue, FieldIssues } from './errors'
 export { buildErrorBody, formatZodIssues } from './errors'
+export type { Logger } from './logger'
 export type { BodyLimitOptions, CorsOptions, SecureHeadersOptions } from './middlewares'
 export { bodyLimit, cors, DEFAULT_MAX_BODY_SIZE, secureHeaders } from './middlewares'
+export type { OutputValidationMode } from './output-validation'
+export { REQUEST_ID_HEADER } from './request-id'
 export type {
   Registry,
   ResolvedValue,
