@@ -17,6 +17,7 @@
   "scripts": {
     "build": "tsup",
     "typecheck": "tsc -p tsconfig.json --noEmit",
+    "prepare": "tsup",
     "prepublishOnly": "pnpm run build && pnpm run typecheck"
   },
   "peerDependencies": {
