@@ -15,7 +15,7 @@ import type { Hono } from 'hono'
 import type { BlankEnv, Schema } from 'hono/types'
 import type { z } from 'zod'
 
-import type { HttpMethod, InputSchemas } from './context'
+import type { HttpMethod, InputSchemas, OutputMap, OutputSpec } from './context'
 
 /**
  * The wire-relevant projection of a route. A real `Route<R, M, P, I, O>` is a
@@ -26,7 +26,7 @@ type RouteLike = {
   readonly method: HttpMethod
   readonly path: string
   readonly input: InputSchemas
-  readonly output: z.ZodTypeAny
+  readonly output: OutputSpec
 }
 
 /** A module is a record of named routes — e.g. `import * as users from './users.route'`. */
@@ -55,25 +55,41 @@ type KataToHonoInput<I extends InputSchemas> = {
     : never
 }
 
+/** One Hono `Schema` endpoint entry — always JSON; response side uses `z.infer` (post-parse). */
+type HonoEndpoint<I extends InputSchemas, Out, S extends number> = {
+  input: KataToHonoInput<I>
+  output: Out
+  outputFormat: 'json'
+  status: S
+}
+
 /**
- * One Kata route → one Hono `Schema` entry. The response side uses `z.infer`
- * (post-parse) and is always JSON with status 200 — Kata validates `output`
- * then `c.json()`s it. Distributes over a union of routes.
+ * The endpoint(s) a Kata `output` contributes. A single schema → one `status: 200`
+ * endpoint (ADR-0003, unchanged). A status→schema map → a union of endpoints, one
+ * per declared status (ADR-0011) — the exact shape Hono accumulates from chained
+ * `c.json(body, status)` calls, so the client narrows with
+ * `InferResponseType<call, Status>`.
+ */
+type OutputEndpoints<I extends InputSchemas, O extends OutputSpec> = O extends z.ZodTypeAny
+  ? HonoEndpoint<I, z.infer<O>, 200>
+  : O extends OutputMap
+    ? { [S in keyof O & number]: HonoEndpoint<I, z.infer<O[S]>, S> }[keyof O & number]
+    : never
+
+/**
+ * One Kata route → its Hono `Schema` entry. Distributes over a union of routes;
+ * two routes on one path merge their `$get`/`$post` keys via the intersection in
+ * {@link ModulesToHonoSchema}.
  */
 type RouteToSchema<T> = T extends {
   method: infer M extends HttpMethod
   path: infer P extends string
   input: infer I extends InputSchemas
-  output: infer O extends z.ZodTypeAny
+  output: infer O extends OutputSpec
 }
   ? {
       [Path in P]: {
-        [Method in M as `$${Lowercase<Method>}`]: {
-          input: KataToHonoInput<I>
-          output: z.infer<O>
-          outputFormat: 'json'
-          status: 200
-        }
+        [Method in M as `$${Lowercase<Method>}`]: OutputEndpoints<I, O>
       }
     }
   : never

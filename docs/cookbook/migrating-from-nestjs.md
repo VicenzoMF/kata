@@ -474,9 +474,13 @@ the `/boom` route in [`users.hurl`](../../examples/hello/src/modules/users/users
 Because a throw becomes an opaque 500, **prefer `c.error` for anything the client
 should understand** — reserve throwing for genuine bugs.
 
-There is no per-status response schema yet: `output` describes the success case,
-and error `Response`s bypass it (status-keyed schemas are tracked in
-[#19](https://github.com/VicenzoMF/kata/issues/19)).
+For per-status contracts, `output` can be a status→schema map
+(`{ 200: UserSchema, 404: ErrorBodySchema }`,
+[ADR-0011](../adr/0011-multi-status-output-schemas.md)): a plain return is the 200
+body, and a `c.json(body, status)` / `c.error(...)` whose status is declared is
+validated against that status's schema (Kata ships `ErrorBodySchema` for the
+unified envelope). A single `output` schema still works unchanged — its error
+`Response`s bypass validation.
 
 ## Modules → the folder layout
 
@@ -560,7 +564,7 @@ Being explicit, so you stop looking for these:
 | Pipes as a separate layer (`ValidationPipe`, custom pipes) | Validation is mandatory per route, not opt-in | The route's `input` Zod schemas; `z.coerce` / `.transform()` for coercion |
 | `@nestjs/swagger` auto OpenAPI | Not shipped yet | Schemas are Zod and could feed a generator later — not available today |
 | `Test.createTestingModule()` | Services are pure functions, not container-managed | Call the function with a hand-rolled fake dependency ([database.md](./database.md#4-test-the-service-with-a-fake-client)) |
-| Multiple response shapes per route | `output` is one success schema | Widen `output` to a union for now; per-status schemas tracked in [#19](https://github.com/VicenzoMF/kata/issues/19) |
+| Multiple response shapes per route | Per-status output schemas ([ADR-0011](../adr/0011-multi-status-output-schemas.md)) | `output: { 200: UserSchema, 404: ErrorBodySchema }` — typed for `hc` and validated at runtime |
 
 The throughline: Kata trades NestJS's runtime flexibility for **static
 verifiability**. Every constraint above exists so a route, its dependencies, and

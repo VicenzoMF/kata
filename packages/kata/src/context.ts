@@ -92,14 +92,39 @@ export type RouteContext<R extends Registry, I extends InputSchemas> = {
   requestId: string
 }
 
-export type RouteHandlerReturn<O extends z.ZodTypeAny> = z.infer<O> | Response
+/** A response-body schema keyed by HTTP status code (ADR-0011). */
+export type OutputMap = { readonly [status: number]: z.ZodTypeAny }
+
+/**
+ * A route's `output` contract (ADR-0011): either a single Zod schema for the
+ * success (200) body — the ADR-0003 form — or a map from HTTP status code to
+ * the schema for that status's body (e.g. `{ 200: UserSchema, 404: ErrorBodySchema }`).
+ */
+export type OutputSpec = z.ZodTypeAny | OutputMap
+
+/**
+ * The body a handler may return as a *plain value* (not via `c.json` / `c.error`).
+ * It is always the 200 body: `z.infer` of the single schema, or of `output[200]`
+ * for a map. A map without a `200` entry yields `never` — such a route must
+ * return a `Response` (e.g. `c.json(body, 201)`), since a plain return cannot
+ * express a non-200 status (ADR-0011).
+ */
+export type SuccessOutput<O extends OutputSpec> = O extends z.ZodTypeAny
+  ? z.infer<O>
+  : O extends OutputMap
+    ? 200 extends keyof O
+      ? z.infer<O[200]>
+      : never
+    : never
+
+export type RouteHandlerReturn<O extends OutputSpec> = SuccessOutput<O> | Response
 
 export type Route<
   R extends Registry,
   M extends HttpMethod = HttpMethod,
   P extends string = string,
   I extends InputSchemas = InputSchemas,
-  O extends z.ZodTypeAny = z.ZodTypeAny,
+  O extends OutputSpec = OutputSpec,
 > = {
   readonly __kata: 'route'
   readonly method: M
@@ -158,7 +183,7 @@ export function defineContext<const R extends Registry>(registry: R) {
     const M extends HttpMethod,
     const P extends string,
     const I extends InputSchemas,
-    const O extends z.ZodTypeAny,
+    const O extends OutputSpec,
   >(config: {
     method: M
     path: P
@@ -363,44 +388,126 @@ async function readInputs<I extends InputSchemas>(
   return { ok: true, value: parsed as InferInput<I> }
 }
 
+/** The status a plain (non-`Response`) handler return maps to (ADR-0011). */
+const SUCCESS_STATUS = 200
+
+/** A route `output` is a single schema (ADR-0003) or a status→schema map (ADR-0011). */
+function isZodSchema(output: OutputSpec): output is z.ZodTypeAny {
+  return typeof (output as { safeParse?: unknown }).safeParse === 'function'
+}
+
 /**
- * Validate the handler's return value against the route's `output` schema and
- * build the success response, honouring the configured mode (ADR-0003,
- * ADR-0009):
- * - `off` — no validation; the data is sent as-is.
- * - `strict` — a mismatch is logged and becomes a 500 (the body never violates
- *   its declared contract).
- * - `log` — a mismatch is logged but the handler's data is sent through anyway.
+ * Build + validate the response for whatever the handler returned, honouring the
+ * configured mode (ADR-0009) against the route's `output` contract (ADR-0003 single
+ * schema or ADR-0011 status→schema map):
+ * - a **plain value** is the 200 body — validated against the single schema or
+ *   `output[200]`.
+ * - a **`Response`** carries its own status; in the map form its body is validated
+ *   against `output[status]` when that status is declared. The single-schema form
+ *   and undeclared statuses pass the `Response` through unvalidated (back-compat:
+ *   a `Response` has always short-circuited output validation).
+ */
+async function buildResponse<R extends Registry>(
+  c: import('hono').Context,
+  route: Route<R>,
+  result: unknown,
+  mode: OutputValidationMode,
+): Promise<Response> {
+  const output = route.output
+  if (result instanceof Response) {
+    if (mode !== 'off' && !isZodSchema(output)) {
+      const schema = output[result.status]
+      if (schema) return validateResponseBody(c, route, result, schema, mode)
+    }
+    return result
+  }
+  const successSchema = isZodSchema(output) ? output : output[SUCCESS_STATUS]
+  return buildOutputResponse(c, route, result, successSchema, mode)
+}
+
+/**
+ * Validate a plain handler return against the success schema and build the 200
+ * response (ADR-0003, ADR-0009):
+ * - `off` or no success schema declared — send the data as-is.
+ * - match — send the parsed (Zod-transformed) data.
+ * - mismatch + `strict` — log and 500 (the body never violates its contract).
+ * - mismatch + `log` — log and send the handler's data through unchanged.
  */
 function buildOutputResponse<R extends Registry>(
   c: import('hono').Context,
   route: Route<R>,
   result: unknown,
+  schema: z.ZodTypeAny | undefined,
   mode: OutputValidationMode,
 ): Response {
-  if (mode === 'off') {
+  if (mode === 'off' || !schema) {
     return c.json(result as never)
   }
-  const outputResult = route.output.safeParse(result)
-  if (outputResult.success) {
-    return c.json(outputResult.data as never)
+  const parsed = schema.safeParse(result)
+  if (parsed.success) {
+    return c.json(parsed.data as never)
   }
-  // Mismatch: log the issues server-side regardless of mode — the same
-  // diagnostic strict has always emitted.
-  console.error(
-    `kata: output schema mismatch in ${route.method} ${route.path}`,
-    outputResult.error.issues,
-  )
+  logOutputMismatch(route, SUCCESS_STATUS, parsed.error.issues)
   if (mode === 'strict') {
-    return errorResponse(
-      c,
-      'internal_output_shape_mismatch',
-      'Response did not match the declared output schema',
-      { status: 500 },
-    )
+    return outputMismatchResponse(c)
   }
   // mode === 'log': keep serving — send the handler's data through unchanged.
   return c.json(result as never)
+}
+
+/**
+ * Validate a handler-returned `Response`'s body against the schema declared for
+ * its status (ADR-0011), as a shape check. The original `Response` is forwarded
+ * verbatim on success — Kata never re-serialises a response the handler built, so
+ * a custom header or content type the handler set is preserved. Reached only in
+ * the map form, for a declared status, when the mode is not `off`.
+ */
+async function validateResponseBody<R extends Registry>(
+  c: import('hono').Context,
+  route: Route<R>,
+  response: Response,
+  schema: z.ZodTypeAny,
+  mode: OutputValidationMode,
+): Promise<Response> {
+  let body: unknown
+  try {
+    body = await response.clone().json()
+  } catch {
+    // Non-JSON or unreadable body — nothing to validate against the schema.
+    return response
+  }
+  const parsed = schema.safeParse(body)
+  if (parsed.success) {
+    return response
+  }
+  logOutputMismatch(route, response.status, parsed.error.issues)
+  if (mode === 'strict') {
+    return outputMismatchResponse(c)
+  }
+  // mode === 'log': keep serving the handler's original response.
+  return response
+}
+
+/** Server-side diagnostic for an output-schema mismatch — the same line `strict` has always emitted. */
+function logOutputMismatch<R extends Registry>(
+  route: Route<R>,
+  status: number,
+  issues: unknown,
+): void {
+  console.error(
+    `kata: output schema mismatch in ${route.method} ${route.path} (status ${status})`,
+    issues,
+  )
+}
+
+/** The 500 envelope (ADR-0008) `strict` returns when a response violates its declared output schema. */
+function outputMismatchResponse(c: import('hono').Context): Response {
+  return errorResponse(
+    c,
+    'internal_output_shape_mismatch',
+    'Response did not match the declared output schema',
+    { status: 500 },
+  )
 }
 
 /**
@@ -471,12 +578,10 @@ function registerRoute<R extends Registry>(
         // 3. Run handler
         const handlerCtx = makeRouteContext(registry, c, inputResult.value, requestId)
         const result = await route.handler(handlerCtx)
-        if (result instanceof Response) {
-          shortCircuit = result
-          return
-        }
-        // 4. Validate output per the configured mode (ADR-0003, ADR-0009)
-        shortCircuit = buildOutputResponse(c, route, result, options.outputValidation)
+        // 4. Build + validate the response against the route's output contract —
+        //    single schema (ADR-0003) or status→schema map (ADR-0011) — per the
+        //    configured mode (ADR-0009).
+        shortCircuit = await buildResponse(c, route, result, options.outputValidation)
         return
       }
       const mw = route.use[i++]!

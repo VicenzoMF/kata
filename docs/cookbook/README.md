@@ -80,18 +80,18 @@ These are enforced project-wide — the snippets obey them so you can paste them
 
 ## Planned API referenced in this cookbook
 
-These recipes occasionally point at framework work that is **not yet shipped**.
-Treat it as roadmap, not as available API:
-
-- Multi-status output schemas (e.g. `200: User, 404: ErrorShape`) — [#19](https://github.com/VicenzoMF/kata/issues/19).
+Every API these recipes reference is now shipped — there is no roadmap-only
+surface in this cookbook at the moment.
 
 > **Recently shipped** — now documented as available API in these recipes: the
 > unified `c.error` helper + error envelope
 > ([#18](https://github.com/VicenzoMF/kata/issues/18),
 > [ADR-0008](../adr/0008-unified-error-response-envelope.md)), the global error
-> boundary ([#62](https://github.com/VicenzoMF/kata/issues/62)), and
+> boundary ([#62](https://github.com/VicenzoMF/kata/issues/62)),
 > output-validation mode ([#17](https://github.com/VicenzoMF/kata/issues/17),
-> [ADR-0009](../adr/0009-output-validation-mode.md)).
+> [ADR-0009](../adr/0009-output-validation-mode.md)), and multi-status output
+> schemas ([#19](https://github.com/VicenzoMF/kata/issues/19),
+> [ADR-0011](../adr/0011-multi-status-output-schemas.md)).
 
 ## See also
 

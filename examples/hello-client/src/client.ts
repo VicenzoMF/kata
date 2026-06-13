@@ -32,6 +32,12 @@ export async function listUsers(search?: string) {
 
 export async function getUser(id: string) {
   const res = await client.users[':id'].$get({ param: { id } })
+  // Multi-status (ADR-0011): the client narrows on the HTTP status with full
+  // types — the 404 branch sees the error envelope, the 200 branch the user.
+  if (res.status === 404) {
+    const { error } = await res.json() // ErrorBody — { error: string; message: string }
+    return { notFound: true as const, error }
+  }
   return res.json() // { id: string; name: string; email: string }
 }
 
@@ -58,13 +64,17 @@ export type RpcTypeProofs = [
   Expect<
     Equal<InferRequestType<typeof client.users.$post>['json'], { name: string; email: string }>
   >,
-  // GET /users/:id response === z.infer<UserSchema>
+  // GET /users/:id 200 response === z.infer<UserSchema>. ADR-0011: the route now
+  // declares `{ 200: UserSchema, 404: ErrorBodySchema }`, so the response is a
+  // per-status union and we narrow it with the status argument to InferResponseType.
   Expect<
     Equal<
-      InferResponseType<(typeof client.users)[':id']['$get']>,
+      InferResponseType<(typeof client.users)[':id']['$get'], 200>,
       { id: string; name: string; email: string }
     >
   >,
+  // GET /users/:id 404 carries the unified error envelope (ADR-0008), typed for the client.
+  Expect<Equal<InferResponseType<(typeof client.users)[':id']['$get'], 404>['error'], string>>,
   // GET /users response === z.infer<UserSchema>[]
   Expect<
     Equal<

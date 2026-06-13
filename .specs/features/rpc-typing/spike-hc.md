@@ -187,7 +187,9 @@ The spike de-risks the implementation to these concrete, **type-only** edits in
   on success and validates `output`; its 422/404/500 envelopes are not in the typed
   client. Hono can model multiple statuses, but Kata's single `output` schema maps
   cleanly to one success endpoint. Treat error-response typing as out of scope / a
-  follow-up.
+  follow-up. _(Resolved later by [ADR-0011](../../../docs/adr/0011-multi-status-output-schemas.md):
+  `output` may be a status→schema map, which `rpc.ts` derives into a per-status
+  union of endpoints — the single-schema case still maps to one `status: 200` endpoint.)_
 - **Paths must be string literals.** Hono `Schema` keys are literal paths; a computed
   `path` can't be typed. Kata routes already use literal paths — keep it that way (a
   lint rule could enforce it).

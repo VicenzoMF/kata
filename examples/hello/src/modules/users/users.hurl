@@ -8,6 +8,8 @@
 # CI invokes this in #46 via start-server + wait-on + hurl.
 
 # 1. GET /users/none — unknown id, expect 404 + not_found envelope (ADR-0008).
+#    The route declares output { 200: UserSchema, 404: ErrorBodySchema } (ADR-0011),
+#    so this 404 body is validated against ErrorBodySchema, not just hand-rolled.
 #    Every kata response — success or error — carries a correlation id (#63).
 GET http://localhost:3000/users/none
 HTTP 404
