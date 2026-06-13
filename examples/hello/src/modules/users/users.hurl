@@ -75,3 +75,13 @@ HTTP 200
 jsonpath "$.id" == "42"
 jsonpath "$.name" == "User-42"
 jsonpath "$.email" == "user-42@example.test"
+
+
+# 7. GET /boom — handler throws; the global error boundary (#62) returns the
+#    unified 500 envelope as JSON, never Hono's default text/HTML 500.
+GET http://localhost:3000/boom
+HTTP 500
+[Asserts]
+header "Content-Type" contains "application/json"
+jsonpath "$.error" == "internal_error"
+jsonpath "$.message" exists

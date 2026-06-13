@@ -148,6 +148,14 @@ function buildHonoApp<R extends Registry>(registry: R, config: AppConfig<R>): Ho
       registerRoute(app, registry, route)
     }
   }
+  // Global fallback (#62): anything that escapes the route pipeline — a raw
+  // Hono handler, or an error thrown while building the kata response itself —
+  // still serialises through the unified envelope instead of Hono's default
+  // text/HTML 500.
+  app.onError((err, c) => {
+    console.error('kata: unhandled error escaped the route pipeline', err)
+    return errorResponse(c, 'internal_error', 'Internal server error', { status: 500 })
+  })
   return app
 }
 
@@ -333,7 +341,16 @@ function registerRoute<R extends Registry>(app: Hono, registry: R, route: Route<
         shortCircuit = result
       }
     }
-    await runChain()
+    // Route-pipeline boundary (#62): a throw from any middleware, the handler,
+    // or output validation is funnelled into the unified 5xx envelope. The raw
+    // error is logged server-side with route context; the client never sees
+    // internal detail (ADR-0008, Alt. D).
+    try {
+      await runChain()
+    } catch (err) {
+      console.error(`kata: unhandled error in ${route.method} ${route.path}`, err)
+      return errorResponse(c, 'internal_error', 'Internal server error', { status: 500 })
+    }
     return shortCircuit
   })
 }
