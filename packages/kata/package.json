@@ -10,6 +10,9 @@
       "import": "./dist/index.js"
     }
   },
+  "bin": {
+    "kata": "./dist/cli/main.js"
+  },
   "files": [
     "dist",
     "README.md"
