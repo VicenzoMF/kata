@@ -8,8 +8,12 @@
   "exports": {
     ".": "./src/index.ts"
   },
+  "bin": {
+    "kata": "./dist/cli/main.js"
+  },
   "files": [
     "src",
+    "dist",
     "README.md"
   ],
   "scripts": {
