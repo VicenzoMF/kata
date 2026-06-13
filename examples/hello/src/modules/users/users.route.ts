@@ -13,7 +13,7 @@ export const getUserRoute = defineRoute({
   output: UserSchema,
   handler: async (c) => {
     const user = await getUser(c.input.params.id)
-    if (!user) return c.json({ error: 'not_found' }, 404)
+    if (!user) return c.error('not_found', 'User not found', { status: 404 })
     return user
   },
 })

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { z } from 'zod'
 
-import { formatZodIssues } from './errors'
+import { buildErrorBody, formatZodIssues } from './errors'
 
 function issuesOf(schema: z.ZodTypeAny, value: unknown) {
   const result = schema.safeParse(value)
@@ -57,5 +57,35 @@ describe('formatZodIssues()', () => {
     const issues = issuesOf(z.object({ email: z.string().email() }), { email: 'x' })
     expect(issues[0]).not.toHaveProperty('expected')
     expect(issues[0]).not.toHaveProperty('received')
+  })
+})
+
+describe('buildErrorBody()', () => {
+  it('maps the code argument to the wire field `error` and keeps the message', () => {
+    expect(buildErrorBody('not_found', 'User not found')).toEqual({
+      error: 'not_found',
+      message: 'User not found',
+    })
+  })
+
+  it('omits `issues` when no extra is provided', () => {
+    expect(buildErrorBody('not_found', 'User not found')).not.toHaveProperty('issues')
+  })
+
+  it('attaches `issues` when supplied via extra', () => {
+    const issues = { body: [{ path: 'email', message: 'Invalid email', code: 'invalid_string' }] }
+    expect(
+      buildErrorBody('validation_failed', 'Request input validation failed', { issues }),
+    ).toEqual({
+      error: 'validation_failed',
+      message: 'Request input validation failed',
+      issues,
+    })
+  })
+
+  it('never leaks `status` into the body (status drives the HTTP code, not the envelope)', () => {
+    const body = buildErrorBody('internal_error', 'Internal server error', { status: 500 })
+    expect(body).not.toHaveProperty('status')
+    expect(body).toEqual({ error: 'internal_error', message: 'Internal server error' })
   })
 })
