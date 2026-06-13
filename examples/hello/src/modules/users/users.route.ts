@@ -13,7 +13,7 @@ export const getUserRoute = defineRoute({
   output: UserSchema,
   handler: async (c) => {
     const user = await getUser(c.input.params.id)
-    if (!user) return c.json({ error: 'not_found' }, 404)
+    if (!user) return c.error('not_found', 'User not found', { status: 404 })
     return user
   },
 })
@@ -33,4 +33,20 @@ export const meRoute = defineRoute({
   input: {},
   output: UserSchema,
   handler: async (c) => c.get('currentUser'),
+})
+
+/**
+ * Diagnostic route — deliberately throws to prove the global error boundary
+ * (#62) funnels an uncaught handler error into the unified envelope (ADR-0008)
+ * instead of leaking Hono's default text/HTML 500. Exercised by users.hurl,
+ * the single E2E file the Kata harness runs in CI and the Stop hook.
+ */
+export const boomRoute = defineRoute({
+  method: 'GET',
+  path: '/boom',
+  input: {},
+  output: z.object({ ok: z.literal(true) }),
+  handler: () => {
+    throw new Error('intentional handler explosion')
+  },
 })

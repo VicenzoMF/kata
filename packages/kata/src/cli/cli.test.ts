@@ -4,7 +4,7 @@ import { join } from 'node:path'
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
-import { formatResult, parseArgs, run } from './cli.js'
+import { formatResult, parseArgs, run } from './cli'
 
 let dir = ''
 

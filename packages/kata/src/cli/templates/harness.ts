@@ -4,7 +4,7 @@
 // differ where this module lets them differ (the tool matcher), never in the
 // command they run or the timeout they allow.
 
-import type { HookCommand, HookEvents } from './types.js'
+import type { HookCommand, HookEvents } from './types'
 
 /** The one command every harness hook shells out to. The generated configs
  *  reference the `kata` CLI as a command string rather than depending on its

@@ -8,8 +8,8 @@
 // `permissions.deny` slot, so the commit/push bans are enforced by
 // `kata verify` on PreToolUse rather than declared here.
 
-import { CODEX_TOOL_MATCHER, harnessHooks } from './harness.js'
-import type { CodexHooks } from './types.js'
+import { CODEX_TOOL_MATCHER, harnessHooks } from './harness'
+import type { CodexHooks } from './types'
 
 export const codexHooksTemplate: CodexHooks = {
   hooks: harnessHooks(CODEX_TOOL_MATCHER),

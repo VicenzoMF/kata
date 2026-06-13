@@ -3,7 +3,7 @@
 // whole command is testable without spawning a subprocess. `main.ts` is the
 // only place that talks to `process`.
 
-import { type InitResult, init } from './init.js'
+import { type InitResult, init } from './init'
 
 export type ParsedArgs = {
   command: string | undefined

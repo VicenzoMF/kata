@@ -7,11 +7,12 @@
 #
 # CI invokes this in #46 via start-server + wait-on + hurl.
 
-# 1. GET /users/none — unknown id, expect 404 + not_found envelope.
+# 1. GET /users/none — unknown id, expect 404 + not_found envelope (ADR-0008).
 GET http://localhost:3000/users/none
 HTTP 404
 [Asserts]
 jsonpath "$.error" == "not_found"
+jsonpath "$.message" exists
 
 
 # 2. POST /users — valid body, capture the created id.
@@ -48,6 +49,7 @@ Content-Type: application/json
 HTTP 422
 [Asserts]
 jsonpath "$.error" == "validation_failed"
+jsonpath "$.message" exists
 jsonpath "$.issues.body" count == 2
 jsonpath "$.issues.body[0].path" == "name"
 jsonpath "$.issues.body[0].code" == "too_small"
@@ -62,6 +64,7 @@ GET http://localhost:3000/me
 HTTP 401
 [Asserts]
 jsonpath "$.error" == "unauthorized"
+jsonpath "$.message" exists
 
 
 # 6. GET /me — with x-user-id header, scoped slot populated by middleware.
@@ -72,3 +75,13 @@ HTTP 200
 jsonpath "$.id" == "42"
 jsonpath "$.name" == "User-42"
 jsonpath "$.email" == "user-42@example.test"
+
+
+# 7. GET /boom — handler throws; the global error boundary (#62) returns the
+#    unified 500 envelope as JSON, never Hono's default text/HTML 500.
+GET http://localhost:3000/boom
+HTTP 500
+[Asserts]
+header "Content-Type" contains "application/json"
+jsonpath "$.error" == "internal_error"
+jsonpath "$.message" exists

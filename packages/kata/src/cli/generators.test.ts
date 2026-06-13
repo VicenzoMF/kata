@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
-import { renderClaudeSettings, renderCodexHooks, serialize } from './generators.js'
-import type { ClaudeSettings, CodexHooks } from './templates/types.js'
+import { renderClaudeSettings, renderCodexHooks, serialize } from './generators'
+import type { ClaudeSettings, CodexHooks } from './templates/types'
 
 function parseClaude(): ClaudeSettings {
   return JSON.parse(renderClaudeSettings()) as ClaudeSettings

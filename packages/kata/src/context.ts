@@ -2,8 +2,8 @@ import type { Hono } from 'hono'
 import { Hono as HonoApp } from 'hono'
 import type { z } from 'zod'
 
-import type { FieldIssue } from './errors'
-import { formatZodIssues } from './errors'
+import type { ErrorExtra, FieldIssue } from './errors'
+import { buildErrorBody, formatZodIssues } from './errors'
 import type { Registry, ResolvedValue, Scoped, ScopedKeys, Singleton } from './types'
 
 // ────────────────────────────────────────────────────────────────────────────
@@ -31,6 +31,8 @@ export type MiddlewareContext<R extends Registry> = {
   header(name: string): string | undefined
   /** Return a JSON response (short-circuit) */
   json<T>(value: T, status?: number): Response
+  /** Return a unified error response (ADR-0008). Defaults to status 400. */
+  error(code: string, message: string, extra?: ErrorExtra): Response
 }
 
 export type Middleware<R extends Registry> = {
@@ -72,6 +74,8 @@ export type RouteContext<R extends Registry, I extends InputSchemas> = {
   input: InferInput<I>
   raw: import('hono').Context
   json<T>(value: T, status?: number): Response
+  /** Return a unified error response (ADR-0008). Defaults to status 400. */
+  error(code: string, message: string, extra?: ErrorExtra): Response
 }
 
 export type RouteHandlerReturn<O extends z.ZodTypeAny> = z.infer<O> | Response
@@ -144,6 +148,14 @@ function buildHonoApp<R extends Registry>(registry: R, config: AppConfig<R>): Ho
       registerRoute(app, registry, route)
     }
   }
+  // Global fallback (#62): anything that escapes the route pipeline — a raw
+  // Hono handler, or an error thrown while building the kata response itself —
+  // still serialises through the unified envelope instead of Hono's default
+  // text/HTML 500.
+  app.onError((err, c) => {
+    console.error('kata: unhandled error escaped the route pipeline', err)
+    return errorResponse(c, 'internal_error', 'Internal server error', { status: 500 })
+  })
   return app
 }
 
@@ -156,6 +168,21 @@ function getScopedStore(c: import('hono').Context): Map<string, unknown> {
     c.set(SCOPED_STORE as never, store as never)
   }
   return store
+}
+
+/**
+ * Single funnel for every Kata 4xx/5xx response (ADR-0008). Builds the unified
+ * envelope via `buildErrorBody` and wraps it in a Hono JSON response. The
+ * `as never` casts are the same Hono-boundary casts used by the `json` helpers
+ * above — they localise Hono's strict status/body typing, not an `any` escape.
+ */
+function errorResponse(
+  c: import('hono').Context,
+  code: string,
+  message: string,
+  extra?: ErrorExtra,
+): Response {
+  return c.json(buildErrorBody(code, message, extra) as never, (extra?.status ?? 400) as never)
 }
 
 function makeMiddlewareContext<R extends Registry>(
@@ -185,6 +212,7 @@ function makeMiddlewareContext<R extends Registry>(
     raw: c,
     header: (name) => c.req.header(name),
     json: (value, status) => c.json(value as never, (status ?? 200) as never),
+    error: (code, message, extra) => errorResponse(c, code, message, extra),
   }
 }
 
@@ -209,6 +237,7 @@ function makeRouteContext<R extends Registry, I extends InputSchemas>(
     input,
     raw: c,
     json: (value, status) => c.json(value as never, (status ?? 200) as never),
+    error: (code, message, extra) => errorResponse(c, code, message, extra),
   }
 }
 
@@ -274,7 +303,10 @@ function registerRoute<R extends Registry>(app: Hono, registry: R, route: Route<
         // 2. Validate input
         const inputResult = await readInputs(route.input, c)
         if (!inputResult.ok) {
-          shortCircuit = c.json({ error: 'validation_failed', issues: inputResult.issues }, 422)
+          shortCircuit = errorResponse(c, 'validation_failed', 'Request input validation failed', {
+            status: 422,
+            issues: inputResult.issues,
+          })
           return
         }
         // 3. Run handler
@@ -291,7 +323,12 @@ function registerRoute<R extends Registry>(app: Hono, registry: R, route: Route<
             `kata: output schema mismatch in ${route.method} ${route.path}`,
             outputResult.error.issues,
           )
-          shortCircuit = c.json({ error: 'internal_output_shape_mismatch' }, 500)
+          shortCircuit = errorResponse(
+            c,
+            'internal_output_shape_mismatch',
+            'Response did not match the declared output schema',
+            { status: 500 },
+          )
           return
         }
         shortCircuit = c.json(outputResult.data as never)
@@ -304,7 +341,16 @@ function registerRoute<R extends Registry>(app: Hono, registry: R, route: Route<
         shortCircuit = result
       }
     }
-    await runChain()
+    // Route-pipeline boundary (#62): a throw from any middleware, the handler,
+    // or output validation is funnelled into the unified 5xx envelope. The raw
+    // error is logged server-side with route context; the client never sees
+    // internal detail (ADR-0008, Alt. D).
+    try {
+      await runChain()
+    } catch (err) {
+      console.error(`kata: unhandled error in ${route.method} ${route.path}`, err)
+      return errorResponse(c, 'internal_error', 'Internal server error', { status: 500 })
+    }
     return shortCircuit
   })
 }

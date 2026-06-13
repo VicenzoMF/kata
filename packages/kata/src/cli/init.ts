@@ -7,7 +7,7 @@
 import { access, mkdir, writeFile } from 'node:fs/promises'
 import { dirname, join, resolve } from 'node:path'
 
-import { renderClaudeSettings, renderCodexHooks } from './generators.js'
+import { renderClaudeSettings, renderCodexHooks } from './generators'
 
 export type InitOptions = {
   /** Project root to scaffold into. Defaults to `process.cwd()`. */

@@ -3,12 +3,8 @@
 // no `process` access); this file just wires it to the real streams and exit
 // code. Tests import `./cli`, never this module, so the top-level call below
 // never runs under vitest.
-//
-// Relative imports in this CLI carry explicit `.js` extensions: the built
-// output is Node-ESM (`"type": "module"`), whose resolver requires them. They
-// resolve to the `.ts` siblings under tsx/vitest and tsc's Bundler resolution.
 
-import { run } from './cli.js'
+import { run } from './cli'
 
 run(process.argv.slice(2))
   .then((result) => {

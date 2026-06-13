@@ -4,8 +4,8 @@ import { dirname, isAbsolute, join } from 'node:path'
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
-import { renderClaudeSettings, renderCodexHooks } from './generators.js'
-import { type FileStatus, type InitResult, init } from './init.js'
+import { renderClaudeSettings, renderCodexHooks } from './generators'
+import { type FileStatus, type InitResult, init } from './init'
 
 const CLAUDE = '.claude/settings.json'
 const CODEX = '.codex/hooks.json'

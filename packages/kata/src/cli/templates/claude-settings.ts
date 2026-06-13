@@ -7,13 +7,8 @@
 // `kata` CLI, not on our bespoke scripts. The PostToolUse hook injecting
 // feedback via `kata verify --json` is the load-bearing line of the issue.
 
-import {
-  CLAUDE_EDIT_MATCHER,
-  CLAUDE_SETTINGS_SCHEMA,
-  DENY_COMMANDS,
-  harnessHooks,
-} from './harness.js'
-import type { ClaudeSettings } from './types.js'
+import { CLAUDE_EDIT_MATCHER, CLAUDE_SETTINGS_SCHEMA, DENY_COMMANDS, harnessHooks } from './harness'
+import type { ClaudeSettings } from './types'
 
 export const claudeSettingsTemplate: ClaudeSettings = {
   $schema: CLAUDE_SETTINGS_SCHEMA,
