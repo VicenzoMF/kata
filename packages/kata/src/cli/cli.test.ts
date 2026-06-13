@@ -83,8 +83,12 @@ describe('run()', () => {
     expect(result.code).toBe(0)
     expect(result.stdout).toContain('.claude/settings.json')
     expect(result.stdout).toContain('.codex/hooks.json')
+    expect(result.stdout).toContain('AGENTS.md')
+    expect(result.stdout).toContain('CLAUDE.md')
     expect(await exists(join(dir, '.claude/settings.json'))).toBe(true)
     expect(await exists(join(dir, '.codex/hooks.json'))).toBe(true)
+    expect(await exists(join(dir, 'AGENTS.md'))).toBe(true)
+    expect(await exists(join(dir, 'CLAUDE.md'))).toBe(true)
   })
 
   it('reports skips on a second run', async () => {
