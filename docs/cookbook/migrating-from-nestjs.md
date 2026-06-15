@@ -562,7 +562,7 @@ Being explicit, so you stop looking for these:
 | Interceptors that transform the response body / RxJS | The handler's return value isn't exposed to middleware | Shape the response in the handler + `output`; use middleware for before/after work and headers |
 | Exception filters & the `HttpException` hierarchy | No exception-type→response mapping layer | `c.error(code, message, { status })`; uncaught throws → generic 500 ([ADR-0008](../adr/0008-unified-error-response-envelope.md)) |
 | Pipes as a separate layer (`ValidationPipe`, custom pipes) | Validation is mandatory per route, not opt-in | The route's `input` Zod schemas; `z.coerce` / `.transform()` for coercion |
-| `@nestjs/swagger` auto OpenAPI | Not shipped yet | Schemas are Zod and could feed a generator later — not available today |
+| `@nestjs/swagger` auto OpenAPI | A deliberate non-goal — Kata doesn't own your docs pipeline, not a roadmap gap ([non-goals.md](./non-goals.md)) | Routes already hold Zod `input` / `output` schemas; feed them to a generator (`@asteasolutions/zod-to-openapi`, `@hono/zod-openapi`) and serve it as a route or via `app.use` |
 | `Test.createTestingModule()` | Services are pure functions, not container-managed | Call the function with a hand-rolled fake dependency ([database.md](./database.md#4-test-the-service-with-a-fake-client)) |
 | Multiple response shapes per route | Per-status output schemas ([ADR-0011](../adr/0011-multi-status-output-schemas.md)) | `output: { 200: UserSchema, 404: ErrorBodySchema }` — typed for `hc` and validated at runtime |
 

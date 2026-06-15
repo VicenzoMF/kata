@@ -11,6 +11,7 @@ solves one common problem with copy-pasteable code that mirrors the working
 | [Authentication](./auth.md) | Identify the caller and expose them to handlers via a scoped slot. |
 | [Database access](./database.md) | Share a long-lived client (db, cache, mailer) across handlers via a singleton slot. |
 | [Errors & validation](./errors.md) | Return correct 4xx responses and understand Kata's 422 / 500 envelopes. |
+| [Non-goals & BYO](./non-goals.md) | See what Kata deliberately leaves to you — persistence, rate limiting, metrics, env, pagination — and the idiomatic bring-your-own pattern for each. |
 
 ## How these recipes are grounded
 
@@ -80,8 +81,12 @@ These are enforced project-wide — the snippets obey them so you can paste them
 
 ## Planned API referenced in this cookbook
 
-Every API these recipes reference is now shipped — there is no roadmap-only
-surface in this cookbook at the moment.
+One roadmap-only surface is referenced: the first-class **app-level (global)
+middleware** API ([#84](https://github.com/VicenzoMF/kata/issues/84),
+[ADR-0012](../adr/0012-app-level-middleware.md)), labelled _Planned_ in
+[Non-goals & BYO](./non-goals.md). The shipped path it will replace —
+`app.use('*', ...)` on the Hono app `createApp` returns — is shown alongside it
+and keeps working.
 
 > **Recently shipped** — now documented as available API in these recipes: the
 > unified `c.error` helper + error envelope
