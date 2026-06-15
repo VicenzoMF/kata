@@ -32,12 +32,18 @@ describe('parseArgs()', () => {
       cwd: undefined,
       force: false,
       help: false,
+      withExample: false,
     })
   })
 
   it('parses --force and -f', () => {
     expect(parseArgs(['init', '--force']).force).toBe(true)
     expect(parseArgs(['init', '-f']).force).toBe(true)
+  })
+
+  it('parses --with-example (defaulting to false)', () => {
+    expect(parseArgs(['init', '--with-example']).withExample).toBe(true)
+    expect(parseArgs(['init']).withExample).toBe(false)
   })
 
   it('parses --cwd <dir>, --cwd=<dir>, and -C <dir>', () => {
@@ -98,6 +104,33 @@ describe('run()', () => {
     expect(second.code).toBe(0)
     expect(second.stdout).toContain('skip')
     expect(second.stdout).toContain('--force')
+  })
+
+  it('scaffolds the runnable example app with --with-example', async () => {
+    const result = await run(['init', '--with-example', '--cwd', dir])
+
+    expect(result.code).toBe(0)
+    expect(result.stdout).toContain('src/context.ts')
+    expect(result.stdout).toContain('src/main.ts')
+    expect(result.stdout).toContain('src/modules/health/health.route.ts')
+    expect(result.stdout).toContain('src/modules/health/health.schema.ts')
+    expect(result.stdout).toContain('package.json')
+    expect(result.stdout).toContain('tsconfig.json')
+    expect(await exists(join(dir, 'src/main.ts'))).toBe(true)
+    expect(await exists(join(dir, 'src/modules/health/health.route.ts'))).toBe(true)
+    expect(await exists(join(dir, 'package.json'))).toBe(true)
+    expect(await exists(join(dir, 'tsconfig.json'))).toBe(true)
+    // The harness files are still written alongside the example.
+    expect(await exists(join(dir, '.claude/settings.json'))).toBe(true)
+  })
+
+  it('stays harness-only without the flag (the flag is purely additive)', async () => {
+    await run(['init', '--cwd', dir])
+
+    expect(await exists(join(dir, '.claude/settings.json'))).toBe(true)
+    expect(await exists(join(dir, 'src/main.ts'))).toBe(false)
+    expect(await exists(join(dir, 'package.json'))).toBe(false)
+    expect(await exists(join(dir, 'tsconfig.json'))).toBe(false)
   })
 })
 

@@ -10,6 +10,7 @@ export type ParsedArgs = {
   cwd: string | undefined
   force: boolean
   help: boolean
+  withExample: boolean
 }
 
 export type RunResult = {
@@ -24,15 +25,24 @@ Usage:
   kata init [options]    Scaffold harness config files into a project
 
 Options:
-  -C, --cwd <dir>    Project root to scaffold into (default: current directory)
-  -f, --force        Overwrite existing files instead of skipping them
-  -h, --help         Show this help
+  -C, --cwd <dir>     Project root to scaffold into (default: current directory)
+  -f, --force         Overwrite existing files instead of skipping them
+      --with-example  Also scaffold a runnable example app (GET /health)
+  -h, --help          Show this help
 
 \`kata init\` writes:
   .claude/settings.json    Claude Code hooks + config-tampering bans (#27, #29)
   .codex/hooks.json        Codex hooks → \`kata verify --json\` (#28)
   AGENTS.md                Canonical agent instructions, Codex + Claude (#31)
   CLAUDE.md                Claude entrypoint → imports AGENTS.md (#31)
+
+\`--with-example\` additionally writes a runnable app — run \`pnpm install\`, then
+\`pnpm start\`, to boot \`GET /health\`:
+  src/context.ts                        defineContext + re-export createApp/defineRoute
+  src/main.ts                           createApp({ modules: [health] }) + serve
+  src/modules/health/health.route.ts    GET /health → 200 {"status":"ok"}
+  src/modules/health/health.schema.ts   HealthSchema (Zod DTO)
+  package.json, tsconfig.json           created only if absent
 `
 
 export function parseArgs(argv: readonly string[]): ParsedArgs {
@@ -40,6 +50,7 @@ export function parseArgs(argv: readonly string[]): ParsedArgs {
   let cwd: string | undefined
   let force = false
   let help = false
+  let withExample = false
 
   for (let i = 0; i < argv.length; i += 1) {
     const arg = argv[i]
@@ -49,6 +60,8 @@ export function parseArgs(argv: readonly string[]): ParsedArgs {
       help = true
     } else if (arg === '-f' || arg === '--force') {
       force = true
+    } else if (arg === '--with-example') {
+      withExample = true
     } else if (arg === '-C' || arg === '--cwd') {
       i += 1
       cwd = argv[i]
@@ -59,7 +72,7 @@ export function parseArgs(argv: readonly string[]): ParsedArgs {
     }
   }
 
-  return { command, cwd, force, help }
+  return { command, cwd, force, help, withExample }
 }
 
 /** Human-readable summary of what `init` did. */
@@ -108,6 +121,6 @@ export async function run(argv: readonly string[]): Promise<RunResult> {
     }
   }
 
-  const result = await init({ cwd: args.cwd, force: args.force })
+  const result = await init({ cwd: args.cwd, force: args.force, withExample: args.withExample })
   return { code: 0, stdout: formatResult(result), stderr: '' }
 }

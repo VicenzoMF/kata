@@ -6,6 +6,14 @@ import { agentsMd } from './templates/agents-md'
 import { claudeMd } from './templates/claude-md'
 import { claudeSettingsTemplate } from './templates/claude-settings'
 import { codexHooksTemplate } from './templates/codex-hooks'
+import {
+  exampleContextSource,
+  exampleHealthRouteSource,
+  exampleHealthSchemaSource,
+  exampleMainSource,
+  examplePackageJson,
+  exampleTsconfig,
+} from './templates/example'
 
 /** Serialise a template to its on-disk form: 2-space JSON + trailing newline,
  *  matching Biome's JSON formatter so the generated file is already canonical
@@ -32,4 +40,40 @@ export function renderAgentsMd(): string {
 /** Render `CLAUDE.md` — the Claude entrypoint that imports AGENTS.md (#31). */
 export function renderClaudeMd(): string {
   return claudeMd
+}
+
+// ── `kata init --with-example` source files (ADR-0015 / issue #101) ──────────
+// The four source files are stored pre-rendered in `templates/example.ts`; these
+// renderers stay thin re-exports, symmetric with the markdown generators above.
+// The two manifests serialise an object (like the JSON harness templates) so the
+// bytes match Biome's JSON formatter.
+
+/** Render `src/context.ts` — the typed DI surface (ADR-0004). */
+export function renderExampleContext(): string {
+  return exampleContextSource
+}
+
+/** Render `src/main.ts` — entry point wiring `createApp` to `serve`. */
+export function renderExampleMain(): string {
+  return exampleMainSource
+}
+
+/** Render `src/modules/health/health.route.ts` — `GET /health` (ADR-0003). */
+export function renderExampleHealthRoute(): string {
+  return exampleHealthRouteSource
+}
+
+/** Render `src/modules/health/health.schema.ts` — the `HealthSchema` DTO (ADR-0005). */
+export function renderExampleHealthSchema(): string {
+  return exampleHealthSchemaSource
+}
+
+/** Render the generated app's `package.json` (emitted only-if-absent). */
+export function renderExamplePackageJson(): string {
+  return serialize(examplePackageJson)
+}
+
+/** Render the generated app's `tsconfig.json` (emitted only-if-absent). */
+export function renderExampleTsconfig(): string {
+  return serialize(exampleTsconfig)
 }
