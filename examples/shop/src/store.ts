@@ -18,6 +18,13 @@ export type Store = {
   putOrder(order: Order): void
   /** Open a unit of work. See {@link Transaction}. */
   begin(): Transaction
+  /**
+   * Release the backing resources. The in-memory stub just drops its data; a
+   * real driver would `await pool.end()` here. Wired into `gracefulShutdown`'s
+   * `onClose` in `main.ts` (ADR-0014) so a `SIGTERM` drains in-flight requests
+   * first, then closes the store. Idempotent — safe to call more than once.
+   */
+  close(): Promise<void>
 }
 
 export type TransactionStatus = 'open' | 'committed' | 'rolled-back'
@@ -156,6 +163,7 @@ export function createStore(seed: readonly Product[] = DEMO_CATALOG): Store {
     carts: new Map(),
     orders: new Map(),
   }
+  let closed = false
 
   return {
     listProducts: () => [...data.products.values()],
@@ -173,5 +181,14 @@ export function createStore(seed: readonly Product[] = DEMO_CATALOG): Store {
       data.orders.set(order.id, order)
     },
     begin: () => createTransaction(data),
+    close: async () => {
+      if (closed) return
+      closed = true
+      // A real pool awaits in-flight queries and tears down its sockets here;
+      // the stub just releases its in-memory data so `onClose` has work to do.
+      data.products.clear()
+      data.carts.clear()
+      data.orders.clear()
+    },
   }
 }
