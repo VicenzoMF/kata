@@ -5,8 +5,15 @@ import {
   renderClaudeMd,
   renderClaudeSettings,
   renderCodexHooks,
+  renderExampleContext,
+  renderExampleHealthRoute,
+  renderExampleHealthSchema,
+  renderExampleMain,
+  renderExamplePackageJson,
+  renderExampleTsconfig,
   serialize,
 } from './generators'
+import { examplePackageJson, exampleTsconfig } from './templates/example'
 import type { ClaudeSettings, CodexHooks } from './templates/types'
 
 function parseClaude(): ClaudeSettings {
@@ -196,11 +203,97 @@ describe('renderAgentsMd() / renderClaudeMd() — issue #31', () => {
   })
 })
 
+describe('renderExample* — `kata init --with-example` source files (ADR-0015 / #101)', () => {
+  it('context.ts calls defineContext and re-exports createApp / defineRoute (ADR-0004)', () => {
+    const src = renderExampleContext()
+    expect(src).toContain("import { defineContext } from 'kata'")
+    expect(src).toContain('export const k = defineContext({})')
+    expect(src).toContain('export const { defineRoute, createApp } = k')
+  })
+
+  it('main.ts wires createApp({ modules: [health] }) to serve from @hono/node-server', () => {
+    const src = renderExampleMain()
+    expect(src).toContain("import { serve } from '@hono/node-server'")
+    expect(src).toContain("import * as health from './modules/health/health.route'")
+    expect(src).toContain('createApp({ modules: [health] })')
+    expect(src).toContain('serve({ fetch: app.fetch, port }')
+  })
+
+  it('health.route.ts declares GET /health with input {} and output HealthSchema (ADR-0003)', () => {
+    const src = renderExampleHealthRoute()
+    expect(src).toContain("method: 'GET'")
+    expect(src).toContain("path: '/health'")
+    expect(src).toContain('input: {}')
+    expect(src).toContain('output: HealthSchema')
+    expect(src).toContain("import { HealthSchema } from './health.schema'")
+  })
+
+  it('health.route.ts builds no schema inline — kata/inline-schema stays clean (ADR-0005)', () => {
+    // The route imports HealthSchema by name; any `z.` construction in a
+    // *.route.ts file would fail `kata verify` in the generated app.
+    expect(renderExampleHealthRoute()).not.toMatch(/\bz\./)
+  })
+
+  it('health.schema.ts holds the HealthSchema Zod DTO (ADR-0005)', () => {
+    const src = renderExampleHealthSchema()
+    expect(src).toContain("import { z } from 'zod'")
+    expect(src).toContain('export const HealthSchema = z.object({')
+    expect(src).toContain("status: z.literal('ok')")
+  })
+
+  it('every generated source file ends in exactly one trailing newline', () => {
+    const sources = [
+      renderExampleContext(),
+      renderExampleMain(),
+      renderExampleHealthRoute(),
+      renderExampleHealthSchema(),
+    ]
+    for (const src of sources) {
+      expect(src.endsWith('\n')).toBe(true)
+      expect(src.endsWith('\n\n')).toBe(false)
+    }
+  })
+
+  it('package.json serialises the template object, with kata + boot deps', () => {
+    const text = renderExamplePackageJson()
+    expect(text.endsWith('\n')).toBe(true)
+    expect(JSON.parse(text)).toEqual(examplePackageJson)
+    expect(examplePackageJson.type).toBe('module')
+    expect(examplePackageJson.dependencies.kata).toBe('^0.1.0')
+    expect(examplePackageJson.dependencies['@hono/node-server']).toBeDefined()
+    expect(examplePackageJson.dependencies.zod).toBeDefined()
+    expect(examplePackageJson.scripts.start).toBe('tsx src/main.ts')
+  })
+
+  it('tsconfig.json serialises the template object: strict + Bundler resolution + node types', () => {
+    const text = renderExampleTsconfig()
+    expect(text.endsWith('\n')).toBe(true)
+    expect(JSON.parse(text)).toEqual(exampleTsconfig)
+    expect(exampleTsconfig.compilerOptions.strict).toBe(true)
+    expect(exampleTsconfig.compilerOptions.moduleResolution).toBe('Bundler')
+    expect(exampleTsconfig.compilerOptions.types).toContain('node')
+  })
+
+  it('serialises both manifests with 2-space JSON (Biome formatter parity)', () => {
+    expect(renderExamplePackageJson()).toBe(serialize(examplePackageJson))
+    expect(renderExampleTsconfig()).toBe(serialize(exampleTsconfig))
+  })
+})
+
 describe('determinism', () => {
   it('renders byte-identical output on repeated calls', () => {
     expect(renderClaudeSettings()).toBe(renderClaudeSettings())
     expect(renderCodexHooks()).toBe(renderCodexHooks())
     expect(renderAgentsMd()).toBe(renderAgentsMd())
     expect(renderClaudeMd()).toBe(renderClaudeMd())
+  })
+
+  it('renders byte-identical example files on repeated calls', () => {
+    expect(renderExampleContext()).toBe(renderExampleContext())
+    expect(renderExampleMain()).toBe(renderExampleMain())
+    expect(renderExampleHealthRoute()).toBe(renderExampleHealthRoute())
+    expect(renderExampleHealthSchema()).toBe(renderExampleHealthSchema())
+    expect(renderExamplePackageJson()).toBe(renderExamplePackageJson())
+    expect(renderExampleTsconfig()).toBe(renderExampleTsconfig())
   })
 })

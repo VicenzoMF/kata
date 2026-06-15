@@ -9,6 +9,12 @@ import {
   renderClaudeMd,
   renderClaudeSettings,
   renderCodexHooks,
+  renderExampleContext,
+  renderExampleHealthRoute,
+  renderExampleHealthSchema,
+  renderExampleMain,
+  renderExamplePackageJson,
+  renderExampleTsconfig,
 } from './generators'
 import { type FileStatus, type InitResult, init } from './init'
 
@@ -16,6 +22,13 @@ const CLAUDE = '.claude/settings.json'
 const CODEX = '.codex/hooks.json'
 const AGENTS_MD = 'AGENTS.md'
 const CLAUDE_MD = 'CLAUDE.md'
+
+const CONTEXT_TS = 'src/context.ts'
+const MAIN_TS = 'src/main.ts'
+const HEALTH_ROUTE = 'src/modules/health/health.route.ts'
+const HEALTH_SCHEMA = 'src/modules/health/health.schema.ts'
+const PACKAGE_JSON = 'package.json'
+const TSCONFIG_JSON = 'tsconfig.json'
 
 let dir = ''
 
@@ -116,5 +129,78 @@ describe('init()', () => {
     expect(statusOf(second, CODEX)).toBe('skipped')
     expect(statusOf(second, AGENTS_MD)).toBe('skipped')
     expect(statusOf(second, CLAUDE_MD)).toBe('skipped')
+  })
+})
+
+describe('init({ withExample: true }) — ADR-0015 D1', () => {
+  it('scaffolds the four example source files', async () => {
+    const result = await init({ cwd: dir, withExample: true })
+
+    expect(statusOf(result, CONTEXT_TS)).toBe('created')
+    expect(statusOf(result, MAIN_TS)).toBe('created')
+    expect(statusOf(result, HEALTH_ROUTE)).toBe('created')
+    expect(statusOf(result, HEALTH_SCHEMA)).toBe('created')
+    expect(await exists(join(dir, MAIN_TS))).toBe(true)
+    expect(await exists(join(dir, HEALTH_ROUTE))).toBe(true)
+  })
+
+  it('also emits package.json and tsconfig.json so the app boots', async () => {
+    const result = await init({ cwd: dir, withExample: true })
+
+    expect(statusOf(result, PACKAGE_JSON)).toBe('created')
+    expect(statusOf(result, TSCONFIG_JSON)).toBe('created')
+  })
+
+  it('writes exactly what the example generators render', async () => {
+    await init({ cwd: dir, withExample: true })
+
+    expect(await readFile(join(dir, CONTEXT_TS), 'utf8')).toBe(renderExampleContext())
+    expect(await readFile(join(dir, MAIN_TS), 'utf8')).toBe(renderExampleMain())
+    expect(await readFile(join(dir, HEALTH_ROUTE), 'utf8')).toBe(renderExampleHealthRoute())
+    expect(await readFile(join(dir, HEALTH_SCHEMA), 'utf8')).toBe(renderExampleHealthSchema())
+    expect(await readFile(join(dir, PACKAGE_JSON), 'utf8')).toBe(renderExamplePackageJson())
+    expect(await readFile(join(dir, TSCONFIG_JSON), 'utf8')).toBe(renderExampleTsconfig())
+  })
+
+  it('still writes the harness files (the example rides on top)', async () => {
+    const result = await init({ cwd: dir, withExample: true })
+
+    expect(statusOf(result, CLAUDE)).toBe('created')
+    expect(statusOf(result, AGENTS_MD)).toBe('created')
+  })
+
+  it('writes no example files without the flag', async () => {
+    const result = await init({ cwd: dir })
+
+    expect(statusOf(result, MAIN_TS)).toBeUndefined()
+    expect(statusOf(result, PACKAGE_JSON)).toBeUndefined()
+    expect(await exists(join(dir, MAIN_TS))).toBe(false)
+  })
+
+  it('overwrites an existing source file under --force', async () => {
+    await seed(MAIN_TS, 'OLD')
+
+    const result = await init({ cwd: dir, withExample: true, force: true })
+
+    expect(statusOf(result, MAIN_TS)).toBe('overwritten')
+    expect(await readFile(join(dir, MAIN_TS), 'utf8')).toBe(renderExampleMain())
+  })
+
+  it('never clobbers an existing package.json — even with --force (only-if-absent)', async () => {
+    await seed(PACKAGE_JSON, '{ "name": "mine" }')
+
+    const result = await init({ cwd: dir, withExample: true, force: true })
+
+    expect(statusOf(result, PACKAGE_JSON)).toBe('skipped')
+    expect(await readFile(join(dir, PACKAGE_JSON), 'utf8')).toBe('{ "name": "mine" }')
+  })
+
+  it('never clobbers an existing tsconfig.json — even with --force (only-if-absent)', async () => {
+    await seed(TSCONFIG_JSON, 'KEEP')
+
+    const result = await init({ cwd: dir, withExample: true, force: true })
+
+    expect(statusOf(result, TSCONFIG_JSON)).toBe('skipped')
+    expect(await readFile(join(dir, TSCONFIG_JSON), 'utf8')).toBe('KEEP')
   })
 })
