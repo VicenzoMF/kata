@@ -86,3 +86,14 @@ describe('store transactions', () => {
     expect(b.status).toBe('rolled-back')
   })
 })
+
+describe('store lifecycle', () => {
+  it('close() releases the data and is idempotent', async () => {
+    const store = createStore([product()])
+
+    await store.close()
+    expect(store.listProducts()).toEqual([]) // backing data released
+
+    await expect(store.close()).resolves.toBeUndefined() // safe to call more than once
+  })
+})

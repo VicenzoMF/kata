@@ -22,6 +22,8 @@ import type { User } from './modules/users/users.schema'
 export type Db = {
   findUser: (id: string) => Promise<User | null>
   insertUser: (user: User) => Promise<void>
+  // Release the connection pool on shutdown — see "Closing the pool on shutdown".
+  close: () => Promise<void>
 }
 
 export function makeDb(env: NodeJS.ProcessEnv): Db {
@@ -34,6 +36,8 @@ export function makeDb(env: NodeJS.ProcessEnv): Db {
     insertUser: async (user) => {
       store.set(user.id, user)
     },
+    // A real driver awaits `pool.end()` here; the in-memory stub has nothing to free.
+    close: async () => {},
   }
 }
 ```
@@ -183,14 +187,51 @@ roll back any transaction the handler left un-committed. The
 [`examples/shop` transaction middleware](../../examples/shop/src/middlewares/transaction.ts)
 shows the full pattern.
 
+## Closing the pool on shutdown
+
+A singleton is opened once at startup and lives for the whole process, so closing
+it is a *process* concern, not a per-request one — there is no per-request
+teardown hook to hang it on. An app that ignores `SIGTERM` (a `docker stop`, a
+Kubernetes pod rotation) is killed mid-flight: in-flight requests are dropped and
+the pool never closes. Wire `gracefulShutdown` from the Node-only **`kata/node`**
+subpath in `main.ts` — it stops accepting connections, drains the in-flight
+requests, then runs your `onClose` ([ADR-0014](../adr/0014-lifecycle-shutdown.md)):
+
+```ts
+// src/main.ts
+import { serve } from '@hono/node-server'
+import { gracefulShutdown } from 'kata/node'
+
+import { createApp, k } from './context'
+import * as users from './modules/users/users.route'
+
+const app = createApp({ modules: [users] })
+const server = serve({ fetch: app.fetch, port: Number(process.env['PORT'] ?? 3000) })
+
+gracefulShutdown(server, {
+  onClose: async () => {
+    await k.registry.db.__value.close() // close the pool *after* the drain
+  },
+})
+```
+
+`onClose` runs **after** the drain, so no live handler loses its pool mid-query,
+and teardown order stays yours: sequence it explicitly (flush metrics, drain a
+queue, *then* close the pool — the inverse of construction order). Kata owns no
+dispose registry; `gracefulShutdown` owns only the always-identical plumbing —
+the signal trap, the drain, and a force-exit timer (`timeoutMs`, default 10 s)
+for a connection that refuses to close. The
+[`examples/shop` bootstrap](../../examples/shop/src/main.ts) wires this against
+the store stub end-to-end.
+
 ## Gotchas
 
 - **Singletons are eager.** `makeDb(process.env)` runs when `context.ts` is first
   imported, not lazily on first `c.get`. Do connection setup there; do not put
   request-specific logic in the factory.
-- **Lifecycle is outside the request.** Closing the pool on shutdown belongs in
-  the server bootstrap (`main.ts`) via process signals — Kata has no per-request
-  teardown hook for singletons.
+- **Lifecycle is outside the request.** A singleton has no per-request teardown
+  hook; closing the pool is a process concern handled in `main.ts` with
+  `gracefulShutdown` — see [Closing the pool on shutdown](#closing-the-pool-on-shutdown).
 - **Read config at the edge.** Pass `env` into `makeDb` once; keep
   `process.env` out of handlers and services so they stay pure and testable.
 - **`c.get('db')` only compiles if `'db'` is in `defineContext`.** An unregistered
