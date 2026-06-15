@@ -11,7 +11,7 @@
 // middleware/context types.
 import { sign, verify } from 'hono/jwt'
 import type { z } from 'zod'
-import type { Middleware } from '../context'
+import type { Middleware, MiddlewareContext } from '../context'
 import type { FieldIssue } from '../errors'
 import { formatZodIssues } from '../errors'
 import type { Registry } from '../types'
@@ -186,11 +186,11 @@ const DEFAULT_HEADER = 'authorization'
 /** `Authorization: Bearer <token>` — the auth scheme is case-insensitive (RFC 7235 §2.1). */
 const BEARER_SCHEME = /^Bearer\s+(\S+)$/i
 
-export type JwtAuthOptions<S extends z.ZodTypeAny> = {
+export type JwtAuthOptions<S extends z.ZodTypeAny, R extends Registry = Registry> = {
   secret: string
-  /** Schema the JWT payload must satisfy; its `z.infer` becomes the slot value. */
+  /** Schema the JWT payload must satisfy; its `z.infer` becomes the slot value (unless `resolve` maps it further). */
   claims: S
-  /** Scoped slot to populate with the validated claims. Default `'currentUser'`. */
+  /** Scoped slot to populate. Default `'currentUser'`. Holds the validated claims, or the resolved user when `resolve` is set. */
   slot?: string
   /** Expected signing algorithm. Default `'HS256'`. */
   alg?: JwtAlgorithm
@@ -200,6 +200,16 @@ export type JwtAuthOptions<S extends z.ZodTypeAny> = {
   audience?: string
   /** Request header to read the bearer token from. Default `'authorization'`. */
   header?: string
+  /**
+   * BYO user load (Epic #89): map the validated claims to the full app user that
+   * gets written into the slot. Runs after claims validation; the slot then holds
+   * the resolved value instead of the raw claims (so the slot type is the user
+   * type, not `z.infer<S>`). Returning `null` / `undefined` means "authenticated,
+   * but no such user" and renders a 401 (ADR-0013 §5) — distinct from a 403, which
+   * is an *authorization* decision the `guard` makes. Omit to keep #92 behaviour:
+   * the validated claims are written verbatim.
+   */
+  resolve?: (claims: z.infer<S>, c: MiddlewareContext<R>) => Promise<unknown> | unknown
 }
 
 /**
@@ -224,7 +234,7 @@ export type JwtAuthOptions<S extends z.ZodTypeAny> = {
  * inferable from `options`; ADR-0013 §4).
  */
 export function jwtAuth<R extends Registry, S extends z.ZodTypeAny>(
-  options: JwtAuthOptions<S>,
+  options: JwtAuthOptions<S, R>,
 ): Middleware<R>['handler'] {
   const slot = options.slot ?? DEFAULT_SLOT
   const header = options.header ?? DEFAULT_HEADER
@@ -251,12 +261,25 @@ export function jwtAuth<R extends Registry, S extends z.ZodTypeAny>(
       return c.error('unauthorized', 'Invalid or expired token', { status: 401 })
     }
 
+    // Optional BYO user load (ADR-0013 §5 / Epic #89): when `resolve` is set, the
+    // slot holds the resolved user, not the raw claims. A `null` / `undefined`
+    // result means "valid token, but no such user" → 401, consistent with the
+    // other authentication failures above (a 403 would imply an authorization
+    // decision, which is the guard's job).
+    let value: unknown = result.claims
+    if (options.resolve) {
+      value = await options.resolve(result.claims, c)
+      if (value === null || value === undefined) {
+        return c.error('unauthorized', 'No such user', { status: 401 })
+      }
+    }
+
     // ADR-0013 §4: `slot` is a runtime string and `R` is opaque here, so widen
     // `set` to its string-keyed form. The slot's membership in `ScopedKeys<R>`
-    // and that `z.infer<S>` matches its declared type are enforced at the call
-    // site (`provides` + lint), exactly as ADR-0004 documents for scoped reads.
-    const setSlot = c.set as unknown as (key: string, value: z.infer<S>) => void
-    setSlot(slot, result.claims)
+    // and that the value matches its declared type are enforced at the call site
+    // (`provides` + lint), exactly as ADR-0004 documents for scoped reads.
+    const setSlot = c.set as unknown as (key: string, value: unknown) => void
+    setSlot(slot, value)
     await next()
   }
 }
@@ -270,4 +293,102 @@ function readBearerToken(headerValue: string | undefined): string | undefined {
   if (headerValue === undefined) return undefined
   const match = BEARER_SCHEME.exec(headerValue.trim())
   return match?.[1]
+}
+
+// ── Authorization guards (403) — ADR-0013 §3b / §5 ────────────────────────────
+// `guard` is the Kata-aware *authorization* layer over the slot `jwtAuth` filled:
+// it reads an already-provided slot (the current user) and rejects with a 403
+// ADR-0008 envelope when its predicate says no. Like `jwtAuth` it returns just the
+// *handler*, so the caller owns `defineMiddleware({ provides: [] })` — a guard
+// reads `currentUser` and provides nothing, so the `provides: []` literal stays at
+// the call site where the ADR-0004 rules can read it (ADR-0013 Alternative C).
+// `requireRole` / `requireClaim` are thin sugar over `guard` for the two most
+// common checks.
+
+/** 403 envelope `error` code `guard` uses when `code` is omitted. */
+const DEFAULT_FORBIDDEN_CODE = 'forbidden'
+
+/** 403 envelope message `guard` uses when `message` is omitted. */
+const DEFAULT_FORBIDDEN_MESSAGE = 'Insufficient permissions'
+
+export type GuardOptions<R extends Registry, C = unknown> = {
+  /** Slot the guard reads (must be provided earlier in the chain). Default `'currentUser'`. */
+  slot?: string
+  /** Predicate over the slot value; return false to reject with 403. */
+  authorize: (claims: C, c: MiddlewareContext<R>) => boolean | Promise<boolean>
+  /** 403 envelope `error` code. Default `'forbidden'`. */
+  code?: string
+  /** 403 envelope message. Default `'Insufficient permissions'`. */
+  message?: string
+}
+
+/**
+ * Build an authorization guard *handler* (ADR-0013 §3b) that reads an
+ * already-provided slot and rejects with a 403 ADR-0008 envelope when `authorize`
+ * returns false; otherwise it calls `next()`. It provides nothing — wire it with
+ * `provides: [] as const` AFTER the auth middleware in the route's `use:` array,
+ * so the slot it reads has already been set.
+ *
+ * `R` is opaque here, so — exactly as `jwtAuth` widens `c.set` (ADR-0013 §4) — we
+ * widen `c.get` to its string-keyed form to read the runtime `slot` string. That
+ * the slot is a real `ScopedKeys<R>` is guaranteed at the call site (`provides` +
+ * lint), not by this signature; `C` is the caller's assertion of the slot's type.
+ */
+export function guard<R extends Registry, C = unknown>(
+  options: GuardOptions<R, C>,
+): Middleware<R>['handler'] {
+  const slot = options.slot ?? DEFAULT_SLOT
+  const code = options.code ?? DEFAULT_FORBIDDEN_CODE
+  const message = options.message ?? DEFAULT_FORBIDDEN_MESSAGE
+  return async (c, next) => {
+    const getSlot = c.get as unknown as (key: string) => C
+    const allowed = await options.authorize(getSlot(slot), c)
+    if (!allowed) {
+      return c.error(code, message, { status: 403 })
+    }
+    await next()
+  }
+}
+
+/**
+ * Sugar over {@link guard}: allow only when the slot value's `role` is (one of)
+ * `role`. Reads the default `currentUser` slot (override via `options.slot`) and
+ * rejects with the default 403 `forbidden` envelope.
+ */
+export function requireRole<R extends Registry>(
+  role: string | readonly string[],
+  options?: { slot?: string },
+): Middleware<R>['handler'] {
+  const allowed = typeof role === 'string' ? [role] : role
+  return guard<R, Record<string, unknown>>({
+    slot: options?.slot,
+    authorize: (claims) => {
+      const value = claims['role']
+      return typeof value === 'string' && allowed.includes(value)
+    },
+  })
+}
+
+/**
+ * Sugar over {@link guard}: allow only when the slot value's claim at `key`
+ * matches `expected` — by strict equality, or, when `expected` is a function, by
+ * that predicate. Reads the default `currentUser` slot (override via
+ * `options.slot`) and rejects with the default 403 `forbidden` envelope.
+ */
+export function requireClaim<
+  R extends Registry,
+  C extends Record<string, unknown> = Record<string, unknown>,
+>(
+  key: string,
+  expected: unknown | ((value: unknown) => boolean),
+  options?: { slot?: string },
+): Middleware<R>['handler'] {
+  const matches: (value: unknown) => boolean =
+    typeof expected === 'function'
+      ? (expected as (value: unknown) => boolean)
+      : (value) => value === expected
+  return guard<R, C>({
+    slot: options?.slot,
+    authorize: (claims) => matches(claims[key]),
+  })
 }

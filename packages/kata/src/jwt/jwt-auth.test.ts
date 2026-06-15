@@ -198,3 +198,95 @@ describe('jwtAuth() — options', () => {
     expect(await accepted.json()).toEqual({ sub: 'u1', name: 'Ada', role: 'user' })
   })
 })
+
+describe('jwtAuth() — resolve() hook (BYO user load, #93)', () => {
+  // The token carries only an opaque `sub`; `resolve` loads the full app user
+  // from a store. The slot is therefore typed as the *resolved* user, not the
+  // claims — proving `resolve` replaces what lands in the slot.
+  const IdClaims = z.object({ sub: z.string() })
+  const AppUser = z.object({ id: z.string(), name: z.string(), role: z.enum(['user', 'admin']) })
+  type AppUser = z.infer<typeof AppUser>
+
+  const store: Record<string, AppUser> = {
+    u1: { id: 'u1', name: 'Ada', role: 'admin' },
+  }
+
+  // `async` resolve exercises the `await` path; returning `store[sub]` yields
+  // `undefined` (→ 401) for an unknown subject under `noUncheckedIndexedAccess`.
+  function buildApp() {
+    const kx = defineContext({ currentUser: scoped<AppUser>() })
+    const requireResolvedUser = kx.defineMiddleware({
+      provides: ['currentUser'] as const,
+      handler: jwtAuth({
+        secret: SECRET,
+        claims: IdClaims,
+        resolve: async (claims) => store[claims.sub],
+      }),
+    })
+    const meRoute = kx.defineRoute({
+      method: 'GET',
+      path: '/me',
+      use: [requireResolvedUser],
+      input: {},
+      output: AppUser,
+      handler: (c) => c.get('currentUser'),
+    })
+    return kx.createApp({ modules: [{ meRoute }] })
+  }
+
+  it('writes the resolved user into the slot when resolve returns one', async () => {
+    const resolvedApp = buildApp()
+    const token = await signJwt({ sub: 'u1' }, { secret: SECRET })
+    const res = await resolvedApp.request('/me', { method: 'GET', headers: bearer(token) })
+
+    expect(res.status).toBe(200)
+    // The body is the full store record, not the `{ sub }` claims — resolve ran.
+    expect(await res.json()).toEqual({ id: 'u1', name: 'Ada', role: 'admin' })
+  })
+
+  it('401s "No such user" when resolve returns null/undefined', async () => {
+    const resolvedApp = buildApp()
+    const token = await signJwt({ sub: 'ghost' }, { secret: SECRET })
+    const res = await resolvedApp.request('/me', { method: 'GET', headers: bearer(token) })
+
+    expect(res.status).toBe(401)
+    expect(await res.json()).toEqual({ error: 'unauthorized', message: 'No such user' })
+  })
+
+  it('passes the validated claims and the middleware context to resolve', async () => {
+    let seenSub: string | undefined
+    let tenant: string | undefined
+    const kx = defineContext({ currentUser: scoped<AppUser>() })
+    const ctxMw = kx.defineMiddleware({
+      provides: ['currentUser'] as const,
+      handler: jwtAuth({
+        secret: SECRET,
+        claims: IdClaims,
+        resolve: (claims, c) => {
+          seenSub = claims.sub
+          tenant = c.header('x-tenant')
+          return store[claims.sub]
+        },
+      }),
+    })
+    const ctxRoute = kx.defineRoute({
+      method: 'GET',
+      path: '/me',
+      use: [ctxMw],
+      input: {},
+      output: AppUser,
+      handler: (c) => c.get('currentUser'),
+    })
+    const ctxApp = kx.createApp({ modules: [{ ctxRoute }] })
+
+    const token = await signJwt({ sub: 'u1' }, { secret: SECRET })
+    const res = await ctxApp.request('/me', {
+      method: 'GET',
+      headers: { ...bearer(token), 'x-tenant': 'acme' },
+    })
+
+    expect(res.status).toBe(200)
+    expect(seenSub).toBe('u1')
+    expect(tenant).toBe('acme')
+  })
+})
