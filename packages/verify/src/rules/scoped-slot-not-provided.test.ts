@@ -34,6 +34,23 @@ function routeProject(routeText: string, scoped: ReadonlySet<string>, withAuth =
   return project(files, scoped)
 }
 
+/** A `src/main.ts` whose `createApp` declares the given `middlewares:` array literal. */
+function appWith(middlewares: string): { relPath: string; text: string } {
+  return {
+    relPath: 'src/main.ts',
+    text: `const app = createApp({ modules: [], middlewares: ${middlewares} })`,
+  }
+}
+
+/** A route reading `currentUser` with no `use:` chain — provided only via the global chain, if at all. */
+const READS_CURRENT_USER = {
+  relPath: ROUTE,
+  text: `export const me = defineRoute({
+    method: 'GET', path: '/me', input: {}, output: U,
+    handler: (c) => c.get('currentUser'),
+  })`,
+}
+
 describe('kata/scoped-slot-not-provided', () => {
   it('passes a scoped read whose slot is provided by a use: middleware', () => {
     const p = routeProject(
@@ -205,5 +222,71 @@ describe('kata/scoped-slot-not-provided', () => {
       false,
     )
     expect(scopedSlotNotProvided.check(p)[0]?.line).toBe(6)
+  })
+
+  // ── ADR-0012: app-level (`createApp({ middlewares })`) providers ───────────
+
+  it('does not flag a read provided by an app-level middleware, even with no use: chain', () => {
+    const p = project([AUTH_MW, appWith('[auth]'), READS_CURRENT_USER], new Set(['currentUser']))
+    expect(scopedSlotNotProvided.check(p)).toEqual([])
+  })
+
+  it('still flags a read provided by neither the app-level chain nor use:', () => {
+    // The global chain provides currentUser; the route reads tenantId, which nothing provides.
+    const route = {
+      relPath: ROUTE,
+      text: `export const me = defineRoute({
+        method: 'GET', path: '/me', input: {}, output: U,
+        handler: (c) => c.get('tenantId'),
+      })`,
+    }
+    const p = project([AUTH_MW, appWith('[auth]'), route], new Set(['currentUser', 'tenantId']))
+    const issues = scopedSlotNotProvided.check(p)
+    expect(issues).toHaveLength(1)
+    expect(issues[0]?.message).toContain("c.get('tenantId')")
+  })
+
+  it('reads app-level providers from a namespaced k.createApp call', () => {
+    const main = {
+      relPath: 'src/main.ts',
+      text: `const app = k.createApp({ modules: [], middlewares: [auth] })`,
+    }
+    const p = project([AUTH_MW, main, READS_CURRENT_USER], new Set(['currentUser']))
+    expect(scopedSlotNotProvided.check(p)).toEqual([])
+  })
+
+  it('bails when an app-level middlewares entry is an unresolvable factory call', () => {
+    // secureHeaders() might provide anything as far as static analysis can prove → no flag, app-wide.
+    const p = project([appWith('[secureHeaders()]'), READS_CURRENT_USER], new Set(['currentUser']))
+    expect(scopedSlotNotProvided.check(p)).toEqual([])
+  })
+
+  it('bails when the app-level middlewares chain contains a spread', () => {
+    const p = project([appWith('[...shared]'), READS_CURRENT_USER], new Set(['currentUser']))
+    expect(scopedSlotNotProvided.check(p)).toEqual([])
+  })
+
+  it('bails when the app-level middlewares value is not an array literal', () => {
+    const p = project([appWith('sharedGlobals'), READS_CURRENT_USER], new Set(['currentUser']))
+    expect(scopedSlotNotProvided.check(p)).toEqual([])
+  })
+
+  it('bails when the createApp config carries an object spread that could inject middlewares', () => {
+    const main = { relPath: 'src/main.ts', text: `const app = createApp({ ...base, modules: [] })` }
+    const p = project([main, READS_CURRENT_USER], new Set(['currentUser']))
+    expect(scopedSlotNotProvided.check(p)).toEqual([])
+  })
+
+  it('bails when the createApp config is not an object literal', () => {
+    const main = { relPath: 'src/main.ts', text: `const app = createApp(buildConfig())` }
+    const p = project([main, READS_CURRENT_USER], new Set(['currentUser']))
+    expect(scopedSlotNotProvided.check(p)).toEqual([])
+  })
+
+  it('a createApp without a middlewares chain leaves routes checked as before', () => {
+    // Guard: the mere presence of createApp must not be treated as a global provider.
+    const main = { relPath: 'src/main.ts', text: `const app = createApp({ modules: [] })` }
+    const p = project([main, READS_CURRENT_USER], new Set(['currentUser']))
+    expect(scopedSlotNotProvided.check(p)).toHaveLength(1)
   })
 })

@@ -1,24 +1,29 @@
 /**
- * Rule: `kata/scoped-slot-not-provided` (issue #8, enforces ADR-0004).
+ * Rule: `kata/scoped-slot-not-provided` (issue #8, enforces ADR-0004; amended by
+ * issue #88 / ADR-0012 to count app-level providers).
  *
  * A scoped slot (`scoped<T>()` in `defineContext`) is empty until a middleware
- * `c.set`s it. So a route handler that reads `c.get('<slot>')` must list, in its
- * `use:` chain, a middleware whose `provides` includes `'<slot>'`. Otherwise the
- * read resolves an unset slot and throws at runtime (`scoped slot '<slot>' read
- * before being set`). The type system intentionally does not enforce this
- * (see the `RouteContext.get` note in kata's context.ts) — this rule does.
+ * `c.set`s it. So a route handler that reads `c.get('<slot>')` must have a
+ * middleware whose `provides` includes `'<slot>'` run before it — either in its
+ * own `use:` chain or in the app-level `createApp({ middlewares: [...] })` chain,
+ * which runs before every route (ADR-0012). Otherwise the read resolves an unset
+ * slot and throws at runtime (`scoped slot '<slot>' read before being set`). The
+ * type system intentionally does not enforce this (see the `RouteContext.get`
+ * note in kata's context.ts) — this rule does.
  *
  * Detection (cross-file): build a `middleware identifier → provides` map from
  * every `defineMiddleware({ provides, ... })` in the project, then for each
  * `defineRoute` collect the scoped keys its handler reads via `<ctx>.get('key')`
- * and check each against the union of `provides` of the middlewares in `use:`.
+ * and check each against the union of `provides` of the middlewares in `use:`
+ * plus those of the app-level `createApp({ middlewares })` chain.
  *
  * Bails (no issues for the affected read/route) to keep the false-positive rate
  * at zero when: the scoped-key set is indeterminate (no/spread `defineContext`);
- * the handler's context parameter is destructured; or a `use:` entry cannot be
- * resolved to a known middleware (a `cors()`-style factory call, a spread, or an
- * identifier whose `provides` is itself indeterminate) — any of which *might*
- * supply the slot.
+ * the handler's context parameter is destructured; or a `use:` entry — or an
+ * app-level `middlewares` entry — cannot be resolved to a known middleware (a
+ * `cors()`-style factory call, a spread, or an identifier whose `provides` is
+ * itself indeterminate) — any of which *might* supply the slot. An unresolvable
+ * global entry suppresses the affected reads across every route.
  */
 import ts from 'typescript'
 
@@ -49,6 +54,9 @@ export const scopedSlotNotProvided: Rule = {
     if (!scoped || scoped.size === 0) return []
 
     const providesByName = buildProvidesMap(project.files)
+    // App-level `createApp({ middlewares })` runs before every route (ADR-0012),
+    // so its providers count as provided for all of them. Resolve once.
+    const global = resolveGlobalProviders(project.files, providesByName)
     const issues: Issue[] = []
 
     for (const file of project.files) {
@@ -70,8 +78,9 @@ export const scopedSlotNotProvided: Rule = {
         const { provided, indeterminate } = resolveUse(config, providesByName)
         const reported = new Set<string>()
         for (const { key, node: readNode } of reads) {
-          if (provided.has(key)) continue
-          if (indeterminate) continue // an unresolved use: entry might provide it
+          if (provided.has(key) || global.provided.has(key)) continue
+          // An unresolved use: or app-level middlewares entry might provide it.
+          if (indeterminate || global.indeterminate) continue
           if (reported.has(key)) continue
           reported.add(key)
           const { line, column } = positionOf(sf, readNode)
@@ -141,17 +150,86 @@ function resolveUse(
   config: ts.ObjectLiteralExpression,
   providesByName: ReadonlyMap<string, Provides>,
 ): { provided: ReadonlySet<string>; indeterminate: boolean } {
-  const provided = new Set<string>()
   const useMember = config.properties.find(
     (m): m is ts.PropertyAssignment => ts.isPropertyAssignment(m) && propertyName(m) === 'use',
   )
-  if (!useMember) return { provided, indeterminate: false } // no use: → provides nothing
+  return resolveMiddlewareList(useMember?.initializer, providesByName)
+}
 
-  const value = unwrapExpression(useMember.initializer)
-  if (!ts.isArrayLiteralExpression(value)) return { provided, indeterminate: true }
+/**
+ * The union of provides supplied by the app-level middleware chain
+ * (`createApp({ middlewares: [...] })`), counted as provided for *every* route:
+ * the global chain runs before any route's `use:` (ADR-0012), so a slot it
+ * provides is populated before any handler reads it. Scans the whole project for
+ * the `createApp` call — it lives in a non-route file such as `src/main.ts` — and
+ * merges every match (union of provides, OR of indeterminacy) so the result does
+ * not depend on call order or count.
+ *
+ * The contribution is determinate-empty — routes checked exactly as before — only
+ * when there is demonstrably no global chain: no `createApp` at all, or a
+ * `createApp({ ... })` object literal with no spread and no `middlewares`
+ * property. Every shape where a global chain *might* exist but cannot be read is
+ * indeterminate, suppressing the affected reads across every route to preserve the
+ * zero-false-positive contract: a non-object-literal config, an object-level
+ * spread that could inject `middlewares`, a shorthand/non-array `middlewares`, or
+ * an array entry that is a `cors()`-style factory call, a spread, or an
+ * unresolved-provides identifier (the same conservatism `use:` applies per route).
+ */
+function resolveGlobalProviders(
+  files: readonly SourceFile[],
+  providesByName: ReadonlyMap<string, Provides>,
+): { provided: ReadonlySet<string>; indeterminate: boolean } {
+  const provided = new Set<string>()
+  let indeterminate = false
+  for (const file of files) {
+    const sf = parseSource(file.path, file.text)
+    forEachDescendant(sf, (node) => {
+      if (!ts.isCallExpression(node) || !isCalleeNamed(node, 'createApp')) return
+      const config = node.arguments[0]
+      // A createApp whose config can't be fully read might still declare a global
+      // chain; be indeterminate rather than miss its providers and false-positive
+      // on every route that reads one.
+      if (!config || !ts.isObjectLiteralExpression(config) || hasSpread(config)) {
+        indeterminate = true
+        return
+      }
+      const member = config.properties.find((m) => propertyName(m) === 'middlewares')
+      if (!member) return // no `middlewares` chain on this app → contributes nothing
+      if (!ts.isPropertyAssignment(member)) {
+        indeterminate = true // shorthand / method `middlewares` → can't read the array
+        return
+      }
+      const resolved = resolveMiddlewareList(member.initializer, providesByName)
+      for (const key of resolved.provided) provided.add(key)
+      if (resolved.indeterminate) indeterminate = true
+    })
+  }
+  return { provided, indeterminate }
+}
+
+/**
+ * Resolve a middleware-array literal — a route's `use:` or the app-level
+ * `middlewares:` — to the union of provides its entries supply, plus whether any
+ * entry is unresolved. Both arrays hold `Middleware` values resolved against the
+ * same `defineMiddleware → provides` map, so they share this logic.
+ *
+ * An absent property (`value === undefined`) provides nothing, determinately. A
+ * non-array initializer, a non-identifier entry (a `cors()`-style factory call or
+ * a spread), or an identifier whose `provides` is itself indeterminate makes the
+ * whole list indeterminate — the conservatism that keeps false positives at zero.
+ */
+function resolveMiddlewareList(
+  value: ts.Expression | undefined,
+  providesByName: ReadonlyMap<string, Provides>,
+): { provided: ReadonlySet<string>; indeterminate: boolean } {
+  const provided = new Set<string>()
+  if (value === undefined) return { provided, indeterminate: false }
+
+  const list = unwrapExpression(value)
+  if (!ts.isArrayLiteralExpression(list)) return { provided, indeterminate: true }
 
   let indeterminate = false
-  for (const element of value.elements) {
+  for (const element of list.elements) {
     if (!ts.isIdentifier(element)) {
       // A factory call (`cors()`), spread, or other expression — unknown provides.
       indeterminate = true
@@ -203,7 +281,7 @@ function makeIssue(
     column,
     message: `route reads scoped slot c.get('${key}') but no middleware in its use: chain provides it`,
     why: `ADR-0004 (Pattern C): a scoped slot is empty until a middleware c.sets it. Reading c.get('${key}') with no providing middleware in the route's \`use:\` chain throws at runtime ("scoped slot '${key}' read before being set").`,
-    fix: `Add a middleware that provides '${key}' to this route's \`use: [...]\` array — a defineMiddleware declaring \`provides: ['${key}']\` that c.sets it. Scoped slots in this project: ${slots}.`,
+    fix: `Add a middleware that provides '${key}' so it runs before this read — a defineMiddleware declaring \`provides: ['${key}']\` that c.sets it — either in this route's \`use: [...]\` array or app-wide in \`createApp({ middlewares: [...] })\` (ADR-0012). Scoped slots in this project: ${slots}.`,
     example: {
       bad: [
         'defineRoute({',
