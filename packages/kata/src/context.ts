@@ -149,6 +149,17 @@ export type AppConfig<
 > = {
   modules: Mods
   /**
+   * App-level middleware chain (issue #86, ADR-0012). Runs **before** every
+   * route's own `use:` chain — the effective per-route chain is
+   * `[...middlewares, ...route.use]`, each in declared (array) order, the global
+   * chain outermost. It shares the exact `Middleware<R>` contract, runtime
+   * pipeline, and per-request scoped store route middleware uses: a global may
+   * short-circuit by returning a `Response`, and a scoped slot it `provides:` is
+   * readable via `c.get` in every handler. Declare cross-cutting concerns
+   * (`cors()`, `secureHeaders()`, `bodyLimit()`) here once instead of per route.
+   */
+  middlewares?: readonly Middleware<R>[]
+  /**
    * Per-request logging (issue #63). When `true` (the default) and a `logger`
    * singleton is registered, every request is logged — method, path, status,
    * duration, request id — through it. A no-op when no usable logger is
@@ -221,20 +232,27 @@ export function defineContext<const R extends Registry>(registry: R) {
 // ────────────────────────────────────────────────────────────────────────────
 
 /** Per-app runtime options resolved once at `createApp` and shared by routes. */
-type RuntimeOptions = {
+type RuntimeOptions<R extends Registry> = {
   logger: Logger | undefined
   requestLogging: boolean
   outputValidation: OutputValidationMode
+  /**
+   * App-level middleware chain (ADR-0012), prepended to every route's `use:` at
+   * registration. Resolved once here so `registerRoute` does a single array
+   * concat per route rather than any per-request work.
+   */
+  middlewares: readonly Middleware<R>[]
 }
 
 function resolveRuntimeOptions<R extends Registry>(
   registry: R,
   config: AppConfig<R>,
-): RuntimeOptions {
+): RuntimeOptions<R> {
   return {
     logger: resolveLogger(registry),
     requestLogging: config.requestLogging ?? true,
     outputValidation: resolveOutputValidationMode(config.outputValidation),
+    middlewares: config.middlewares ?? [],
   }
 }
 
@@ -520,7 +538,7 @@ function finalizeResponse<R extends Registry>(
   requestId: string,
   startedAt: number,
   response: Response | undefined,
-  options: RuntimeOptions,
+  options: RuntimeOptions<R>,
 ): Response | undefined {
   if (response) {
     // kata returns a response detached from `c.res` (see middlewares/from-hono.ts),
@@ -549,7 +567,7 @@ function registerRoute<R extends Registry>(
   app: Hono,
   registry: R,
   route: Route<R>,
-  options: RuntimeOptions,
+  options: RuntimeOptions<R>,
 ): void {
   const method = route.method.toLowerCase() as Lowercase<HttpMethod>
   // Hono router: app.get(path, ...handlers)
@@ -557,15 +575,21 @@ function registerRoute<R extends Registry>(
     method
   ]
   if (!register) throw new Error(`kata: Hono does not support method '${route.method}'`)
+  // Effective chain (ADR-0012): app-level middleware runs before the route's own
+  // `use:`, each in declared order, the global chain outermost. Built once here at
+  // registration — a global is just an earlier entry in the same array, so the
+  // short-circuit capture, shared scoped store, request-id, logging, and 5xx
+  // boundary below all cover it for free. Skip the concat when there are no globals.
+  const chain = options.middlewares.length > 0 ? [...options.middlewares, ...route.use] : route.use
   register.call(app, route.path, async (c: import('hono').Context) => {
     const requestId = resolveRequestId(c.req.header(REQUEST_ID_HEADER))
     const startedAt = Date.now()
-    // 1. Run middleware chain manually (Hono's native middleware would also work,
-    //    but threading the kata context is cleaner this way).
+    // 1. Run the effective middleware chain manually (Hono's native middleware
+    //    would also work, but threading the kata context is cleaner this way).
     let i = 0
     let shortCircuit: Response | undefined
     const runChain = async (): Promise<void> => {
-      if (i >= route.use.length) {
+      if (i >= chain.length) {
         // 2. Validate input
         const inputResult = await readInputs(route.input, c)
         if (!inputResult.ok) {
@@ -584,7 +608,7 @@ function registerRoute<R extends Registry>(
         shortCircuit = await buildResponse(c, route, result, options.outputValidation)
         return
       }
-      const mw = route.use[i++]!
+      const mw = chain[i++]!
       const mwCtx = makeMiddlewareContext(registry, c, requestId)
       const result = await mw.handler(mwCtx, runChain)
       if (result instanceof Response) {

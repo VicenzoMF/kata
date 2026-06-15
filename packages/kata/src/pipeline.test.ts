@@ -1,8 +1,9 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { z } from 'zod'
 
-import { defineContext, singleton } from './context'
+import { defineContext, scoped, singleton } from './context'
 import type { Logger } from './logger'
+import { secureHeaders } from './middlewares'
 import type { OutputValidationMode } from './output-validation'
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
@@ -224,5 +225,239 @@ describe('output validation mode', () => {
       expect(r.status).toBe(200)
       expect(r.body).toEqual({ ok: true })
     }
+  })
+})
+
+// ────────────────────────────────────────────────────────────────────────────
+// App-level (global) middleware (issue #86, ADR-0012)
+// ────────────────────────────────────────────────────────────────────────────
+
+describe('app-level middleware (ADR-0012)', () => {
+  it("runs the global chain before each route's use:, in declared order (onion)", async () => {
+    const order: string[] = []
+    const k = defineContext({})
+    const trace = (label: string) =>
+      k.defineMiddleware({
+        provides: [],
+        handler: async (_c, next) => {
+          order.push(`>${label}`)
+          await next()
+          order.push(`<${label}`)
+        },
+      })
+    const route = k.defineRoute({
+      method: 'GET',
+      path: '/ordered',
+      use: [trace('route-1'), trace('route-2')],
+      input: {},
+      output: z.object({ ok: z.boolean() }),
+      handler: () => {
+        order.push('handler')
+        return { ok: true }
+      },
+    })
+    const app = k.createApp({
+      modules: [{ route }],
+      middlewares: [trace('global-1'), trace('global-2')],
+    })
+
+    const res = await app.request('/ordered')
+
+    expect(res.status).toBe(200)
+    // Globals run first (declared order), then the route chain, then the handler;
+    // post-`next()` unwinds outermost-last — the standard onion, global outermost.
+    expect(order).toEqual([
+      '>global-1',
+      '>global-2',
+      '>route-1',
+      '>route-2',
+      'handler',
+      '<route-2',
+      '<route-1',
+      '<global-2',
+      '<global-1',
+    ])
+  })
+
+  it('short-circuits when a global middleware returns a Response', async () => {
+    const reached: string[] = []
+    const k = defineContext({})
+    const gate = k.defineMiddleware({
+      provides: [],
+      handler: (c) => c.error('forbidden', 'No entry', { status: 403 }),
+    })
+    const laterGlobal = k.defineMiddleware({
+      provides: [],
+      handler: async (_c, next) => {
+        reached.push('later-global')
+        await next()
+      },
+    })
+    const routeMw = k.defineMiddleware({
+      provides: [],
+      handler: async (_c, next) => {
+        reached.push('route-mw')
+        await next()
+      },
+    })
+    const route = k.defineRoute({
+      method: 'GET',
+      path: '/guarded',
+      use: [routeMw],
+      input: {},
+      output: z.object({ ok: z.boolean() }),
+      handler: () => {
+        reached.push('handler')
+        return { ok: true }
+      },
+    })
+    const app = k.createApp({ modules: [{ route }], middlewares: [gate, laterGlobal] })
+
+    const res = await app.request('/guarded')
+
+    expect(res.status).toBe(403)
+    expect(await res.json()).toEqual({ error: 'forbidden', message: 'No entry' })
+    // Later globals, the whole route chain, and the handler are all skipped.
+    expect(reached).toEqual([])
+    // The short-circuit still funnels through finalizeResponse — x-request-id echo.
+    expect(res.headers.get('x-request-id')).toMatch(UUID)
+  })
+
+  it('makes a scoped slot a global middleware provides readable in every handler', async () => {
+    const k = defineContext({ user: scoped<{ id: string }>() })
+    const auth = k.defineMiddleware({
+      provides: ['user'] as const,
+      handler: async (c, next) => {
+        c.set('user', { id: 'u-42' })
+        await next()
+      },
+    })
+    // Neither route lists `auth` in `use:` — the slot is provided only by the
+    // global chain, yet readable in both handlers via the shared scoped store.
+    const me = k.defineRoute({
+      method: 'GET',
+      path: '/me',
+      input: {},
+      output: z.object({ id: z.string() }),
+      handler: (c) => ({ id: c.get('user').id }),
+    })
+    const echo = k.defineRoute({
+      method: 'GET',
+      path: '/echo-user',
+      input: {},
+      output: z.object({ id: z.string() }),
+      handler: (c) => ({ id: c.get('user').id }),
+    })
+    const app = k.createApp({ modules: [{ me, echo }], middlewares: [auth] })
+
+    const results = await Promise.all(
+      ['/me', '/echo-user'].map(async (path) => {
+        const res = await app.request(path)
+        return { status: res.status, body: await res.json() }
+      }),
+    )
+    for (const r of results) {
+      expect(r.status).toBe(200)
+      expect(r.body).toEqual({ id: 'u-42' })
+    }
+  })
+
+  it('exposes a global-provided slot to a later route middleware too', async () => {
+    const k = defineContext({ user: scoped<{ id: string }>() })
+    const auth = k.defineMiddleware({
+      provides: ['user'] as const,
+      handler: async (c, next) => {
+        c.set('user', { id: 'u-7' })
+        await next()
+      },
+    })
+    let seenByRouteMw: string | undefined
+    const readUser = k.defineMiddleware({
+      provides: [],
+      handler: async (c, next) => {
+        seenByRouteMw = c.get('user').id
+        await next()
+      },
+    })
+    const route = k.defineRoute({
+      method: 'GET',
+      path: '/chain-read',
+      use: [readUser],
+      input: {},
+      output: z.object({ ok: z.boolean() }),
+      handler: () => ({ ok: true }),
+    })
+    const app = k.createApp({ modules: [{ route }], middlewares: [auth] })
+
+    const res = await app.request('/chain-read')
+
+    expect(res.status).toBe(200)
+    expect(seenByRouteMw).toBe('u-7')
+  })
+
+  it('applies a hardening middleware declared globally to every route', async () => {
+    const k = defineContext({})
+    const a = k.defineRoute({
+      method: 'GET',
+      path: '/a',
+      input: {},
+      output: z.object({ ok: z.boolean() }),
+      handler: () => ({ ok: true }),
+    })
+    const b = k.defineRoute({
+      method: 'GET',
+      path: '/b',
+      input: {},
+      output: z.object({ ok: z.boolean() }),
+      handler: () => ({ ok: true }),
+    })
+    // secureHeaders() declares provides: [] — the canonical declare-once case,
+    // and not blocked on the #88 lint change (per ADR-0012).
+    const app = k.createApp({ modules: [{ a, b }], middlewares: [secureHeaders()] })
+
+    const results = await Promise.all(
+      ['/a', '/b'].map(async (path) => {
+        const res = await app.request(path)
+        return {
+          status: res.status,
+          nosniff: res.headers.get('x-content-type-options'),
+          frame: res.headers.get('x-frame-options'),
+        }
+      }),
+    )
+    for (const r of results) {
+      expect(r.status).toBe(200)
+      expect(r.nosniff).toBe('nosniff')
+      expect(r.frame).toBe('SAMEORIGIN')
+    }
+  })
+
+  it('runs only the route use: chain when middlewares is omitted', async () => {
+    const order: string[] = []
+    const k = defineContext({})
+    const routeMw = k.defineMiddleware({
+      provides: [],
+      handler: async (_c, next) => {
+        order.push('route-mw')
+        await next()
+      },
+    })
+    const route = k.defineRoute({
+      method: 'GET',
+      path: '/plain',
+      use: [routeMw],
+      input: {},
+      output: z.object({ ok: z.boolean() }),
+      handler: () => {
+        order.push('handler')
+        return { ok: true }
+      },
+    })
+    const app = k.createApp({ modules: [{ route }] })
+
+    const res = await app.request('/plain')
+
+    expect(res.status).toBe(200)
+    expect(order).toEqual(['route-mw', 'handler'])
   })
 })
