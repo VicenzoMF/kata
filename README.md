@@ -250,6 +250,26 @@ serve({ fetch: app.fetch, port }, (info) => {
 })
 ```
 
+**Harden it app-wide.** Cross-cutting middleware goes in the same `createApp` call
+through the optional `middlewares` slot — a chain that runs **before** every route's
+own `use:` ([ADR-0012](docs/adr/0012-app-level-middleware.md)). The first-party
+hardening built-ins — `cors()`, `secureHeaders()`, and `bodyLimit()` — are the
+canonical case: declare them once and every route is covered, instead of
+copy-pasting them onto each `defineRoute`.
+
+```ts
+import { bodyLimit, cors, secureHeaders } from 'kata'
+
+const app = createApp({
+  modules: [users],
+  middlewares: [cors(), secureHeaders(), bodyLimit({ maxSize: 8 * 1024 })],
+})
+```
+
+[`examples/hello`](examples/hello/src/main.ts) wires exactly this trio app-wide. For
+full CORS preflight (`OPTIONS`) handling, apply `cors()` on the returned app via
+`app.use('*', …)` — see the note in [`cors.ts`](packages/kata/src/middlewares/cors.ts).
+
 ## Run it
 
 From this repo, the example is wired with [`tsx`](https://tsx.is):
