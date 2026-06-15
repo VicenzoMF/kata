@@ -151,32 +151,36 @@ export async function createUser(input: CreateUserBody): Promise<User> {
 
 ### 4. Middleware & scoped slots — `src/middlewares/auth.ts`
 
-A middleware declares which scoped slots it `provides`, then populates them with
-`c.set(...)`. Returning a `Response` (e.g. `c.json(..., 401)`) short-circuits the
-request before the handler runs.
+A middleware declares which scoped slots it `provides`; its handler fills them —
+directly with `c.set(...)`, or via a built-in. Returning a `Response`
+short-circuits the request before the handler runs.
+
+Kata ships JWT auth under [`kata/jwt`](docs/adr/0013-jwt-delivery.md): `jwtAuth`
+reads a `Bearer` token, verifies it, parses the claims with your Zod schema, and
+fills the slot. The `resolve()` hook maps the validated claims onto the app's
+`User`. You keep the `defineMiddleware` wrapper, so the `provides` literal stays
+greppable and lint-checkable.
 
 ```ts
+import { jwtAuth } from 'kata/jwt'
+
+import { JWT_SECRET } from '../config'
 import { defineMiddleware } from '../context'
+import { type User, UserClaimsSchema } from '../modules/users/users.schema'
 
-/**
- * Toy auth: reads `x-user-id` header and synthesizes a User.
- * Replace with real JWT / session decoding in any real app.
- */
-export const fakeAuth = defineMiddleware({
+export const requireUser = defineMiddleware({
   provides: ['currentUser'] as const,
-  handler: async (c, next) => {
-    const userId = c.header('x-user-id')
-    if (!userId) return c.json({ error: 'unauthorized' }, 401)
-
-    c.set('currentUser', {
-      id: userId,
-      name: `User-${userId}`,
-      email: `user-${userId}@example.test`,
-    })
-    await next()
-  },
+  handler: jwtAuth({
+    secret: JWT_SECRET,
+    claims: UserClaimsSchema,
+    resolve: (claims): User => ({ id: claims.sub, name: claims.name, email: claims.email }),
+  }),
 })
 ```
+
+To roll your own slot-filling middleware with `c.set` directly (sessions, API
+keys), or to layer authorization with `requireRole` / `guard`, see the
+[auth cookbook](docs/cookbook/auth.md).
 
 ### 5. Routes — `src/modules/users/users.route.ts`
 
@@ -194,7 +198,7 @@ read a scoped slot list the providing middleware in `use:`.
 import { z } from 'zod'
 
 import { defineRoute } from '../../context'
-import { fakeAuth } from '../../middlewares/auth'
+import { requireUser } from '../../middlewares/auth'
 
 import { CreateUserBodySchema, UserSchema } from './users.schema'
 import { createUser, getUser } from './users.service'
@@ -222,7 +226,7 @@ export const createUserRoute = defineRoute({
 export const meRoute = defineRoute({
   method: 'GET',
   path: '/me',
-  use: [fakeAuth],
+  use: [requireUser],
   input: {},
   output: UserSchema,
   handler: async (c) => c.get('currentUser'),
@@ -296,9 +300,13 @@ curl -s localhost:3000/users/f81d4fae-…
 curl -s localhost:3000/users/none
 # {"error":"not_found"}
 
-# Scoped slot populated by middleware
-curl -s localhost:3000/me                      # 401 {"error":"unauthorized"}
-curl -s localhost:3000/me -H 'x-user-id: 42'   # 200 {"id":"42","name":"User-42",…}
+# Auth: mint a token (POST /auth/token), then call /me with it.
+curl -s localhost:3000/auth/token -H 'content-type: application/json' \
+  -d '{"id":"42","name":"Ada","email":"ada@example.com"}'
+# {"token":"eyJhbGc…"}
+
+curl -s localhost:3000/me                                       # 401 {"error":"unauthorized",…}
+curl -s localhost:3000/me -H 'Authorization: Bearer eyJhbGc…'  # 200 {"id":"42","name":"Ada",…}
 ```
 
 ## Typed RPC client — `hc<typeof app>`

@@ -1,8 +1,9 @@
-# Recipe: Authentication
+# Recipe: Authentication & authorization
 
-**Problem:** identify the caller, reject unauthenticated requests, and make the
+**Problem:** identify the caller, reject unauthenticated requests, make the
 authenticated user available to every handler that needs it — without a global
-variable and without threading the user through every function signature.
+variable and without threading the user through every function signature — and
+then **authorize** specific routes by role or claim.
 
 **Pattern:** a middleware that **provides a scoped slot**. This is exactly the
 shape [ADR-0004](../adr/0004-di-via-scoped-slots.md) calls _Pattern C_: scoped
@@ -10,9 +11,22 @@ slots are declared up front in `defineContext`, and a middleware populates them
 per request. A handler reads the user with `c.get('currentUser')` — the same
 monomorphic accessor used for singletons.
 
-The reference app already ships a minimal version in
-[`examples/hello/src/middlewares/auth.ts`](../../examples/hello/src/middlewares/auth.ts);
-this recipe builds it out.
+Kata ships the JWT building blocks under [`kata/jwt`](../adr/0013-jwt-delivery.md),
+so you no longer hand-roll a verifier:
+
+| Function | Role |
+| --- | --- |
+| `signJwt(claims, opts)` | sign a claims object into a compact JWT |
+| `verifyJwt(token, opts)` | verify + Zod-parse a token → a `Result` (never throws) |
+| `jwtAuth(opts)` | a middleware **handler** that authenticates a request and fills a slot |
+| `guard(opts)` / `requireRole(...)` / `requireClaim(...)` | middleware **handlers** that authorize (403) |
+
+The reference app ships a working version in
+[`examples/hello`](../../examples/hello/src) — auth middleware in
+[`middlewares/auth.ts`](../../examples/hello/src/middlewares/auth.ts), the
+token-minting route in
+[`modules/auth`](../../examples/hello/src/modules/auth/auth.route.ts). This
+recipe walks through it.
 
 ## 1. Declare the scoped slot
 
@@ -23,59 +37,148 @@ value — it only declares the type that a middleware will later `set`.
 // src/context.ts
 import { defineContext, scoped, singleton } from 'kata'
 
-import { makeDb } from './db'
 import type { User } from './modules/users/users.schema'
 
 export const k = defineContext({
-  db: singleton(makeDb(process.env)),
+  logger: singleton(makeLogger()),
   currentUser: scoped<User>(), // ← one User per request
 })
 
 export const { defineRoute, defineMiddleware, createApp } = k
 ```
 
-## 2. Write the auth middleware
+## 2. Describe the token's claims
 
-`defineMiddleware` takes a `provides` array — the scoped slots this middleware
-populates — and a handler that receives the middleware context `c` and `next`.
+The payload inside a JWT is just data until you validate it. Declare a Zod schema
+for the claims you expect; `jwtAuth` parses every decoded token through it, so an
+attacker-controlled payload can never reach your handler as an untyped blob
+(`any` is banned — see [AGENTS.md](../../AGENTS.md)). Schemas live in
+`<domain>.schema.ts` ([ADR-0005](../adr/0005-schemas-in-schema-files.md)):
 
-The middleware context exposes `c.header(name)` to read a request header,
-`c.set(key, value)` to fill a scoped slot, and `c.json(body, status)` to
-short-circuit the request. Returning a `Response` (instead of calling `next()`)
-stops the chain — the route handler never runs.
+```ts
+// src/modules/users/users.schema.ts
+import { z } from 'zod'
+
+export const UserSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  email: z.string().email(),
+})
+
+// `sub` is the standard JWT subject claim (the user id); `name`/`email` ride
+// along as extra claims. Registered claims like `iat`/`exp` are stripped by this
+// object schema.
+export const UserClaimsSchema = z.object({
+  sub: z.string().min(1),
+  name: z.string().min(1),
+  email: z.string().email(),
+})
+
+export type User = z.infer<typeof UserSchema>
+export type UserClaims = z.infer<typeof UserClaimsSchema>
+```
+
+## 3. Authenticate with `jwtAuth`
+
+`jwtAuth` returns a middleware **handler** — it reads `Authorization: Bearer
+<token>`, verifies the signature and time claims, parses the payload through your
+`claims` schema, and fills a scoped slot. You wrap it with `defineMiddleware`, so
+the `provides` literal stays at the call site where the type system and the
+`kata/middleware-provides-mismatch` lint rule can check it.
+
+The **`resolve()` hook** maps the validated claims to the value that lands in the
+slot. Because the `currentUser` slot is typed `User`, `resolve` turns the claims
+into a `User`. Here the token already carries everything `User` needs, so it is a
+pure reshape — but `resolve` is also the seam where a real app loads the full
+user from its database by `claims.sub` (returning `null`/`undefined` for an
+unknown subject renders a 401):
 
 ```ts
 // src/middlewares/auth.ts
-import { defineMiddleware } from '../context'
+import { jwtAuth } from 'kata/jwt'
 
-import { verifyToken } from './token' // your JWT/session verifier → User | null
+import { JWT_SECRET } from '../config'
+import { defineMiddleware } from '../context'
+import { type User, UserClaimsSchema } from '../modules/users/users.schema'
 
 export const requireUser = defineMiddleware({
   provides: ['currentUser'] as const,
-  handler: async (c, next) => {
-    const header = c.header('authorization')
-    const token = header?.startsWith('Bearer ') ? header.slice('Bearer '.length) : undefined
-    if (!token) return c.error('unauthorized', 'Missing bearer token', { status: 401 })
+  handler: jwtAuth({
+    secret: JWT_SECRET,
+    claims: UserClaimsSchema,
+    // claims → User. In a real app: `resolve: (claims) => db.users.find(claims.sub)`.
+    resolve: (claims): User => ({ id: claims.sub, name: claims.name, email: claims.email }),
+  }),
+})
+```
 
-    const user = await verifyToken(token)
-    if (!user) return c.error('unauthorized', 'Invalid or expired token', { status: 401 })
+`provides: ['currentUser'] as const` is load-bearing: the `as const` keeps the
+literal key types so the type system and the `kata/middleware-provides-mismatch`
+lint rule can check that a middleware actually fills everything it claims to
+provide.
 
-    c.set('currentUser', user)
-    await next()
+Every authentication failure short-circuits the chain with the unified ADR-0008
+envelope as a **401** — the handler never runs:
+
+| Situation | `error` | `message` |
+| --- | --- | --- |
+| no / malformed `Authorization` header | `unauthorized` | `Missing bearer token` |
+| bad signature, wrong alg, expired | `unauthorized` | `Invalid or expired token` |
+| payload fails `claims` | `unauthorized` | `Token claims did not match` (with `issues.claims`) |
+| `resolve` returns `null`/`undefined` | `unauthorized` | `No such user` |
+
+Invalid and expired collapse to one message on purpose: the endpoint is never a
+validity oracle. Need a stricter token? `jwtAuth` also accepts `alg`, `issuer`,
+`audience`, a custom `slot`, and a custom `header`.
+
+## 4. Mint a token with `signJwt`
+
+Verification needs something to verify. `signJwt` stamps `iat` and signs your
+claims; the registered-claim options (`subject`, `expiresInSeconds`, `issuer`, …)
+override same-named keys. The example exposes a tiny route so the test suite (and
+you, with `curl`) can obtain a real token without external tooling:
+
+```ts
+// src/modules/auth/auth.route.ts
+import { signJwt } from 'kata/jwt'
+
+import { JWT_SECRET, TOKEN_TTL_SECONDS } from '../../config'
+import { defineRoute } from '../../context'
+import { TokenRequestSchema, TokenResponseSchema } from './auth.schema'
+
+export const mintTokenRoute = defineRoute({
+  method: 'POST',
+  path: '/auth/token',
+  input: { body: TokenRequestSchema }, // { id, name, email }
+  output: TokenResponseSchema, // { token }
+  handler: async (c) => {
+    const { id, name, email } = c.input.body
+    const token = await signJwt(
+      { name, email },
+      { secret: JWT_SECRET, subject: id, expiresInSeconds: TOKEN_TTL_SECONDS },
+    )
+    return { token }
   },
 })
 ```
 
-> `verifyToken` is your code, not framework API — swap in your real JWT or
-> session logic. Keep its return type concrete (`Promise<User | null>`); `any` is
-> banned, so narrow `unknown` payloads with a Zod schema before trusting them.
+The signing key is shared by the minting route and the verifying middleware — if
+they disagree, every token fails. A dev default keeps the example zero-config; a
+real app must supply `JWT_SECRET` from the environment and never ship the
+fallback:
 
-`provides: ['currentUser'] as const` is load-bearing: the `as const` keeps the
-literal key types so the type system and the `kata/middleware-provides-mismatch`
-lint rule can check that a middleware actually `set`s everything it claims to
-provide.
+```ts
+// src/config.ts
+export const JWT_SECRET = process.env['JWT_SECRET'] ?? 'dev-secret'
+export const TOKEN_TTL_SECONDS = 60 * 60
+```
 
-## 3. Consume it in a route
+> This `/auth/token` route trusts its caller, so it is **not** how you
+> authenticate real users — a production endpoint verifies credentials (or an
+> OAuth code) before signing. It exists here to make the mint → verify loop
+> runnable end to end.
+
+## 5. Consume it in a route
 
 A route opts into the middleware via `use: [...]`. Order matters — middlewares
 run left to right. Once `requireUser` has run, `c.get('currentUser')` returns a
@@ -107,62 +210,82 @@ This mirrors the `GET /me` cases asserted in
 [`users.hurl`](../../examples/hello/src/modules/users/users.hurl):
 
 ```http
+POST /auth/token        {"id":"42","name":"Ada","email":"ada@example.com"}
+→ 200  { "token": "eyJhbGc…" }
+
 GET /me
 → 401  { "error": "unauthorized", "message": "Missing bearer token" }
 
 GET /me
-Authorization: Bearer <valid-token>
-→ 200  { "id": "...", "name": "...", "email": "..." }
+Authorization: Bearer eyJhbGc…
+→ 200  { "id": "42", "name": "Ada", "email": "ada@example.com" }
+
+GET /me
+Authorization: Bearer not-a-real-jwt
+→ 401  { "error": "unauthorized", "message": "Invalid or expired token" }
 ```
 
-## Authorization: a role guard that depends on the user
+## 6. Authorize: guards that depend on the user
 
-A second middleware can _read_ a scoped slot it doesn't provide, as long as a
-middleware earlier in the `use:` chain provided it. Its `provides` list is empty.
-This is the recommended way to layer authorization on top of authentication —
-the **order in the `use:` array is the contract**
-([#23](https://github.com/VicenzoMF/kata/issues/23) tracks formalising
-dependent-slot ordering).
+Authentication proves _who_ you are; **authorization** decides _what you may do_.
+A guard reads a scoped slot it doesn't provide — as long as a middleware earlier
+in the `use:` chain provided it — and rejects with a **403** when its predicate
+says no. Its `provides` list is empty. The **order in the `use:` array is the
+contract**: the guard must come _after_ the auth middleware that fills the slot.
+
+Kata ships three guard handlers under `kata/jwt`:
+
+- `requireRole(role | roles[])` — allow only when the slot value's `role` is (one of) `role`.
+- `requireClaim(key, expected | predicate)` — allow only when a claim matches.
+- `guard({ authorize })` — the general form; supply any predicate over the slot value.
+
+Each carries a `role`/claim on the slot, so extend your claims (and `User`) with
+the field you guard on:
 
 ```ts
-// src/middlewares/require-role.ts
-import { defineMiddleware } from '../context'
-
-export const requireAdmin = defineMiddleware({
-  provides: [] as const, // reads currentUser, provides nothing
-  handler: async (c, next) => {
-    const user = c.get('currentUser') // requires requireUser to run first
-    if (user.role !== 'admin') return c.error('forbidden', 'Admin role required', { status: 403 })
-    await next()
-  },
+// users.schema.ts — add a role to both the claims and the User
+export const UserClaimsSchema = z.object({
+  sub: z.string().min(1),
+  name: z.string().min(1),
+  email: z.string().email(),
+  role: z.enum(['user', 'admin']),
 })
 ```
 
 ```ts
-// in a route — requireUser MUST come before requireAdmin
-use: [requireUser, requireAdmin]
+// in a route — requireUser MUST come before the guard
+import { requireRole } from 'kata/jwt'
+
+export const adminRoute = defineRoute({
+  method: 'GET',
+  path: '/admin/metrics',
+  use: [requireUser, requireRole('admin')], // 401 if unauthenticated, 403 if not admin
+  input: {},
+  output: MetricsSchema,
+  handler: async (c) => collectMetrics(),
+})
 ```
 
-> This assumes `User` carries a `role` field; extend `UserSchema` in
-> `users.schema.ts` accordingly. For guards parameterised by role, export a
-> factory `requireRole(role: string)` that returns a `defineMiddleware({...})`.
+```http
+GET /admin/metrics
+Authorization: Bearer <token for a non-admin>
+→ 403  { "error": "forbidden", "message": "Insufficient permissions" }
+```
 
-## Composing dependent slots in one middleware
-
-If one slot is derived from another (e.g. `tenantId` from the user), a single
-middleware can provide both — it sets them in order:
+For anything role-based won't express, drop to `guard` with a custom predicate
+(it may be `async`, and receives the middleware context as a second argument):
 
 ```ts
-// context.ts:  tenantId: scoped<string>()
-export const requireUser = defineMiddleware({
-  provides: ['currentUser', 'tenantId'] as const,
-  handler: async (c, next) => {
-    const user = await verifyToken(/* ... */)
-    if (!user) return c.error('unauthorized', 'Invalid or expired token', { status: 401 })
-    c.set('currentUser', user)
-    c.set('tenantId', user.tenantId)
-    await next()
-  },
+import { guard } from 'kata/jwt'
+
+// Only the owner of the resource may read it.
+const requireOwner = defineMiddleware({
+  provides: [] as const,
+  handler: guard<AppRegistry, User>({
+    authorize: (user, c) => user.id === c.raw.req.param('id'),
+    code: 'forbidden',
+    message: 'Not your resource',
+  }),
 })
 ```
 
@@ -174,8 +297,8 @@ export const requireUser = defineMiddleware({
   every provider declares `provides: ['currentUser']`, the harness can prove that
   no route reads `currentUser` without an auth middleware in its chain — the
   `kata/scoped-slot-not-provided` rule (ADR-0004, _Companion rules_).
-- **Explicit failure.** An auth middleware that fails short-circuits with a
-  `Response`; it cannot fall through and leave the slot unset.
+- **Explicit failure.** `jwtAuth` short-circuits with a `Response` on any
+  failure; it cannot fall through and leave the slot unset.
 
 ## Gotchas
 
@@ -188,5 +311,8 @@ export const requireUser = defineMiddleware({
   `c.get`, `c.input`, `c.json`, `c.error`, and `c.raw` — but no `set` (handlers
   consume slots, they don't fill them) and no `header` shortcut (read headers via
   an `input.headers` schema, or `c.raw.req.header(...)`).
+- **Keep the secret out of the slot type.** `resolve` decides what lands in the
+  slot; return your `User`, never the raw token or secret.
 - **Don't read scoped slots at module load.** They only exist inside a request
   (planned `kata/scoped-read-outside-request` rule).
+```

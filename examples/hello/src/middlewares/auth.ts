@@ -1,20 +1,32 @@
+import { jwtAuth } from 'kata/jwt'
+
+import { JWT_SECRET } from '../config'
 import { defineMiddleware } from '../context'
+import { type User, UserClaimsSchema } from '../modules/users/users.schema'
 
 /**
- * Toy auth: reads `x-user-id` header and synthesizes a User.
- * Replace with real JWT / session decoding in any real app.
+ * Authentication via real JWTs (ADR-0013) — the production replacement for the
+ * old `x-user-id` toy. `jwtAuth` reads `Authorization: Bearer <token>`, verifies
+ * the signature and time claims, parses the payload through {@link UserClaimsSchema},
+ * and on any failure short-circuits with the unified ADR-0008 401 envelope — so
+ * the route handler only ever runs for an authenticated request.
+ *
+ * The `resolve()` hook (#93) maps the validated claims to the app's `User` that
+ * lands in the `currentUser` slot, which keeps the slot typed `User` rather than
+ * the raw claims. Here the token already carries everything `User` needs, so
+ * `resolve` is a pure reshape (`sub` → `id`); in a real app this is the seam
+ * where you would load the full user from your database by `claims.sub`
+ * (returning `null` for an unknown subject renders a 401).
+ *
+ * `jwtAuth` returns just the handler; the `defineMiddleware({ provides })`
+ * wrapper stays here at the call site so the `provides: ['currentUser']` literal
+ * is greppable and lint-checkable (ADR-0013 §3b / ADR-0004).
  */
-export const fakeAuth = defineMiddleware({
+export const requireUser = defineMiddleware({
   provides: ['currentUser'] as const,
-  handler: async (c, next) => {
-    const userId = c.header('x-user-id')
-    if (!userId) return c.error('unauthorized', 'Missing x-user-id header', { status: 401 })
-
-    c.set('currentUser', {
-      id: userId,
-      name: `User-${userId}`,
-      email: `user-${userId}@example.test`,
-    })
-    await next()
-  },
+  handler: jwtAuth({
+    secret: JWT_SECRET,
+    claims: UserClaimsSchema,
+    resolve: (claims): User => ({ id: claims.sub, name: claims.name, email: claims.email }),
+  }),
 })

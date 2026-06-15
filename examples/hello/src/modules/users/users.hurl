@@ -1,5 +1,6 @@
 # API E2E for the users module.
-# Mirrors the six smoke paths verified manually at bootstrap.
+# Covers users CRUD + validation, the real-JWT auth flow on /me (mint → call →
+# 401 paths), and the global error boundary.
 #
 # Run with the server already listening on :3000:
 #   pnpm --filter=hello dev    # in another terminal
@@ -63,28 +64,57 @@ jsonpath "$.issues.body[1].code" == "invalid_string"
 jsonpath "$.issues.body[1].message" == "Invalid email"
 
 
-# 5. GET /me — no auth header, middleware short-circuits with 401.
+# 5. POST /auth/token — mint a real JWT and capture it for the calls below. Stands
+#    in for a login/exchange endpoint (it signs the identity it is given) so the
+#    suite needs no external tooling. Signed with the dev-default JWT_SECRET, which
+#    the verifying middleware shares.
+POST http://localhost:3000/auth/token
+Content-Type: application/json
+{
+  "id": "42",
+  "name": "Ada",
+  "email": "ada@example.com"
+}
+HTTP 200
+[Captures]
+token: jsonpath "$.token"
+[Asserts]
+jsonpath "$.token" exists
+
+
+# 6. GET /me — no Authorization header, jwtAuth short-circuits with 401 (ADR-0008).
 GET http://localhost:3000/me
 HTTP 401
 [Asserts]
 jsonpath "$.error" == "unauthorized"
-jsonpath "$.message" exists
+jsonpath "$.message" == "Missing bearer token"
 
 
-# 6. GET /me — with x-user-id header, scoped slot populated by middleware. Also
-#    sends an inbound x-request-id; the runtime reuses it and echoes it back (#63).
+# 7. GET /me — with the captured Bearer token, the scoped slot is populated by
+#    jwtAuth's resolve() hook (claims → User). Also sends an inbound x-request-id;
+#    the runtime reuses it and echoes it back (#63).
 GET http://localhost:3000/me
-X-User-Id: 42
+Authorization: Bearer {{token}}
 X-Request-Id: e2e-trace-1
 HTTP 200
 [Asserts]
 jsonpath "$.id" == "42"
-jsonpath "$.name" == "User-42"
-jsonpath "$.email" == "user-42@example.test"
+jsonpath "$.name" == "Ada"
+jsonpath "$.email" == "ada@example.com"
 header "X-Request-Id" == "e2e-trace-1"
 
 
-# 7. GET /boom — handler throws; the global error boundary (#62) returns the
+# 8. GET /me — a garbage (non-JWT) bearer token → the generic 401. Invalid and
+#    expired collapse to one message, so the endpoint is never a validity oracle.
+GET http://localhost:3000/me
+Authorization: Bearer not-a-real-jwt
+HTTP 401
+[Asserts]
+jsonpath "$.error" == "unauthorized"
+jsonpath "$.message" == "Invalid or expired token"
+
+
+# 9. GET /boom — handler throws; the global error boundary (#62) returns the
 #    unified 500 envelope as JSON, never Hono's default text/HTML 500.
 GET http://localhost:3000/boom
 HTTP 500

@@ -364,10 +364,13 @@ export class AuthGuard implements CanActivate {
 
 In Kata, "deny" means return a `Response`; "allow" means call `next()`. A guard
 that also makes the authenticated user available declares the scoped slot it
-`provides`. This mirrors [`examples/hello/src/middlewares/auth.ts`](../../examples/hello/src/middlewares/auth.ts):
+`provides`. The shim below stays minimal to show the mechanism — `c.header`,
+`c.set`, `provides`; the real
+[`examples/hello`](../../examples/hello/src/middlewares/auth.ts) middleware
+verifies a JWT with `jwtAuth` instead (see [auth.md](./auth.md)):
 
 ```ts
-// src/middlewares/auth.ts
+// a header-only shim — see auth.md for the real jwtAuth version
 import { defineMiddleware } from '../context'
 
 export const requireUser = defineMiddleware({
