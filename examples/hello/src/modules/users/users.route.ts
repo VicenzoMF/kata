@@ -1,7 +1,7 @@
 import { ErrorBodySchema } from 'kata'
 
 import { defineRoute } from '../../context'
-import { fakeAuth } from '../../middlewares/auth'
+import { requireUser } from '../../middlewares/auth'
 
 import {
   BoomResponseSchema,
@@ -40,7 +40,7 @@ export const createUserRoute = defineRoute({
 export const meRoute = defineRoute({
   method: 'GET',
   path: '/me',
-  use: [fakeAuth],
+  use: [requireUser],
   input: {},
   output: UserSchema,
   handler: async (c) => c.get('currentUser'),

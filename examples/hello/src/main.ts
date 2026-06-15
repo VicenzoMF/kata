@@ -2,12 +2,13 @@ import { serve } from '@hono/node-server'
 import { bodyLimit, cors, secureHeaders } from 'kata'
 
 import { createApp, k } from './context'
+import * as auth from './modules/auth/auth.route'
 import * as diag from './modules/diag/diag.route'
 import * as echo from './modules/echo/echo.route'
 import * as users from './modules/users/users.route'
 
 const app = createApp({
-  modules: [users, echo, diag],
+  modules: [users, auth, echo, diag],
   // App-level hardening (issue #87, ADR-0012): the global `middlewares` chain
   // runs before every route's own `use:`, so CORS, secure response headers, and
   // an 8 KiB body-size limit apply app-wide — declared once here instead of
