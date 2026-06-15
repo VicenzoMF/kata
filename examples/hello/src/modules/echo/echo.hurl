@@ -1,6 +1,7 @@
-# API E2E for the echo module — demonstrates the opt-in hardening middleware
-# (issue #67): CORS, secure response headers, and a request body-size limit,
-# verified here over a real socket.
+# API E2E for the echo module — verifies the hardening middleware (issue #67):
+# CORS, secure response headers, and a request body-size limit. These now run
+# app-wide from `createApp({ middlewares })` (ADR-0012); this file proves they
+# ride along on the `/echo` response over a real socket.
 #
 # Run with the server already listening on :3000:
 #   pnpm --filter=hello start    # in another terminal

@@ -54,7 +54,7 @@ and an agent) can check it by shape ([ADR-0002](../adr/0002-no-classes-no-decora
 | Exception filter (`@Catch`) + `HttpException` | `c.error(code, message, { status })` + the global error boundary | [§ Errors](#exception-filters--cerror) |
 | `@Module({ providers, controllers, imports })` | `modules/<domain>/` folder + `createApp({ modules: [...] })` | [§ Modules](#modules--the-folder-layout) |
 | `NestFactory.create(AppModule)` + `app.listen()` | `createApp({ modules })` + `serve({ fetch: app.fetch, port })` | [§ Bootstrap](#bootstrap) |
-| `app.useGlobalGuards` / `useGlobalPipes` / `useGlobalFilters` | per-route `use:` + always-on validation; truly global → Hono `app.use('*', ...)` | [§ Bootstrap](#bootstrap) |
+| `app.useGlobalGuards` / `useGlobalPipes` / `useGlobalFilters` | per-route `use:` + always-on validation; truly global → `createApp({ middlewares })` ([ADR-0012](../adr/0012-app-level-middleware.md)), or Hono `app.use('*', ...)` | [§ Bootstrap](#bootstrap) |
 
 ## The shared context file
 
@@ -430,20 +430,29 @@ Two honest limits versus a NestJS interceptor:
 - **Response headers** *can* be set through the Hono context and survive into the
   final response — that is exactly how the built-in `cors()` and `secureHeaders()`
   middlewares work (verified in [`echo.hurl`](../../examples/hello/src/modules/echo/echo.hurl)).
-  Reach for those built-ins rather than hand-rolling header logic:
+  Reach for those built-ins rather than hand-rolling header logic — and apply
+  cross-cutting hardening **once** through the global `middlewares` chain
+  ([ADR-0012](../adr/0012-app-level-middleware.md)) rather than per route:
 
 ```ts
+// src/main.ts — hardening declared once, app-wide (ADR-0012)
 import { bodyLimit, cors, secureHeaders } from 'kata'
 
-export const echoRoute = defineRoute({
-  method: 'POST',
-  path: '/echo',
-  use: [cors(), secureHeaders(), bodyLimit({ maxSize: 8 * 1024 })],
-  input: { body: EchoBodySchema },
-  output: EchoResponseSchema,
-  handler: (c) => ({ echoed: c.input.body.message }),
+import { createApp } from './context'
+import * as echo from './modules/echo/echo.route'
+import * as users from './modules/users/users.route'
+
+export const app = createApp({
+  modules: [users, echo],
+  // Runs before every route's `use:` — no per-route copy-paste.
+  middlewares: [cors(), secureHeaders(), bodyLimit({ maxSize: 8 * 1024 })],
 })
 ```
+
+  The global chain composes with a route's own as `[...middlewares, ...use]`, so a
+  route that needs middleware for itself alone still lists it in `use:`.
+  [`examples/hello`](../../examples/hello/src/main.ts) applies exactly this trio
+  app-wide.
 
 ## Exception filters → `c.error`
 
@@ -538,15 +547,20 @@ serve({ fetch: app.fetch, port }, (info) => {
 })
 ```
 
-`createApp` returns a plain Hono app, so the `NestFactory` globals map cleanly:
+The `NestFactory` globals map cleanly:
 
 - `useGlobalPipes(new ValidationPipe())` → nothing to do; validation is mandatory
   per route already.
 - `useGlobalGuards` / `useGlobalInterceptors` / a truly global middleware →
-  apply Hono middleware on the returned app: `app.use('*', ...)`. (This is also
-  the recommended place for app-wide CORS so browser preflight `OPTIONS` requests
-  are handled — see the note in
-  [`packages/kata/src/middlewares/cors.ts`](../../packages/kata/src/middlewares/cors.ts).)
+  declare them once in `createApp({ middlewares: [...] })`
+  ([ADR-0012](../adr/0012-app-level-middleware.md)): a Kata `Middleware` chain that
+  runs before every route's `use:`, sharing the same contract, per-request scoped
+  store, and short-circuit semantics. The hardening built-ins live here —
+  `middlewares: [cors(), secureHeaders(), bodyLimit()]`.
+- An arbitrary third-party Hono middleware (or full CORS preflight `OPTIONS`
+  handling) → `createApp` still returns a plain Hono app, so `app.use('*', ...)`
+  works too, and remains the recommended spot for app-wide CORS preflight (see the
+  note in [`packages/kata/src/middlewares/cors.ts`](../../packages/kata/src/middlewares/cors.ts)).
 
 ## What Kata intentionally does NOT have
 

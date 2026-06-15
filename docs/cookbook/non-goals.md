@@ -142,16 +142,20 @@ app.use('*', rateLimiter({ windowMs: 60_000, limit: 100 }))
 serve({ fetch: app.fetch, port: Number(process.env.PORT ?? 3000) })
 ```
 
-For the per-route case, Kata's own `cors()`, `secureHeaders()`, and `bodyLimit()`
+Kata's own `cors()`, `secureHeaders()`, and `bodyLimit()`
 ([`packages/kata/src/middlewares/`](../../packages/kata/src/middlewares)) show the
-shape — Hono middleware adapted into a route's `use:` chain — and a limiter you
-wrap the same way slots in beside them.
+shape — Hono middleware adapted to Kata's `Middleware` contract — and a limiter you
+wrap the same way slots in beside them: in a single route's `use:` chain, or, for an
+app-wide limit, in the global `createApp({ middlewares })` chain
+([ADR-0012](../adr/0012-app-level-middleware.md)).
 
-> **Planned:** a first-class app-level middleware API, so cross-cutting concerns
-> are declared once in `createApp` instead of on the returned Hono instance
+> **Shipped:** the app-level middleware API has landed
 > ([Epic #84](https://github.com/VicenzoMF/kata/issues/84),
-> [ADR-0012](../adr/0012-app-level-middleware.md)). Until it lands, `app.use('*', …)`
-> is the supported path and will keep working.
+> [ADR-0012](../adr/0012-app-level-middleware.md)) — declare cross-cutting concerns
+> once in `createApp({ middlewares: [...] })` and they run before every route's
+> `use:`. A Kata-native limiter (a `Middleware` value) drops straight in;
+> `app.use('*', …)` on the returned Hono instance still works for arbitrary Hono
+> middleware.
 
 ## 3. Metrics / tracing
 
