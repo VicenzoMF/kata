@@ -15,11 +15,18 @@ import { defineConfig } from 'tsup'
 // a third entry so tsup emits `dist/node/index.js`, kept out of the root entry
 // so an edge/Workers build importing `kata` never pulls in `node:process`
 // (ADR-0001 runtime neutrality).
+//
+// `src/jwt/index.ts` is the `kata/jwt` subpath export (ADR-0013): the JWT
+// primitives. A tree-shakeable entry so apps that never import `kata/jwt` pay
+// nothing for it; it shares the error/type helpers via `splitting` (below).
 export default defineConfig({
-  entry: ['src/index.ts', 'src/node/index.ts', 'src/cli/main.ts'],
+  entry: ['src/index.ts', 'src/jwt/index.ts', 'src/node/index.ts', 'src/cli/main.ts'],
   format: ['esm'],
   dts: true,
   sourcemap: true,
   clean: true,
-  splitting: false,
+  // `splitting: true` so shared error/type helpers (e.g. `formatZodIssues`, used
+  // by both the root entry and `kata/jwt`) are hoisted into a shared chunk rather
+  // than inlined into every entry (ADR-0013).
+  splitting: true,
 })
