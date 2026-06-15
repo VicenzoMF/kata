@@ -11,8 +11,10 @@
 // middleware/context types.
 import { sign, verify } from 'hono/jwt'
 import type { z } from 'zod'
+import type { Middleware } from '../context'
 import type { FieldIssue } from '../errors'
 import { formatZodIssues } from '../errors'
+import type { Registry } from '../types'
 
 /** Algorithms supported by the underlying `hono/jwt` (HS / RS / PS / ES + EdDSA). */
 export type JwtAlgorithm =
@@ -165,4 +167,107 @@ function toJwtError(error: unknown): JwtError {
     return { code: 'expired', message: 'Token has expired' }
   }
   return { code: 'invalid_token', message: 'Token is invalid' }
+}
+
+// ── Kata integration (middleware handler) — ADR-0013 §3b–§5 ───────────────────
+// `jwtAuth` is the Kata-aware layer over `verifyJwt`: it reads a bearer token,
+// verifies it, and writes the validated claims into a scoped slot. It returns
+// just the *handler* (mirroring `fromHono` in `../middlewares/from-hono.ts`) so
+// the caller owns the `defineMiddleware({ provides: [...] })` wrapper — keeping
+// the `provides` literal at the call site where the ADR-0004 lint rules can read
+// it (ADR-0013 Alternative C, rejected: hiding `provides` inside the package).
+
+/** Scoped slot `jwtAuth` fills when `slot` is omitted. */
+const DEFAULT_SLOT = 'currentUser'
+
+/** Request header `jwtAuth` reads the bearer token from when `header` is omitted. */
+const DEFAULT_HEADER = 'authorization'
+
+/** `Authorization: Bearer <token>` — the auth scheme is case-insensitive (RFC 7235 §2.1). */
+const BEARER_SCHEME = /^Bearer\s+(\S+)$/i
+
+export type JwtAuthOptions<S extends z.ZodTypeAny> = {
+  secret: string
+  /** Schema the JWT payload must satisfy; its `z.infer` becomes the slot value. */
+  claims: S
+  /** Scoped slot to populate with the validated claims. Default `'currentUser'`. */
+  slot?: string
+  /** Expected signing algorithm. Default `'HS256'`. */
+  alg?: JwtAlgorithm
+  /** When set, require this `iss` claim. */
+  issuer?: string
+  /** When set, require this `aud` claim. */
+  audience?: string
+  /** Request header to read the bearer token from. Default `'authorization'`. */
+  header?: string
+}
+
+/**
+ * Build a Kata middleware *handler* that authenticates a request via JWT and
+ * writes the validated claims into a scoped slot (ADR-0013 §3b–§5). It reads
+ * `Authorization: Bearer <token>` (header configurable), runs {@link verifyJwt},
+ * and on success `c.set(slot, claims)` with the Zod-validated payload — never a
+ * raw `any`. Every authentication failure renders the unified ADR-0008 envelope
+ * as a 401:
+ *
+ * - missing / malformed bearer header → `Missing bearer token`
+ * - invalid signature / structure / expired → `Invalid or expired token`
+ *   (`invalid_token` and `expired` collapse to one message — no validity oracle)
+ * - payload fails `claims` → `Token claims did not match`, with the Zod issues
+ *   carried under the envelope's `issues.claims`
+ *
+ * Returns the handler only — the caller wraps it with
+ * `defineMiddleware({ provides: [slot], ... })` so the `provides` literal stays
+ * greppable / lint-checkable at the call site (ADR-0013 Alternative C). That the
+ * slot string is a real `ScopedKeys<R>` whose declared type matches `z.infer<S>`
+ * is guaranteed there by `provides` + lint, not by this signature (`R` is not
+ * inferable from `options`; ADR-0013 §4).
+ */
+export function jwtAuth<R extends Registry, S extends z.ZodTypeAny>(
+  options: JwtAuthOptions<S>,
+): Middleware<R>['handler'] {
+  const slot = options.slot ?? DEFAULT_SLOT
+  const header = options.header ?? DEFAULT_HEADER
+  return async (c, next) => {
+    const token = readBearerToken(c.header(header))
+    if (token === undefined) {
+      return c.error('unauthorized', 'Missing bearer token', { status: 401 })
+    }
+
+    const result = await verifyJwt(token, {
+      secret: options.secret,
+      claims: options.claims,
+      alg: options.alg,
+      issuer: options.issuer,
+      audience: options.audience,
+    })
+    if (!result.ok) {
+      if (result.error.code === 'claims_mismatch') {
+        return c.error('unauthorized', 'Token claims did not match', {
+          status: 401,
+          issues: { claims: result.error.issues ?? [] },
+        })
+      }
+      return c.error('unauthorized', 'Invalid or expired token', { status: 401 })
+    }
+
+    // ADR-0013 §4: `slot` is a runtime string and `R` is opaque here, so widen
+    // `set` to its string-keyed form. The slot's membership in `ScopedKeys<R>`
+    // and that `z.infer<S>` matches its declared type are enforced at the call
+    // site (`provides` + lint), exactly as ADR-0004 documents for scoped reads.
+    const setSlot = c.set as unknown as (key: string, value: z.infer<S>) => void
+    setSlot(slot, result.claims)
+    await next()
+  }
+}
+
+/**
+ * Extract the token from an `Authorization: Bearer <token>` header value. Returns
+ * `undefined` when the header is absent or not a well-formed single-token bearer
+ * credential — both of which `jwtAuth` renders as the same generic 401.
+ */
+function readBearerToken(headerValue: string | undefined): string | undefined {
+  if (headerValue === undefined) return undefined
+  const match = BEARER_SCHEME.exec(headerValue.trim())
+  return match?.[1]
 }
