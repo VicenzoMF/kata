@@ -14,8 +14,8 @@ purpose: persistence, rate-limit, metrics, env, and pagination are
 each, and the lever it leans on.
 
 Every snippet here uses only Kata's shipped surface
-([`packages/kata/src/index.ts`](../../packages/kata/src/index.ts)) and the
-runnable [`examples/shop`](../../examples/shop) / [`examples/hello`](../../examples/hello)
+([`packages/kata/src/index.ts`](https://github.com/VicenzoMF/kata/blob/main/packages/kata/src/index.ts)) and the
+runnable [`examples/shop`](https://github.com/VicenzoMF/kata/tree/main/examples/shop) / [`examples/hello`](https://github.com/VicenzoMF/kata/tree/main/examples/hello)
 apps. Where a recipe leans on planned API, it is labelled _Planned_ with its
 tracking issue — never assume planned API works yet.
 
@@ -48,7 +48,7 @@ infrastructure stay with you.
 **scoped** slot, opened and committed (or rolled back) by a middleware. It is the
 same two-lifetime split as [database.md](./database.md) — `c.get('store')` is the
 long-lived pool, `c.get('tx')` is this request's transaction — and it ships
-runnable in [`examples/shop`](../../examples/shop), where checkout decrements
+runnable in [`examples/shop`](https://github.com/VicenzoMF/kata/tree/main/examples/shop), where checkout decrements
 stock, writes the order, and clears the cart atomically.
 
 ```ts
@@ -116,7 +116,7 @@ export const checkoutRoute = defineRoute({
 
 See [database.md](./database.md) for the full singleton + pure-service
 walkthrough, and the
-[`examples/shop` transaction middleware](../../examples/shop/src/middlewares/transaction.ts)
+[`examples/shop` transaction middleware](https://github.com/VicenzoMF/kata/blob/main/examples/shop/src/middlewares/transaction.ts)
 for the complete commit/rollback wiring.
 
 ## 2. Rate limiting / throttling
@@ -143,7 +143,7 @@ serve({ fetch: app.fetch, port: Number(process.env.PORT ?? 3000) })
 ```
 
 Kata's own `cors()`, `secureHeaders()`, and `bodyLimit()`
-([`packages/kata/src/middlewares/`](../../packages/kata/src/middlewares)) show the
+([`packages/kata/src/middlewares/`](https://github.com/VicenzoMF/kata/tree/main/packages/kata/src/middlewares)) show the
 shape — Hono middleware adapted to Kata's `Middleware` contract — and a limiter you
 wrap the same way slots in beside them: in a single route's `use:` chain, or, for an
 app-wide limit, in the global `createApp({ middlewares })` chain
@@ -232,7 +232,7 @@ the environment instead of the body.
 its query contract as an `input.query` schema, and a **pure service** applies it —
 exactly like any other route. There is no `@Paginate()` decorator because there
 is nothing for the framework to decide: the shape of a page is your product's
-call. [`examples/shop`](../../examples/shop) already does the filtering half:
+call. [`examples/shop`](https://github.com/VicenzoMF/kata/tree/main/examples/shop) already does the filtering half:
 
 ```ts
 // examples/shop/src/modules/products/products.schema.ts
@@ -303,7 +303,7 @@ Kata leaves it to you.
 - [Authentication](./auth.md) — the scoped-slot mechanism the BYO patterns reuse.
 - [Migrating from NestJS to Kata](./migrating-from-nestjs.md) — what else Kata
   intentionally does not have, and why.
-- [`examples/shop`](../../examples/shop) — the runnable transaction + query-filter
+- [`examples/shop`](https://github.com/VicenzoMF/kata/tree/main/examples/shop) — the runnable transaction + query-filter
   source this page quotes.
 - ADRs: [0002 (no classes/decorators)](../adr/0002-no-classes-no-decorators.md),
   [0003 (mandatory schemas)](../adr/0003-mandatory-input-output-schemas.md),

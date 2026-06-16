@@ -20,13 +20,17 @@
     "test:cov": "vitest run --coverage",
     "test:hooks": "bash .codex/hooks/lib/extract-write-paths.test.sh && bash .codex/hooks/acceptance.test.sh",
     "check": "pnpm format:check && pnpm lint && pnpm typecheck && pnpm test && pnpm test:hooks",
-    "dev:hello": "pnpm --filter=hello dev"
+    "dev:hello": "pnpm --filter=hello dev",
+    "docs:dev": "vitepress dev docs",
+    "docs:build": "vitepress build docs",
+    "docs:preview": "vitepress preview docs"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.4.15",
     "@vitest/coverage-v8": "^4.1.7",
     "lefthook": "^2.1.8",
     "oxlint": "^1.66.0",
+    "vitepress": "^1.6.4",
     "vitest": "^4.1.7"
   }
 }

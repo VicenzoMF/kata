@@ -21,7 +21,7 @@ When request input fails its schema, Kata never calls your handler. It responds
 
 For the `POST /users` body `{ "name": "", "email": "not-an-email" }` against
 `CreateUserBodySchema`, the response is exactly (asserted in
-[`users.hurl`](../../examples/hello/src/modules/users/users.hurl)):
+[`users.hurl`](https://github.com/VicenzoMF/kata/blob/main/examples/hello/src/modules/users/users.hurl)):
 
 ```json
 {
@@ -37,7 +37,7 @@ For the `POST /users` body `{ "name": "", "email": "not-an-email" }` against
 ```
 
 Each entry is a `FieldIssue`, defined in
-[`packages/kata/src/errors.ts`](../../packages/kata/src/errors.ts):
+[`packages/kata/src/errors.ts`](https://github.com/VicenzoMF/kata/blob/main/packages/kata/src/errors.ts):
 
 ```ts
 export type FieldIssue = {
