@@ -2,19 +2,20 @@ import { defineConfig } from 'vitepress'
 
 const gh = 'https://github.com/VicenzoMF/kata'
 
+// English is the root locale (its nav/sidebar/labels are the top-level themeConfig
+// defaults). The pt-BR locale lives under /pt/ and overrides them in
+// locales.pt.themeConfig. ADRs stay English (canonical decision records), so the
+// pt nav links to the English /adr/* set.
 // https://vitepress.dev/reference/site-config
 export default defineConfig({
-  lang: 'en-US',
   title: 'Kata',
   titleTemplate: ':title · Kata',
   description:
     'A web framework on Hono — opinionated like NestJS, functional like a script, verifiable like a type system.',
-  // GitHub Pages project site: https://vicenzomf.github.io/kata/
   base: '/kata/',
   cleanUrls: true,
   lastUpdated: true,
   metaChunk: true,
-  // The old cookbook landing is replaced by cookbook/index.md.
   srcExclude: ['**/_template.md', '**/TASK.md', '**/README.md'],
 
   head: [
@@ -31,16 +32,108 @@ export default defineConfig({
     ],
   ],
 
+  locales: {
+    root: { label: 'English', lang: 'en-US' },
+    pt: {
+      label: 'Português',
+      lang: 'pt-BR',
+      link: '/pt/',
+      description:
+        'Um framework web sobre o Hono — opinativo como o NestJS, funcional como um script, verificável como um type system.',
+      themeConfig: {
+        nav: [
+          { text: 'Guia', link: '/pt/guide/what-is-kata', activeMatch: '/pt/guide/' },
+          { text: 'Cookbook', link: '/pt/cookbook/', activeMatch: '/pt/cookbook/' },
+          { text: 'Referência', link: '/pt/reference/', activeMatch: '/pt/reference/' },
+          // ADRs are English-only (canonical records).
+          { text: 'ADRs', link: '/adr/0001-use-hono-as-base', activeMatch: '/adr/' },
+        ],
+        sidebar: {
+          '/pt/guide/': [
+            {
+              text: 'Introdução',
+              items: [
+                { text: 'O que é Kata', link: '/pt/guide/what-is-kata' },
+                { text: 'Por que Kata', link: '/pt/guide/why-kata' },
+                { text: 'Início rápido', link: '/pt/guide/quickstart' },
+              ],
+            },
+            {
+              text: 'Conceitos centrais',
+              items: [
+                { text: 'Contexto & DI', link: '/pt/guide/context-di' },
+                { text: 'Rotas & schemas', link: '/pt/guide/routes-schemas' },
+                { text: 'Serviços', link: '/pt/guide/services' },
+                { text: 'Middleware & scoped slots', link: '/pt/guide/middleware' },
+                { text: 'O envelope de erros', link: '/pt/guide/errors' },
+                { text: 'Cliente RPC tipado', link: '/pt/guide/rpc-client' },
+                { text: 'Layout do projeto', link: '/pt/guide/project-layout' },
+              ],
+            },
+            {
+              text: 'Indo para produção',
+              items: [
+                { text: 'Middleware global', link: '/pt/guide/app-middleware' },
+                { text: 'Autenticação JWT', link: '/pt/guide/jwt' },
+                { text: 'Ciclo de vida & shutdown', link: '/pt/guide/lifecycle' },
+                { text: 'CLI de bootstrap', link: '/pt/guide/cli' },
+                { text: 'Harness engineering', link: '/pt/guide/harness' },
+              ],
+            },
+          ],
+          '/pt/cookbook/': [
+            {
+              text: 'Cookbook',
+              items: [
+                { text: 'Visão geral', link: '/pt/cookbook/' },
+                { text: 'Autenticação', link: '/pt/cookbook/auth' },
+                { text: 'Banco de dados', link: '/pt/cookbook/database' },
+                { text: 'Erros', link: '/pt/cookbook/errors' },
+                { text: 'Migrando do NestJS', link: '/pt/cookbook/migrating-from-nestjs' },
+                { text: 'Não-objetivos (BYO)', link: '/pt/cookbook/non-goals' },
+              ],
+            },
+          ],
+          '/pt/reference/': [
+            {
+              text: 'Referência da API',
+              items: [
+                { text: 'Visão geral', link: '/pt/reference/' },
+                { text: 'defineContext', link: '/pt/reference/define-context' },
+                { text: 'defineRoute', link: '/pt/reference/define-route' },
+                { text: 'defineMiddleware', link: '/pt/reference/define-middleware' },
+                { text: 'createApp', link: '/pt/reference/create-app' },
+                { text: 'Middleware embutido', link: '/pt/reference/middleware' },
+                { text: 'kata/jwt', link: '/pt/reference/jwt' },
+              ],
+            },
+          ],
+        },
+        editLink: {
+          pattern: `${gh}/edit/main/docs/:path`,
+          text: 'Edite esta página no GitHub',
+        },
+        outline: { level: 'deep', label: 'Nesta página' },
+        docFooter: { prev: 'Anterior', next: 'Próximo' },
+        lastUpdated: { text: 'Atualizado', formatOptions: { dateStyle: 'medium' } },
+        langMenuLabel: 'Mudar idioma',
+        footer: {
+          message: 'Código aberto — licença a definir. Feito com Hono + Zod.',
+          copyright: 'Kata · a forma praticada',
+        },
+      },
+    },
+  },
+
   themeConfig: {
     logo: { light: '/enso.svg', dark: '/enso-dark.svg' },
     siteTitle: 'Kata',
+    langMenuLabel: 'Change language',
 
     nav: [
       { text: 'Guide', link: '/guide/what-is-kata', activeMatch: '/guide/' },
       { text: 'Cookbook', link: '/cookbook/', activeMatch: '/cookbook/' },
       { text: 'Reference', link: '/reference/', activeMatch: '/reference/' },
-      // No index page is possible under docs/adr/ (ADR-0007 makes it immutable),
-      // so the ADRs nav lands on the first decision; the sidebar lists them all.
       { text: 'ADRs', link: '/adr/0001-use-hono-as-base', activeMatch: '/adr/' },
     ],
 
@@ -129,7 +222,23 @@ export default defineConfig({
     },
 
     socialLinks: [{ icon: 'github', link: gh }],
-    search: { provider: 'local' },
+    search: {
+      provider: 'local',
+      options: {
+        locales: {
+          pt: {
+            translations: {
+              button: { buttonText: 'Buscar', buttonAriaLabel: 'Buscar' },
+              modal: {
+                noResultsText: 'Nenhum resultado para',
+                resetButtonTitle: 'Limpar busca',
+                footer: { selectText: 'selecionar', navigateText: 'navegar', closeText: 'fechar' },
+              },
+            },
+          },
+        },
+      },
+    },
     editLink: {
       pattern: `${gh}/edit/main/docs/:path`,
       text: 'Edit this page on GitHub',
