@@ -134,6 +134,30 @@ describe('run()', () => {
   })
 })
 
+describe('run() — verify', () => {
+  it('dispatches `verify` to the rule engine, not the unknown-command path', async () => {
+    const result = await run(['verify', '--help'], dir)
+    expect(result.code).toBe(0)
+    expect(result.stdout).toContain('kata verify')
+    expect(result.stderr).toBe('')
+  })
+
+  it('verifies the scaffolded example app clean (exit 0)', async () => {
+    await run(['init', '--with-example', '--cwd', dir])
+    const result = await run(['verify', dir], dir)
+    expect(result.code).toBe(0)
+    expect(result.stdout).toContain('no problems found')
+  })
+
+  it('emits PostToolUse hook JSON in --json mode and always exits 0', async () => {
+    await run(['init', '--with-example', '--cwd', dir])
+    const result = await run(['verify', dir, '--json'], dir)
+    expect(result.code).toBe(0)
+    const parsed = JSON.parse(result.stdout)
+    expect(parsed.decision).toBeUndefined() // clean run → no block decision
+  })
+})
+
 describe('formatResult()', () => {
   it('lists each file with its status mark', () => {
     const text = formatResult({

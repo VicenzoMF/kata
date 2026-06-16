@@ -3,6 +3,8 @@
 // whole command is testable without spawning a subprocess. `main.ts` is the
 // only place that talks to `process`.
 
+import { runCli } from '@kata/verify'
+
 import { type InitResult, init } from './init'
 
 export type ParsedArgs = {
@@ -23,12 +25,16 @@ export const HELP_TEXT = `kata — agent-driven web framework with the harness s
 
 Usage:
   kata init [options]    Scaffold harness config files into a project
+  kata verify [path]     Run Kata's lint rules over a project (default path: cwd)
 
 Options:
   -C, --cwd <dir>     Project root to scaffold into (default: current directory)
   -f, --force         Overwrite existing files instead of skipping them
       --with-example  Also scaffold a runnable example app (GET /health)
   -h, --help          Show this help
+
+\`kata verify\` enforces ADR-0003/0004/0005; \`kata verify --json\` emits Claude
+Code PostToolUse hook JSON. Run \`kata verify --help\` for its flags.
 
 \`kata init\` writes:
   .claude/settings.json    Claude Code hooks + config-tampering bans (#27, #29)
@@ -97,8 +103,32 @@ export function formatResult(result: InitResult): string {
   return `${lines.join('\n')}\n`
 }
 
+/**
+ * If `argv` is a `verify` invocation, return the args that follow the `verify`
+ * token so `@kata/verify`'s CLI sees them exactly as it would standalone;
+ * otherwise return `null`. The command is the first non-flag arg (matching
+ * `parseArgs`). Exported so `main.ts` can route the long-running `--watch` mode.
+ */
+export function verifyArgv(argv: readonly string[]): string[] | null {
+  const commandIndex = argv.findIndex((arg) => !arg.startsWith('-'))
+  if (commandIndex < 0 || argv[commandIndex] !== 'verify') return null
+  return [...argv.slice(0, commandIndex), ...argv.slice(commandIndex + 1)]
+}
+
 /** Parse args, dispatch, and return the streams + exit code to emit. */
-export async function run(argv: readonly string[]): Promise<RunResult> {
+export async function run(
+  argv: readonly string[],
+  cwd: string = process.cwd(),
+): Promise<RunResult> {
+  const verifyArgs = verifyArgv(argv)
+  if (verifyArgs) {
+    // Delegate to @kata/verify's pure CLI. `--watch` never reaches here — it is
+    // long-running and dispatched in main.ts — so runCli only does single-shot
+    // (human or --json) runs, which already return an output string + exit code.
+    const { output, exitCode } = runCli(verifyArgs, cwd)
+    return { code: exitCode, stdout: output, stderr: '' }
+  }
+
   const args = parseArgs(argv)
 
   if (args.help) {
