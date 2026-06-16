@@ -11,13 +11,13 @@ a controller becomes a set of `defineRoute` calls, a provider becomes a slot in
 class-validator DTO becomes a Zod schema. This guide is the side-by-side.
 
 Every Kata snippet below is grounded in the real framework surface
-([`packages/kata/src/index.ts`](../../packages/kata/src/index.ts)) and the
-runnable [`examples/hello`](../../examples/hello) app. If a snippet shows an API,
+([`packages/kata/src/index.ts`](https://github.com/VicenzoMF/kata/blob/main/packages/kata/src/index.ts)) and the
+runnable [`examples/hello`](https://github.com/VicenzoMF/kata/tree/main/examples/hello) app. If a snippet shows an API,
 that API exists today.
 
 > **Before you start.** Kata is pre-release and not yet on npm. The fastest path
-> is to clone the repo and copy [`examples/hello`](../../examples/hello) into
-> your `src/` — the [README quickstart](../../README.md#quickstart) walks the
+> is to clone the repo and copy [`examples/hello`](https://github.com/VicenzoMF/kata/tree/main/examples/hello) into
+> your `src/` — the [README quickstart](https://github.com/VicenzoMF/kata/blob/main/README.md#quickstart) walks the
 > same six files this guide migrates to.
 
 ## The mental-model shift
@@ -64,7 +64,7 @@ the analogue of your root `AppModule`'s `providers` array, but flat and global
 rather than per-module. `defineContext` returns the `defineRoute`,
 `defineMiddleware`, and `createApp` helpers bound to that registry; re-export
 them so the rest of the app imports from `./context`, never from `kata`
-directly. This mirrors [`examples/hello/src/context.ts`](../../examples/hello/src/context.ts):
+directly. This mirrors [`examples/hello/src/context.ts`](https://github.com/VicenzoMF/kata/blob/main/examples/hello/src/context.ts):
 
 ```ts
 // src/context.ts
@@ -119,7 +119,7 @@ export class UsersController {
 In Kata there is no controller class. Each endpoint is its own `defineRoute`
 value, exported by name from `<domain>.route.ts`. The verb and path are fields;
 inputs arrive pre-validated on `c.input`, typed from the route's `input` schemas.
-This mirrors [`examples/hello/src/modules/users/users.route.ts`](../../examples/hello/src/modules/users/users.route.ts):
+This mirrors [`examples/hello/src/modules/users/users.route.ts`](https://github.com/VicenzoMF/kata/blob/main/examples/hello/src/modules/users/users.route.ts):
 
 ```ts
 // src/modules/users/users.route.ts
@@ -185,7 +185,7 @@ In Kata the DTO **is** the schema. Zod schemas live in `<domain>.schema.ts`,
 never inline in the route ([ADR-0005](../adr/0005-dtos-in-separate-schema-file.md)),
 and the `z.infer` type lives beside them so one import pulls both the runtime
 validator and the compile-time type. This mirrors
-[`examples/hello/src/modules/users/users.schema.ts`](../../examples/hello/src/modules/users/users.schema.ts):
+[`examples/hello/src/modules/users/users.schema.ts`](https://github.com/VicenzoMF/kata/blob/main/examples/hello/src/modules/users/users.schema.ts):
 
 ```ts
 // src/modules/users/users.schema.ts
@@ -235,7 +235,7 @@ Two differences worth internalising:
 When input fails, Kata never calls your handler; it returns the `422`
 `validation_failed` envelope with issues keyed by section (`params` / `query` /
 `body` / `headers`). The exact shape is documented in [errors.md](./errors.md)
-and asserted in [`users.hurl`](../../examples/hello/src/modules/users/users.hurl).
+and asserted in [`users.hurl`](https://github.com/VicenzoMF/kata/blob/main/examples/hello/src/modules/users/users.hurl).
 
 ## Providers → dependency injection
 
@@ -366,7 +366,7 @@ In Kata, "deny" means return a `Response`; "allow" means call `next()`. A guard
 that also makes the authenticated user available declares the scoped slot it
 `provides`. The shim below stays minimal to show the mechanism — `c.header`,
 `c.set`, `provides`; the real
-[`examples/hello`](../../examples/hello/src/middlewares/auth.ts) middleware
+[`examples/hello`](https://github.com/VicenzoMF/kata/blob/main/examples/hello/src/middlewares/auth.ts) middleware
 verifies a JWT with `jwtAuth` instead (see [auth.md](./auth.md)):
 
 ```ts
@@ -432,7 +432,7 @@ Two honest limits versus a NestJS interceptor:
   equivalent — put that shape in the handler and the `output` schema instead.
 - **Response headers** *can* be set through the Hono context and survive into the
   final response — that is exactly how the built-in `cors()` and `secureHeaders()`
-  middlewares work (verified in [`echo.hurl`](../../examples/hello/src/modules/echo/echo.hurl)).
+  middlewares work (verified in [`echo.hurl`](https://github.com/VicenzoMF/kata/blob/main/examples/hello/src/modules/echo/echo.hurl)).
   Reach for those built-ins rather than hand-rolling header logic — and apply
   cross-cutting hardening **once** through the global `middlewares` chain
   ([ADR-0012](../adr/0012-app-level-middleware.md)) rather than per route:
@@ -454,7 +454,7 @@ export const app = createApp({
 
   The global chain composes with a route's own as `[...middlewares, ...use]`, so a
   route that needs middleware for itself alone still lists it in `use:`.
-  [`examples/hello`](../../examples/hello/src/main.ts) applies exactly this trio
+  [`examples/hello`](https://github.com/VicenzoMF/kata/blob/main/examples/hello/src/main.ts) applies exactly this trio
   app-wide.
 
 ## Exception filters → `c.error`
@@ -482,7 +482,7 @@ For an **unexpected** error, a global error boundary catches any throw that
 escapes a handler or middleware and serialises it as a generic
 `500 internal_error` envelope — never Hono's default text/HTML page, and never
 leaking the underlying message (ADR-0008, Alternative D). This is exercised by
-the `/boom` route in [`users.hurl`](../../examples/hello/src/modules/users/users.hurl).
+the `/boom` route in [`users.hurl`](https://github.com/VicenzoMF/kata/blob/main/examples/hello/src/modules/users/users.hurl).
 Because a throw becomes an opaque 500, **prefer `c.error` for anything the client
 should understand** — reserve throwing for genuine bugs.
 
@@ -502,7 +502,7 @@ visibility to it.
 
 A Kata "module" is **not** an injection scope. It is a folder under
 `src/modules/<domain>/` holding the route, service, schema, test, and Hurl files
-for one domain ([AGENTS.md](../../AGENTS.md)), plus its registration in
+for one domain ([AGENTS.md](https://github.com/VicenzoMF/kata/blob/main/AGENTS.md)), plus its registration in
 `createApp`. All dependency injection is the single, global `defineContext` — so
 there is no per-module `providers` list, no `exports`, and no `imports` graph to
 wire. To "use a provider from another module," you just `c.get('it')`; it is
@@ -563,7 +563,7 @@ The `NestFactory` globals map cleanly:
 - An arbitrary third-party Hono middleware (or full CORS preflight `OPTIONS`
   handling) → `createApp` still returns a plain Hono app, so `app.use('*', ...)`
   works too, and remains the recommended spot for app-wide CORS preflight (see the
-  note in [`packages/kata/src/middlewares/cors.ts`](../../packages/kata/src/middlewares/cors.ts)).
+  note in [`packages/kata/src/middlewares/cors.ts`](https://github.com/VicenzoMF/kata/blob/main/packages/kata/src/middlewares/cors.ts)).
 
 ## What Kata intentionally does NOT have
 
@@ -611,7 +611,7 @@ its contract are inspectable by shape — by a human, by an agent, and by the
 
 ## See also
 
-- [README quickstart](../../README.md#quickstart) — the same app in six files.
+- [README quickstart](https://github.com/VicenzoMF/kata/blob/main/README.md#quickstart) — the same app in six files.
 - [Authentication](./auth.md) — scoped slots and role guards in depth.
 - [Database access](./database.md) — singletons, pure services, fake-client tests.
 - [Errors & validation](./errors.md) — the 422 / 500 envelopes in detail.
@@ -620,4 +620,4 @@ its contract are inspectable by shape — by a human, by an agent, and by the
   [0004 (DI via slots)](../adr/0004-di-via-scoped-slots.md),
   [0005 (DTOs in schema files)](../adr/0005-dtos-in-separate-schema-file.md),
   [0008 (error envelope)](../adr/0008-unified-error-response-envelope.md).
-- [`examples/hello`](../../examples/hello) — the runnable reference this guide tracks.
+- [`examples/hello`](https://github.com/VicenzoMF/kata/tree/main/examples/hello) — the runnable reference this guide tracks.

@@ -22,10 +22,10 @@ so you no longer hand-roll a verifier:
 | `guard(opts)` / `requireRole(...)` / `requireClaim(...)` | middleware **handlers** that authorize (403) |
 
 The reference app ships a working version in
-[`examples/hello`](../../examples/hello/src) — auth middleware in
-[`middlewares/auth.ts`](../../examples/hello/src/middlewares/auth.ts), the
+[`examples/hello`](https://github.com/VicenzoMF/kata/tree/main/examples/hello/src) — auth middleware in
+[`middlewares/auth.ts`](https://github.com/VicenzoMF/kata/blob/main/examples/hello/src/middlewares/auth.ts), the
 token-minting route in
-[`modules/auth`](../../examples/hello/src/modules/auth/auth.route.ts). This
+[`modules/auth`](https://github.com/VicenzoMF/kata/blob/main/examples/hello/src/modules/auth/auth.route.ts). This
 recipe walks through it.
 
 ## 1. Declare the scoped slot
@@ -52,8 +52,8 @@ export const { defineRoute, defineMiddleware, createApp } = k
 The payload inside a JWT is just data until you validate it. Declare a Zod schema
 for the claims you expect; `jwtAuth` parses every decoded token through it, so an
 attacker-controlled payload can never reach your handler as an untyped blob
-(`any` is banned — see [AGENTS.md](../../AGENTS.md)). Schemas live in
-`<domain>.schema.ts` ([ADR-0005](../adr/0005-schemas-in-schema-files.md)):
+(`any` is banned — see [AGENTS.md](https://github.com/VicenzoMF/kata/blob/main/AGENTS.md)). Schemas live in
+`<domain>.schema.ts` ([ADR-0005](/adr/0005-dtos-in-separate-schema-file)):
 
 ```ts
 // src/modules/users/users.schema.ts
@@ -80,8 +80,7 @@ export type UserClaims = z.infer<typeof UserClaimsSchema>
 
 ## 3. Authenticate with `jwtAuth`
 
-`jwtAuth` returns a middleware **handler** — it reads `Authorization: Bearer
-<token>`, verifies the signature and time claims, parses the payload through your
+`jwtAuth` returns a middleware **handler** — it reads the `Authorization: Bearer <token>` header, verifies the signature and time claims, parses the payload through your
 `claims` schema, and fills a scoped slot. You wrap it with `defineMiddleware`, so
 the `provides` literal stays at the call site where the type system and the
 `kata/middleware-provides-mismatch` lint rule can check it.
@@ -207,7 +206,7 @@ Returning the user value (not a `Response`) means Kata validates it against
 ## Behaviour over the wire
 
 This mirrors the `GET /me` cases asserted in
-[`users.hurl`](../../examples/hello/src/modules/users/users.hurl):
+[`users.hurl`](https://github.com/VicenzoMF/kata/blob/main/examples/hello/src/modules/users/users.hurl):
 
 ```http
 POST /auth/token        {"id":"42","name":"Ada","email":"ada@example.com"}

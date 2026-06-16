@@ -24,3 +24,6 @@ lefthook-local.yml
 
 # Claude Code per-user overrides
 .claude/settings.local.json
+
+# VitePress docs site (dist/ is already ignored above)
+docs/.vitepress/cache/

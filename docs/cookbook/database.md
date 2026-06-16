@@ -69,7 +69,7 @@ Resolve the client in the route handler with `c.get('db')`, then hand it to a
 service function. Keeping the service **pure** — it receives `db` as an argument
 rather than importing the context — is what makes it unit-testable without
 booting an HTTP server (the layout in
-[`examples/hello`](../../examples/hello) keeps services free of framework
+[`examples/hello`](https://github.com/VicenzoMF/kata/tree/main/examples/hello) keeps services free of framework
 imports for exactly this reason).
 
 ```ts
@@ -128,7 +128,7 @@ export const createUserRoute = defineRoute({
 
 Because the service takes `db` as a parameter, a unit test passes a hand-rolled
 fake — no network, no context, no Hono. This mirrors
-[`users.service.test.ts`](../../examples/hello/src/modules/users/users.service.test.ts).
+[`users.service.test.ts`](https://github.com/VicenzoMF/kata/blob/main/examples/hello/src/modules/users/users.service.test.ts).
 
 ```ts
 // src/modules/users/users.service.test.ts
@@ -184,7 +184,7 @@ the handler's outcome — and the global error boundary
 ([#62](https://github.com/VicenzoMF/kata/issues/62)) makes that outcome visible:
 wrap `await next()` in `try/catch` to roll back (and rethrow) on a throw, and
 roll back any transaction the handler left un-committed. The
-[`examples/shop` transaction middleware](../../examples/shop/src/middlewares/transaction.ts)
+[`examples/shop` transaction middleware](https://github.com/VicenzoMF/kata/blob/main/examples/shop/src/middlewares/transaction.ts)
 shows the full pattern.
 
 ## Closing the pool on shutdown
@@ -221,7 +221,7 @@ queue, *then* close the pool — the inverse of construction order). Kata owns n
 dispose registry; `gracefulShutdown` owns only the always-identical plumbing —
 the signal trap, the drain, and a force-exit timer (`timeoutMs`, default 10 s)
 for a connection that refuses to close. The
-[`examples/shop` bootstrap](../../examples/shop/src/main.ts) wires this against
+[`examples/shop` bootstrap](https://github.com/VicenzoMF/kata/blob/main/examples/shop/src/main.ts) wires this against
 the store stub end-to-end.
 
 ## Gotchas
