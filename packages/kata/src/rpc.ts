@@ -8,8 +8,7 @@
  * registration loop in `context.ts` is untouched; `createApp` merely casts the
  * built `Hono` to `KataApp<Mods>`. That single cast is sound because the loop
  * registers exactly the routes the modules declare; the `examples/hello-client`
- * type fixture (typechecked in CI) keeps the cast honest. See the spike for the
- * full derivation: `.specs/features/rpc-typing/spike-hc.md`.
+ * type fixture (typechecked in CI) keeps the cast honest.
  */
 import type { Hono } from 'hono'
 import type { BlankEnv, Schema } from 'hono/types'

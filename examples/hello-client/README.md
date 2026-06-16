@@ -41,8 +41,8 @@ pnpm test                            # runtime round-trip via hono/testing testC
 
 ## Why this is also a test
 
-`client.ts` is the spike's **typecheck-as-test fixture** (see
-`.specs/features/rpc-typing/spike-hc.md`): `tsc --noEmit` is its whole test, so
-CI fails the moment the runtime and the type layer disagree. `client.test.ts`
+`client.ts` is the **typecheck-as-test fixture**: `tsc --noEmit` is its whole
+test, so CI fails the moment the runtime and the type layer disagree.
+`client.test.ts`
 exercises the same routes at runtime through `testClient(app)`, pinning the two
 together.
