@@ -2,8 +2,6 @@
 # Acceptance smoke tests for the Codex hooks. Drives each hook with
 # the documented Codex stdin shape and asserts the documented
 # behavior. No Codex CLI required — we simulate Codex by piping JSON.
-#
-# Covers R5.1–R5.4 of .specs/features/codex-hooks/spec.md.
 
 set -uo pipefail
 
