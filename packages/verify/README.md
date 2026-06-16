@@ -17,11 +17,13 @@ kata verify --help
 `path` defaults to the current working directory. The project is expected to
 follow the mandatory folder layout (`src/context.ts`, `src/modules/**/*.route.ts`).
 
-From the workspace:
+This package is the rule engine; the user-facing command is **`kata verify`**,
+shipped by the `kata` bin which bundles this package (so downstream `kata init`
+apps get it for free). From the workspace:
 
 ```sh
-pnpm --filter=@kata/verify run verify          # check the package itself (no-op)
-pnpm --filter=@kata/verify exec kata-verify ../../examples/hello
+pnpm exec kata verify examples/hello              # via the kata bin (built)
+pnpm --filter=@kata/verify run verify -- ../../examples/hello   # via tsx (dev, no build)
 ```
 
 ## Rules

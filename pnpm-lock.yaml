@@ -14,6 +14,9 @@ importers:
       '@vitest/coverage-v8':
         specifier: ^4.1.7
         version: 4.1.7(vitest@4.1.7)
+      kata:
+        specifier: workspace:*
+        version: link:packages/kata
       lefthook:
         specifier: ^2.1.8
         version: 2.1.8
@@ -104,6 +107,9 @@ importers:
 
   packages/kata:
     devDependencies:
+      '@kata/verify':
+        specifier: workspace:*
+        version: link:../verify
       '@types/node':
         specifier: ^20
         version: 20.19.41
