@@ -3,7 +3,7 @@ import { z } from 'zod'
 import { defineRoute } from '../../context'
 import { requireAuth } from '../../middlewares/auth'
 
-import { AddCartItemBodySchema, CartSchema } from './cart.schema'
+import { AddCartItemBodySchema, CartSchema, RemoveCartItemParamsSchema } from './cart.schema'
 import { addItem, readCart, removeItem } from './cart.service'
 
 export const getCartRoute = defineRoute({
@@ -32,7 +32,7 @@ export const removeCartItemRoute = defineRoute({
   method: 'DELETE',
   path: '/cart/items/:productId',
   use: [requireAuth],
-  input: { params: z.object({ productId: z.string() }) },
+  input: { params: RemoveCartItemParamsSchema },
   output: CartSchema,
   handler: (c) => removeItem(c.get('store'), c.get('currentUser').id, c.input.params.productId),
 })
