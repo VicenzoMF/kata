@@ -61,6 +61,25 @@ expect_post_empty() {
   fi
 }
 
+# Asserts the Codex PostToolUse output both blocks (decision == "block")
+# and surfaces <needle> in additionalContext — the shape `kata verify`
+# violations take, mirroring the Claude wiring.
+expect_post_block_contains() {
+  local needle="$1" name="$2" json="$3"
+  ran=$((ran + 1))
+  local out
+  out="$(printf '%s' "$json" | bash "$POST" 2>/dev/null || true)"
+  if printf '%s' "$out" | jq -er --arg n "$needle" \
+    '.decision == "block" and (.hookSpecificOutput.additionalContext | contains($n))' \
+    >/dev/null 2>&1; then
+    printf 'OK   %s\n' "$name"
+  else
+    fails=$((fails + 1))
+    printf 'FAIL %s — expected decision=block + context containing %q\n  out: %s\n' \
+      "$name" "$needle" "$out"
+  fi
+}
+
 # --- R5.3 / R3.2: forbidden-command blocks ----------------------------
 
 expect_pre_rc 2 'forbidden: git commit --no-verify' \
@@ -97,7 +116,10 @@ expect_pre_rc 0 'allowed: write to src/foo.ts' \
 # lint issue. Build a fixture under examples/hello/src/temp and trigger
 # the Codex post-tool-use hook via a synthesized Bash `tee` payload.
 fixture="$ROOT/examples/hello/src/__codex_hooks_fixture__.ts"
-trap 'rm -rf "$tmp" "$fixture"' EXIT
+# A .route.ts inside a Kata app trips `kata verify` (kata/inline-schema).
+kata_dir="$ROOT/examples/hello/src/modules/__codex_kata_fixture__"
+kata_fixture="$kata_dir/__codex_kata_fixture__.route.ts"
+trap 'rm -rf "$tmp" "$fixture" "$kata_dir"' EXIT
 mkdir -p "$(dirname "$fixture")"
 
 # Code that survives auto-fix but trips a lint rule (no-unused-vars).
@@ -117,6 +139,27 @@ expect_post_empty 'PostToolUse silent on benign Bash (no writes)' \
 
 expect_post_empty 'PostToolUse silent on non-source write' \
   "{\"tool_input\":{\"command\":\"echo x > $tmp/notes.txt\"}}"
+
+# kata verify parity: a route with an inline Zod schema must both inject
+# the violation as feedback AND propagate decision:block, matching the
+# Claude PostToolUse wiring (#124/#125).
+mkdir -p "$kata_dir"
+cat >"$kata_fixture" <<'EOF'
+import { z } from 'zod'
+import { defineRoute } from '../../context'
+
+export const probeRoute = defineRoute({
+  method: 'GET',
+  path: '/codex-kata-fixture',
+  input: { query: z.object({ q: z.string() }) },
+  output: z.object({ ok: z.boolean() }),
+  handler: async () => ({ ok: true }),
+})
+EOF
+
+expect_post_block_contains "kata/inline-schema" \
+  'PostToolUse blocks + surfaces kata verify violations' \
+  "{\"tool_input\":{\"command\":\"echo touched > $kata_fixture\"}}"
 
 # --- R5.4: Stop hook short-circuits when stop_hook_active ------------
 
