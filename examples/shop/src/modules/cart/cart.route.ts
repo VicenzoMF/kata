@@ -1,5 +1,3 @@
-import { z } from 'zod'
-
 import { defineRoute } from '../../context'
 import { requireAuth } from '../../middlewares/auth'
 
