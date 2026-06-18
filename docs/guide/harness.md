@@ -107,7 +107,7 @@ The rules `kata verify` enforces, each anchored to the ADR that justifies it:
 | `kata/middleware-provides-mismatch` | `provides[]` matches the handler's `c.set` | ADR-0004 |
 | `kata/context-key-not-registered` | `c.get('key')` is a registered context key | ADR-0004 |
 
-See [/guide/cli](/guide/cli) for the full command surface, including
+See [Bootstrap CLI](/guide/cli) for the full command surface, including
 `kata verify --watch` for a re-checking terminal loop.
 
 ## Why the harness is fast
@@ -245,10 +245,10 @@ instead. The commands, the events, and the `Stop` timeout are identical — that
 parity is the point.
 
 Pass `--with-example` to also scaffold a runnable `GET /health` app on top of the
-harness files. See [/guide/cli](/guide/cli) for every flag.
+harness files. See [Bootstrap CLI](/guide/cli) for every flag.
 
 ## See also
 
-- [/guide/cli](/guide/cli) — the full `kata` command surface.
+- [Bootstrap CLI](/guide/cli) — the full `kata` command surface.
 - [ADR-0007](/adr/0007-self-apply-harness-before-feature-work) — self-apply the harness before feature work.
 - [ADR-0010](/adr/0010-ban-no-verify-and-config-tampering) — ban `--no-verify` and config tampering.

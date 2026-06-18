@@ -43,7 +43,8 @@ Leia a tabela pelas colunas:
 
 - **Nest** é opinativo, mas as opiniões são classes, decorators e um container IoC
   em runtime. Dependências são resolvidas por reflexão em runtime, então a ligação
-  não é estaticamente enumerável, e schemas são uma convenção em que você opta por
+  não é *estaticamente enumerável* — você não consegue listar cada dependência lendo
+  um único arquivo — e schemas são uma convenção em que você opta por
   rota. O Kata mantém o caráter opinativo e descarta o maquinário.
 - **Elysia** é funcional e validation-first, mas é só para Bun e sua disciplina de
   schema e DI é por convenção, não imposta pelo lint (`⚠️`). Nada quebra o build

@@ -170,27 +170,32 @@ createApp({
 
 ## Adaptando um middleware do Hono
 
-Os três built-ins não são especiais — cada um é um middleware do Hono envolvido para encaixar
-no contrato `Middleware<R>` do kata. O wrapper existe porque o kata constrói sua
-resposta no *fim* da cadeia de uma rota e a retorna desacoplada de `c.res`.
-Um middleware do Hono que define headers de resposta *depois* do seu próprio `next()` — como
-`secureHeaders` — seria, de outra forma, descartado: seus headers chegam a `c.res` apenas depois
-de o kata já ter tirado um snapshot deles. Então o adaptador roda o middleware do Hono até
-a conclusão primeiro, com um `next` inerte, de modo que todo header que ele define esteja em `c.res`
-antes de o kata construir a resposta, e então continua a cadeia do kata. Se o middleware
-envolvido der curto-circuito com uma `Response` (um `413`, um preflight de CORS `204`),
-essa resposta é retornada e a cadeia para.
+Os três built-ins não são especiais: cada um é um middleware comum do Hono envolvido para encaixar
+no contrato `Middleware<R>` do Kata. Entender *por que* o wrapper é necessário explica uma
+restrição real sobre o que pode entrar em uma cadeia.
 
-Isso torna o wrapper correto para middlewares que **apenas definem headers de resposta ou
-rejeitam uma requisição** — não para transformadores de resposta (compressão, ETag) que precisam
-observar o corpo final. Esses não pertencem a um `use:` ou a uma cadeia global. Essa é
-a mesma restrição sob a qual o middleware de rota vive.
+Aqui está o problema. O Kata constrói sua resposta no *fim* da cadeia de uma rota e
+a retorna desacoplada de `c.res`. Um middleware normal do Hono que define headers de resposta
+*depois* do seu próprio `next()` — `secureHeaders` é um deles — espera escrever esses headers em
+`c.res` no caminho de volta. Mas a essa altura o Kata já tirou um snapshot da resposta, então
+esses headers simplesmente seriam descartados.
+
+O wrapper contorna isso mudando *quando* o middleware do Hono roda. Ele executa o
+middleware envolvido até a conclusão primeiro, entregando-lhe um `next` inerte, de modo que todo header que ele
+define caia em `c.res` *antes* de o Kata construir a resposta — então ele continua a própria cadeia
+do Kata. E se o middleware envolvido der curto-circuito com uma `Response` (um `413`, um
+preflight de CORS `204`), essa resposta é retornada e a cadeia para.
+
+O porém: isso é correto apenas para middlewares que **definem headers de resposta ou rejeitam uma
+requisição**. Um *transformador* de resposta — compressão, ETag — precisa observar o corpo
+final, o que ele nunca consegue aqui, então ele não pertence a um `use:` ou a uma cadeia global de
+forma alguma. (Esta é a mesma restrição sob a qual o middleware de rota vive; veja o aviso de `c.header`
+em [Middleware](/pt/guide/middleware).)
 
 Para middlewares que você escreve por conta própria — populando um scoped slot a partir de um cookie de
-sessão ou API key, adicionando camadas de autorização — não envolva um middleware do Hono. Use
-`defineMiddleware` e escreva no store scoped com `c.set` diretamente. Veja
-[Middleware](/pt/guide/middleware) para o padrão de preenchimento de slots e
-[Auth com JWT](/pt/guide/jwt) para o caminho específico de auth.
+sessão ou API key, adicionando camadas de autorização — não envolva um middleware do Hono. Use `defineMiddleware`
+e escreva no store scoped com `c.set` diretamente. Veja [Middleware](/pt/guide/middleware)
+para o padrão de preenchimento de slots e [Auth com JWT](/pt/guide/jwt) para o caminho específico de auth.
 
 ## Tratando o preflight de CORS
 

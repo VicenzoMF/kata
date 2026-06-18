@@ -105,6 +105,11 @@ de mismatch é definido pelo modo `outputValidation` da aplicação
 | `log` | Loga as issues, envia os dados do handler sem alteração | produção |
 | `off` | Pula a validação de output por completo | opt-out crítico para performance |
 
+Os três modos traçam a tensão entre *capturar bugs* e *manter-se no ar*: `strict`
+falha de forma ruidosa, para que um formato errado nunca passe despercebido em dev ou CI; `log` mantém
+a produção servindo, permitindo que um desvio benigno se torne uma linha de log em vez de uma interrupção;
+`off` remove a checagem por completo onde cada microssegundo conta.
+
 O modo é resolvido uma vez no `createApp`, a primeira correspondência vence:
 
 1. o `outputValidation` explícito passado para `createApp`,
@@ -144,11 +149,12 @@ de erro global do Kata e serializado através do mesmo envelope:
 ```
 
 com status `500` e `Content-Type: application/json` — nunca a página 500
-text/HTML padrão do Hono. O erro bruto é logado no servidor; a mensagem
+text/HTML padrão do Hono. Essa fronteira existe para que um bug nunca possa vazar um stack trace ou uma
+página de erro HTML para um cliente: o erro bruto é logado no servidor, e a mensagem
 subjacente nunca é exposta ao cliente.
 
-Reserve o throw para bugs genuínos. Para falhas que o cliente deve entender,
-retorne `c.error(...)`.
+Reserve o throw para bugs genuínos. Para falhas que o cliente deve entender, retorne
+`c.error(...)`.
 
 ## Status customizados: `c.error` e `c.json`
 
@@ -175,10 +181,11 @@ type ErrorExtra = {
 
 - O argumento `code` torna-se o campo `error` na rede.
 - `status` vai dentro de `extra` e **tem padrão `400`**.
-- Anexe erros de campo estruturados via `extra.issues` (o mesmo formato
-  `FieldIssue[]` do envelope 422).
+- Anexe erros de campo estruturados via `extra.issues` (o mesmo formato `FieldIssue[]`
+  do envelope 422).
 
-A distinção que governa o pipeline de resposta:
+A distinção que governa o pipeline de resposta (a mesma de
+[Routes & schemas](/pt/guide/routes-schemas)):
 
 - **retornar um valor** → validado contra `output`, enviado como `200`.
 - **retornar `c.error(...)` / `c.json(body, status)`** → carrega seu próprio
@@ -188,7 +195,7 @@ A distinção que governa o pipeline de resposta:
 
 Com um **único** schema `output`, um `Response` retornado (incluindo `c.error`)
 faz um short-circuit na route e **não** é checado contra ele — que é exatamente o
-motivo pelo qual um body de erro pode diferir do seu formato de sucesso.
+motivo pelo qual é permitido que um body de erro difira do seu formato de sucesso.
 
 ```ts
 export const getUserRoute = defineRoute({

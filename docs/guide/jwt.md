@@ -5,11 +5,16 @@ description: Authenticate requests with kata/jwt — sign and verify tokens, fil
 
 # JWT auth
 
-`kata/jwt` is a tree-shakeable subpath of the core package. It ships the JWT
-building blocks so you do not hand-roll a verifier: sign a token, verify it,
-authenticate a request into a scoped slot, and authorize that slot with guards.
-It adds **no new dependency** — `kata/jwt` is built on `hono/jwt`, and `hono` is
-already a peer dependency ([ADR-0013](/adr/0013-jwt-delivery)).
+A **JWT** (JSON Web Token) is a compact, signed string that carries a set of
+*claims* — facts about the caller, such as "user id 42, email ada@…". Because it is
+signed with a secret only your server knows, the server can trust those claims after
+a cheap signature check — no session store, no database round-trip.
+
+`kata/jwt` ships the building blocks for that flow so you do not hand-roll a verifier:
+**sign** a token, **verify** it, **authenticate** a request into a scoped slot, and
+**authorize** that slot with guards. It adds **no new dependency** — `kata/jwt` is a
+tree-shakeable subpath built on `hono/jwt`, and `hono` is already a peer dependency
+([ADR-0013](/adr/0013-jwt-delivery)).
 
 ```ts
 import {
@@ -176,9 +181,13 @@ type JwtError = {
 }
 ```
 
-A signature, structure, algorithm, `iss`, `aud`, or not-before failure collapses
-to `invalid_token`; an expired token to `expired`; a payload that fails the Zod
-schema to `claims_mismatch` (carrying structured `issues`).
+Three buckets, so a caller always knows which kind of failure happened:
+
+- a signature, structure, algorithm, `iss`, `aud`, or not-before failure →
+  `invalid_token`
+- an expired token → `expired`
+- a payload that fails the Zod schema → `claims_mismatch` (carrying structured
+  `issues`)
 
 You rarely call `verifyJwt` directly in route code — `jwtAuth` wraps it. Reach
 for it when you verify a token outside the request middleware chain (a background

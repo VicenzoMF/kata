@@ -5,21 +5,34 @@ description: How createApp returns a parametric Hono app whose type gives the hc
 
 # Typed RPC client
 
-A Kata server already declares every route's `input` and `output` as Zod
-schemas. The RPC client reuses those declarations: it infers paths, request
-bodies, params, query, and per-status responses directly from the same schemas
-the server validates against. No codegen. No shared runtime. The only artifact a
-client imports is one exported type.
+First, the term. An **RPC client** (remote procedure call) lets you call a server
+endpoint as if it were a local function — `client.users.$post(...)` instead of
+hand-writing a `fetch` with a URL, a method, headers, and `JSON.stringify`. "Typed"
+means that function already knows the server's *exact* input and output types: the
+arguments it accepts and the shape it returns are the very Zod schemas the server
+validates against.
 
-This is Hono's [RPC client](https://hono.dev/docs/guides/rpc). Kata's job is to
-make `createApp` return a Hono app whose type carries your routes, so `hc` has
-something to infer from.
+A Kata server already declares every route's `input` and `output` as Zod schemas. The
+RPC client reuses those declarations — it infers paths, request bodies, params, query,
+and per-status responses straight from the same schemas the server validates against.
+**No codegen. No shared runtime.** The only artifact a client imports is one exported
+*type*.
+
+That last point is what "end-to-end types" really means: because the contract travels
+as a type rather than a generated file, there is nothing to regenerate and nothing to
+drift. Rename a field on the server and every client call site that used it stops
+compiling — the mismatch becomes a build error instead of a production 500.
+
+This is Hono's [RPC client](https://hono.dev/docs/guides/rpc). Kata's job is to make
+`createApp` return a Hono app whose *type* carries your routes, so `hc` has something to
+infer from.
 
 ## The app type
 
-`createApp` returns a **parametric** `Hono` app. Its RPC schema is derived from
-the modules you pass. Export that app's type — that is the entire contract a
-client needs.
+`createApp` returns a **parametric** `Hono` app — "parametric" meaning its type is
+parameterised by the modules you pass in, so the routes you registered are visible *in
+the type itself*. Its RPC schema is derived from those modules. Export that app's type
+and you have handed a client the entire contract:
 
 ```ts
 // server.ts
@@ -34,9 +47,10 @@ export const app = createApp({ modules })
 export type AppType = typeof app
 ```
 
-`createApp` infers its module tuple with a `const` type parameter, so the
-`as const` on `modules` is what keeps element types literal. `AppType` is
-exactly `KataApp<typeof modules>` — the same type spelled two ways.
+`createApp` infers its module tuple with a `const` type parameter, so the `as const` on
+`modules` is what keeps the element types literal — without it, TypeScript would widen
+them and the per-route detail would be lost. `AppType` is exactly
+`KataApp<typeof modules>` — the same type spelled two ways.
 
 ::: tip
 `KataApp` is exported from `kata` if you want to name the type explicitly:
@@ -64,15 +78,16 @@ import type { AppType } from './server' // in a real deploy: from the server pac
 const client = hc<AppType>('http://localhost:3001')
 ```
 
-In a real deployment the server lives in one package and the client in another —
-a frontend, a microservice, a CLI. The shared artifact is the `AppType` import,
-nothing else. There is no generated client to keep in sync and no runtime
-dependency on the server.
+In a real deployment the server lives in one package and the client in another — a
+frontend, a microservice, a CLI. The only thing they share is the `AppType` import, and
+since a type is erased at build time, the client carries no runtime dependency on the
+server and there is no generated client to keep in sync.
 
 ## Calling routes
 
-Each path becomes a property; each HTTP method becomes a `$`-prefixed call.
-Request inputs map from Kata's `input` sections to Hono's client targets:
+The client mirrors your route tree: each path segment becomes a property, and each HTTP
+method becomes a `$`-prefixed call (`$get`, `$post`). The request inputs you declared
+under `input` map onto Hono's client targets like this:
 
 | Kata `input` key | Client target |
 | --- | --- |
@@ -97,14 +112,13 @@ const all = await client.users.$get({ query: { q: 'grace' } })
 const list = await all.json() // { id: string; name: string; email: string }[]
 ```
 
-Request types are derived from `z.input` — the shape the caller sends, before
-any Zod transforms. Response types are derived from `z.infer` — the shape after
-parsing.
+Request types are derived from `z.input` — the shape the caller sends, before any Zod
+transforms. Response types are derived from `z.infer` — the shape after parsing.
 
 ## Wrong calls are compile errors
 
-Because inputs come from your schemas, a call that violates them does not
-type-check. These three statements each fail `tsc`:
+Because inputs come from your schemas, a call that violates them does not type-check.
+These three statements each fail `tsc`:
 
 ```ts
 // Body must satisfy CreateUserBodySchema — email is required.
@@ -117,15 +131,14 @@ await client.users[':id'].$get({ param: { id: 123 } }) // ✗
 await client.users.$get({ query: { q: 123 } }) // ✗
 ```
 
-You do not get a runtime surprise. You get a red squiggle in the editor and a
-failing typecheck in CI.
+You do not get a runtime surprise. You get a red squiggle in the editor and a failing
+typecheck in CI.
 
 ## Multi-status responses narrow on `res.status`
 
 When a route declares a status→schema `output` map (see
-[/guide/routes-schemas](/guide/routes-schemas)), the response is a per-status
-union. Narrow it with `res.status`, and each branch is typed to that status's
-schema.
+[Routes & schemas](/guide/routes-schemas)), the response is a per-status union. Narrow
+it with `res.status`, and each branch is typed to that status's schema.
 
 The `/users/:id` route declares `output: { 200: UserSchema, 404: ErrorBodySchema }`:
 
@@ -141,14 +154,13 @@ return res.json() // { id: string; name: string; email: string }
 ```
 
 `ErrorBodySchema` (exported from `kata`) is the canonical schema for Kata's error
-envelope, so the 404 branch is typed end to end. See
-[/guide/errors](/guide/errors) for the envelope shape and `c.error(...)`.
+envelope, so the 404 branch is typed end to end. See [Errors](/guide/errors) for the
+envelope shape and `c.error(...)`.
 
 ## Extracting the types directly
 
-If you need the inferred request or response type for a call site — to type a
-function parameter or a React hook — use Hono's `InferRequestType` and
-`InferResponseType`:
+If you need the inferred request or response type for a call site — to type a function
+parameter or a React hook — use Hono's `InferRequestType` and `InferResponseType`:
 
 ```ts
 import type { InferRequestType, InferResponseType } from 'hono'
@@ -163,15 +175,17 @@ type NotFoundResponse = InferResponseType<(typeof client.users)[':id']['$get'], 
 // the error envelope, narrowed to the 404 status
 ```
 
-The second argument to `InferResponseType` is the status you are narrowing to —
-the same status you branch on at runtime.
+The second argument to `InferResponseType` is the status you are narrowing to — the
+same status you branch on at runtime.
 
 ## The DI registry never reaches the wire
 
-A server registers dependencies in `defineContext` — a logger, a db pool, scoped
-slots like `currentUser` (see [/guide/context-di](/guide/context-di)). None of
-that is part of the HTTP contract, so none of it appears in the client type. The
-client's Hono `Env` stays `BlankEnv`.
+A server registers dependencies in `defineContext` — a logger, a db pool, scoped slots
+like `currentUser` (see [Context & DI](/guide/context-di)). None of that is part of the
+HTTP contract, so none of it appears in the client type — which is exactly what you
+want: a database handle and your internal services are server-only concerns, and they
+have no business leaking into a frontend's types. The client's Hono `Env` stays
+`BlankEnv`.
 
 ```ts
 import type { Hono } from 'hono'
@@ -183,15 +197,15 @@ type EnvOf<T> = T extends Hono<infer E, infer _S, infer _B> ? E : never
 type _Proof = EnvOf<AppType> extends BlankEnv ? true : false
 ```
 
-So `c.get('logger')` works inside a handler but is invisible to `hc<AppType>`.
-The wire carries routes, inputs, and outputs — never your registry.
+So `c.get('logger')` works inside a handler but is invisible to `hc<AppType>`. The wire
+carries routes, inputs, and outputs — never your registry.
 
 ## Testing the client in-process
 
-`hono/testing`'s `testClient` binds `hc<typeof app>` to your app object directly,
-with no socket. The calls drive the full Kata pipeline — input validation,
-handler, output validation — with the exact types the real client sees, so your
-tests and your type layer cannot drift apart.
+`hono/testing`'s `testClient` binds `hc<typeof app>` to your app object directly, with
+no socket. The calls drive the full Kata pipeline — input validation, handler, output
+validation — with the exact types the real client sees, so your tests and your type
+layer cannot drift apart.
 
 ```ts
 import { testClient } from 'hono/testing'
@@ -225,11 +239,10 @@ describe('users RPC', () => {
 is a runnable, type-checked demonstration of everything above:
 
 - `src/server.ts` builds the app and exports `AppType`.
-- `src/client.ts` consumes it with `hc<AppType>`, plus a tuple of compile-time
-  type proofs and `@ts-expect-error` lines that fail `tsc` the moment the runtime
-  and the type layer disagree.
-- `src/client.test.ts` exercises the same routes at runtime through
-  `testClient(app)`.
+- `src/client.ts` consumes it with `hc<AppType>`, plus a tuple of compile-time type
+  proofs and `@ts-expect-error` lines that fail `tsc` the moment the runtime and the
+  type layer disagree.
+- `src/client.test.ts` exercises the same routes at runtime through `testClient(app)`.
 
 The type proofs are the test: `tsc --noEmit` is run in CI, so a regression in the
 runtime-to-type bridge turns a proof `false` and fails the build.

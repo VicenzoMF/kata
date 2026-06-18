@@ -5,14 +5,19 @@ description: kata init faz o scaffold de um projeto já conectado ao harness —
 
 # CLI de bootstrap
 
-Kata distribui um único binário, `kata`. Ele tem exatamente um comando: `init`.
-Rode-o dentro de um projeto para escrever o harness — as configs de hook do
-Claude Code e do Codex mais o par de instruções `AGENTS.md` / `CLAUDE.md`.
-Adicione `--with-example` e ele também faz o scaffold de um app `GET /health`
-executável que você pode subir com mais um passo.
+Kata distribui um único binário, `kata`, com dois comandos:
 
-A CLI não instala nada, não gerencia versões e não gera código por rota. Ela
-escreve um conjunto fixo de arquivos, de forma idempotente, e relata o que fez.
+- **`kata init`** — faz o scaffold do harness em um projeto. Esta página o cobre.
+- **`kata verify`** — roda as regras de lint do Kata sobre um projeto; no modo `--json` ele emite
+  o output de hook que um agente consome. Sua superfície completa — o conjunto de regras, `--json`, e
+  `--watch` — vive n'[o harness](/pt/guide/harness); a seção [`kata verify`](#kata-verify)
+  abaixo é uma referência rápida.
+
+`kata init` escreve o harness — as configs de hook do Claude Code e do Codex mais o
+par de instruções `AGENTS.md` / `CLAUDE.md`. Adicione `--with-example` e ele também faz o scaffold
+de um app `GET /health` executável que você pode subir com mais um passo. Ele não instala
+nada, não gerencia versões, nem gera código por rota: ele escreve um conjunto fixo de arquivos,
+de forma idempotente, e relata o que fez.
 
 ## `kata init`
 
@@ -217,15 +222,32 @@ um diretório novo ou já no formato Kata; o skip-on-exists protege os arquivos
 existentes, mas os novos ainda aparecem onde você o roda.
 :::
 
-## Outros comandos
+## `kata verify`
 
-Não há nenhum. `kata` tem um único comando, `init`. Rodar `kata` sem comando, ou
-com um comando desconhecido, imprime a ajuda de uso e sai com código diferente de
-zero:
+O segundo comando roda as regras determinísticas de lint do Kata sobre um projeto:
+
+```bash
+kata verify [path]      # caminho padrão: o diretório atual
+```
+
+Ele lê o projeto, verifica as regras ancoradas nas ADR-0003 / 0004 / 0005, e imprime
+um relatório legível para humanos. Duas flags moldam como ele roda:
+
+- `kata verify --json` — emite JSON de hook `PostToolUse` do Claude Code em vez do
+  relatório no terminal. Isso é exatamente o que os hooks gerados chamam a cada escrita de arquivo.
+- `kata verify --watch` — continua rodando e reverifica ao mudar, para um loop local rápido.
+
+Rode `kata verify --help` para a lista completa de flags. O conjunto de regras, o contrato JSON e
+como os hooks o conectam ao Claude Code e ao Codex estão documentados n'[o harness](/pt/guide/harness).
+
+## Sem comando, ou um desconhecido
+
+Rodar `kata` sem comando, ou com um comando desconhecido, imprime a ajuda de uso e
+sai com código diferente de zero:
 
 ```bash
 kata
-# kata: missing command (try `kata init`)
+# kata: missing command (try `kata init` or `kata verify`)
 ```
 
 Um gerador de módulo por domínio (`kata new <domain>`) está reservado, mas ainda

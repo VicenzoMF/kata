@@ -7,8 +7,8 @@ description: A thin, opinionated layer on Hono — functional, schema-complete, 
 
 Kata is a thin, opinionated layer on top of [Hono](https://hono.dev). Hono gives
 you the router, the cross-runtime adapters, and the typed RPC client. Kata adds
-the part Hono leaves open: how you structure an app, where dependencies come
-from, and what a route is allowed to look like.
+the part Hono leaves open: **how you structure an app, where dependencies come
+from, and what a route is allowed to look like.**
 
 > Opinionated like NestJS, functional like a script, verifiable like a type
 > system. Built so AI agents and humans both produce correct code on the first
@@ -20,11 +20,13 @@ until it is automatic, the same whether a human or an agent writes it.
 
 ## A thin layer, not a rewrite
 
-Kata wraps Hono's router and context, but it does not re-export Hono's API. The
-public surface is four functions — `defineContext`, `defineRoute`,
-`defineMiddleware`, `createApp` — plus Hono's RPC client for end-to-end types
-([ADR-0001](/adr/0001-use-hono-as-base)). Everything else is a plain object you
-pass to one of them.
+**Kata wraps Hono; it does not replace it.** It builds on Hono's router and
+context but never re-exports Hono's API. The entire public surface is four
+functions — `defineContext`, `defineRoute`, `defineMiddleware`, `createApp` —
+plus Hono's RPC client: the piece that lets a TypeScript caller hit your API and
+get back the server's *exact* request and response types, with no codegen and no
+separately built client ([ADR-0001](/adr/0001-use-hono-as-base)). Everything else
+is a plain object you pass to one of those four functions.
 
 ```ts
 import { defineContext, scoped, singleton } from 'kata'
@@ -37,50 +39,63 @@ export const k = defineContext({
 export const { defineRoute, defineMiddleware, createApp } = k
 ```
 
-`defineContext` is the root. It takes your dependency registry and returns
-`defineRoute`, `defineMiddleware`, and `createApp` already bound to it, so the
-rest of your app inherits the types. Because Kata sits on Hono, it runs wherever
-Hono runs — Node, Bun, Deno, edge — and the app `createApp` returns is a real
-Hono app you can extend.
+`defineContext` is the root of everything. You hand it your dependency registry,
+and it hands back `defineRoute`, `defineMiddleware`, and `createApp` — already
+bound to that registry, so the rest of your app inherits the types for free.
+
+Because Kata sits *on* Hono rather than hiding it, two things follow:
+
+- It runs wherever Hono runs — Node, Bun, Deno, edge.
+- The app `createApp` returns is a real Hono app you can extend.
 
 ## Functional only
 
 Kata has no classes, no decorators, and no runtime IoC container
-([ADR-0002](/adr/0002-no-classes-no-decorators)). A route is `defineRoute({...})`
-and nothing else. A dependency is an entry in `defineContext`. There is no
-`@Injectable()`, no metadata reflection, no inheritance chain to trace.
+([ADR-0002](/adr/0002-no-classes-no-decorators)). The whole vocabulary is
+smaller than that:
 
-This is not nostalgia. NestJS-style decorators encode control flow that is hard
-to grep and hard to verify mechanically — the metadata runs at decoration time,
-the container resolves at runtime, and neither is visible in the source. Kata's
-bet is the opposite: **constraints aid agents**. Functions, plain objects, and
-explicit imports are inspectable by a tool, not just a human. Named exports only;
-the `any` type is forbidden (use `unknown` and narrow).
+- A route is `defineRoute({...})` — and nothing else.
+- A dependency is one entry in `defineContext`.
+
+There is no `@Injectable()`, no metadata reflection, no inheritance chain to
+trace.
+
+This is not nostalgia — it is what makes the code checkable by a tool.
+NestJS-style decorators hide control flow that is hard to grep and hard to
+verify: the metadata runs at decoration time, the container resolves at runtime,
+and neither is visible in the source you are reading. Kata bets the opposite way
+— **constraints aid agents.** Functions, plain objects, and explicit imports can
+be inspected by a machine, not just a human.
+
+Two rules fall out of that bet, and Kata enforces both: named exports only, and
+no `any` (use `unknown` and narrow).
 
 ## Three invariants
 
-Kata enforces three rules. Together they make an app mechanically verifiable —
-checkable by a lint pass in a `PostToolUse` hook, in under 100ms, with no app
+Kata enforces three rules. Together they make an app *mechanically verifiable* —
+meaning a program, not just a human reviewer, can confirm the rules hold.
+Concretely, that check is a lint pass in a `PostToolUse` hook: under 100ms, no app
 boot.
 
 ### 1. Static DI
 
-Every dependency is declared in a single `defineContext({...})`. There are two
-slot kinds:
+Every dependency is declared in a single `defineContext({...})`. A dependency is
+one of two slot kinds:
 
-- `singleton(value)` — one value for the process lifetime (a db pool, a logger,
-  a mailer).
-- `scoped<T>()` — one value per request, filled by a middleware (the current
+- `singleton(value)` — one value for the whole process (a db pool, a logger, a
+  mailer).
+- `scoped<T>()` — one value per request, filled in by a middleware (the current
   user, a tenant id, a transaction).
 
-`c.get('key')` only type-checks for a key you registered. There are no
-string-keyed lookups that escape the type system, so the full dependency graph
-is enumerable from one file ([ADR-0004](/adr/0004-di-via-scoped-slots)).
+`c.get('key')` only type-checks for a key you actually registered. Nothing
+escapes the type system through string-keyed lookups, so the entire dependency
+graph can be read off from one file ([ADR-0004](/adr/0004-di-via-scoped-slots)).
 
 ### 2. Mandatory schemas
 
-Every route declares both an `input` and an `output` schema — omitting either is
-a TypeScript error ([ADR-0003](/adr/0003-mandatory-input-output-schemas)).
+Every route declares both an `input` and an `output` schema. Omit either and it
+is a TypeScript error, not a runtime surprise
+([ADR-0003](/adr/0003-mandatory-input-output-schemas)).
 
 ```ts
 export const getUserRoute = defineRoute({
@@ -96,12 +111,17 @@ export const getUserRoute = defineRoute({
 })
 ```
 
-`input` is validated **before** the handler; on failure Kata returns `422` with
-a normalised `{ error: "validation_failed", issues }` envelope. `output` is
-validated **after** the handler; a mismatch is logged and turned into `500
-{ "error": "internal_output_shape_mismatch" }` so the wrong shape never reaches
-the client. The same Zod schemas drive the typed RPC client — no codegen, no
-shared runtime.
+Those two schemas guard both ends of the handler:
+
+- **`input` is checked before the handler runs.** On failure Kata returns `422`
+  with a normalised `{ error: "validation_failed", issues }` envelope — your code
+  never sees bad input.
+- **`output` is checked after the handler returns.** A mismatch is logged and
+  turned into `500 { "error": "internal_output_shape_mismatch" }`, so the wrong
+  shape never reaches the client.
+
+The same Zod schemas also drive the typed RPC client — no codegen, no shared
+runtime.
 
 ### 3. Locked layout
 
@@ -127,29 +147,35 @@ rules.
 
 ::: tip Why the invariants matter
 Static DI, mandatory schemas, and a locked layout are exactly what `kata verify`
-checks. Because the shape is fixed, the check is a glob plus an AST match — fast
-enough to run on every file write and feed results back to an agent as
-`hookSpecificOutput.additionalContext` for self-correction. See
+checks. Because the shape is fixed, the check is just a glob plus an AST match —
+fast enough to run on every file write and feed the result straight back to an
+agent as `hookSpecificOutput.additionalContext` for self-correction. See
 [The harness](/guide/harness).
 :::
 
 ## Who it is for
 
-Both audiences, by the same mechanism. Humans get one obvious way to write a
-route and a verifier that catches the slip before review. Agents get a shape they
-can produce and a check they can read: when `kata verify` fails, it returns
-structured feedback the agent uses to fix its own output. The constraints that
-make the code greppable for a tool are the same ones that make it predictable for
-a person.
+Humans and agents — served by the same mechanism, not two different ones.
+
+- **Humans** get one obvious way to write a route, and a verifier that catches
+  the slip before review.
+- **Agents** get a shape they can reliably produce and a check they can read:
+  when `kata verify` fails, it returns structured feedback the agent uses to fix
+  its own output.
+
+The constraints that make the code greppable for a tool are the very same ones
+that make it predictable for a person. That overlap is the whole design.
 
 ## What Kata is not
 
-Kata owns the request: typed routing, mandatory validation, dependency injection,
-the error envelope, and the lifecycle. It does **not** ship a persistence layer,
-a rate limiter, a metrics exporter, a config loader, or pagination helpers. Those
-are infrastructure and product policy — they stay yours, so the framework never
-locks you into a vendor or a shape. Because `createApp` returns a plain Hono app,
-any Hono middleware works app-wide today.
+Kata owns the request — and stops there. Inside its borders: typed routing,
+mandatory validation, dependency injection, the error envelope, and the
+lifecycle. Outside them, on purpose: **no persistence layer, no rate limiter, no
+metrics exporter, no config loader, no pagination helpers.**
+
+Those are infrastructure and product policy. They stay yours, so the framework
+never locks you into a vendor or a shape. And because `createApp` returns a plain
+Hono app, any Hono middleware works app-wide today.
 
 This boundary is deliberate, not a gap. See
 [Non-goals & bring-your-own](/cookbook/non-goals) for the idiomatic BYO pattern

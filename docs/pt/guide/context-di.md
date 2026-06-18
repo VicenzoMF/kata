@@ -140,13 +140,20 @@ export const me = defineRoute({
 })
 ```
 
-`c.get` é monomórfico. Ele retorna o tipo do valor resolvido do slot —
-`ResolvedValue<R[K]>` — de forma síncrona, para os dois tipos. Um singleton retorna o
-valor que você registrou; um scoped slot retorna o valor que seu middleware definiu.
+Duas propriedades de `c.get` valem ser nomeadas, porque são elas que o tornam agradável
+de usar:
 
-`c.get('key')` só passa no type-check quando `'key'` é uma chave do seu registry. Um
-typo ou um nome não declarado é um erro de compilação, e a regra de lint
-`kata/context-key-not-registered` também o sinaliza.
+- **Ele é síncrono.** `c.get` nunca retorna uma promise — você nunca faz `await` em uma
+  dependência. Seja o que for que o slot guarde, você recebe o valor diretamente. (Esta é
+  a recompensa concreta de banir factories lazy.)
+- **Ele é monomórfico** — ele tem exatamente *um* tipo de retorno por chave, fixado pelo
+  registry: `ResolvedValue<R[K]>`. Uma chave singleton retorna precisamente o tipo que você
+  registrou; uma chave scoped retorna precisamente o tipo que seu middleware define. Nenhuma
+  union para estreitar, nenhum widening, nenhum `| undefined` para se proteger contra.
+
+E ele só passa no type-check para chaves que você realmente declarou. Um typo ou um nome
+não declarado é um erro de compilação, e a regra de lint `kata/context-key-not-registered` também o
+sinaliza — então você descobre enquanto digita, não em produção.
 
 ::: warning Lendo o registry na inicialização
 Os quatro membros retornados são a superfície pública. Fora de um request você não
@@ -158,8 +165,10 @@ handler de request é um erro em tempo de build (`kata/scoped-read-outside-reque
 
 ## Preencher scoped slots acontece no middleware
 
-Um slot `scoped<T>()` começa vazio. Um middleware o preenche. O middleware declara
-quais slots fornece; o runtime lhe dá um `c.set` para exatamente esses slots:
+Esta é a outra metade da história de scoped-slot acima. Um slot `scoped<T>()`
+começa vazio, e a *única* maneira de ele receber um valor é um middleware colocá-lo
+lá. O middleware declara quais slots ele `provides` (fornece), e em troca o runtime
+lhe entrega um `c.set` que aceita exatamente esses slots:
 
 ```ts
 import { defineMiddleware } from '../context'
@@ -176,53 +185,68 @@ export const requireAuth = defineMiddleware({
 })
 ```
 
-`provides` precisa ser `as const` para que os nomes literais dos slots sobrevivam no
-tipo. Uma route que lê `c.get('currentUser')` lista `requireAuth` na sua cadeia
-`use:` — é assim que o valor chega lá.
+Leia isso como um contrato com dois lados:
 
-O array `provides` é restrito por tipo aos nomes dos seus scoped slots, e `c.set`
-aceita apenas essas chaves com o tipo de valor correto. Definir um singleton, ou um
-nome que você nunca declarou, não compila. A relação entre uma leitura scoped e um
-middleware que a fornece também é uma invariante de lint:
-`kata/scoped-slot-not-provided` reprova uma route que lê um scoped slot cujo
-middleware não está na sua cadeia `use:`, e `kata/middleware-provides-mismatch`
-reprova um middleware que declara um slot que nunca define.
+- O middleware *promete*, via `provides: ['currentUser'] as const`, que uma vez que ele
+  tenha rodado, `currentUser` estará definido. O `as const` é estrutural: sem ele o
+  TypeScript alarga o array para `string[]` e o nome literal do slot é perdido.
+- Uma rota que lê `c.get('currentUser')` deve listar `requireAuth` em sua cadeia
+  `use:`. Essa listagem é o fio real que entrega o valor — ler um slot e
+  fornecê-lo são conectados pela cadeia `use:`, nada mais.
 
-Se o middleware que fornece nunca rodar, o slot nunca é definido. Lê-lo então não é
-um `undefined` silencioso — `c.get` lança em runtime:
+O sistema de tipos e o harness mantêm ambos os lados desse contrato honestos:
+
+- `provides` é restrito aos nomes dos seus scoped slots, e `c.set` aceita apenas
+  essas chaves com o tipo de valor correto. Definir um singleton, ou um nome que você nunca
+  declarou, não compila.
+- `kata/scoped-slot-not-provided` reprova uma rota que lê um scoped slot cujo
+  middleware fornecedor não está na sua cadeia `use:`.
+- `kata/middleware-provides-mismatch` reprova um middleware que declara um slot em
+  `provides` mas nunca o define de fato.
+
+E se a fiação estiver errada de qualquer forma — o middleware fornecedor nunca rodar — o slot
+continua vazio, e o Kata se recusa a mascarar isso com `undefined`. `c.get` lança,
+em alto e bom som:
 
 > `kata: scoped slot 'currentUser' read before being set. Did the providing middleware run?`
 
-As regras de lint acima existem para pegar esse erro de fiação antes do runtime.
+O lançamento (throw) é deliberado. Um `undefined` silencioso transformaria um erro de fiação em um
+crash de referência nula três linhas depois, longe de sua causa; lançar na leitura
+aponta direto para o problema. As regras de lint acima existem para pegar o mesmo
+erro ainda mais cedo, antes de o código sequer rodar.
 
 Para o contrato completo de middleware — `provides`, a API de contexto,
 curto-circuito com um `Response` — veja [Middleware](/pt/guide/middleware).
 
 ## Por que enumerabilidade estática importa
 
-O registry inteiro é um único object literal em um único arquivo. Para responder
-"quais dependências existem?" você lê `src/context.ts`. Para responder "quais routes
-usam `currentUser`?" você dá grep em `c.get('currentUser')`. Sem grafo de factories
-para resolver, sem container para rastrear.
+Tudo acima compra uma propriedade, e é o motivo de o design ser como é:
+**o grafo de dependências inteiro é um único object literal em um único arquivo.** Nada
+é computado, registrado dinamicamente ou escondido atrás de uma chamada de factory. Então toda
+questão sobre dependências se resume a uma leitura ou a um grep:
 
-Isso é deliberado. A história de correção do Kata se apoia em invariantes multi-arquivo
-que um checker rápido consegue verificar mecanicamente — toda leitura scoped tem um
-middleware que a fornece, toda chave de `c.get` está registrada. Um único registry
-estaticamente enumerável é o que torna essas verificações um grep em vez de uma busca
-de prova em nível de tipos. Veja [O harness](/pt/guide/harness).
+- *Quais dependências existem?* → leia `src/context.ts`.
+- *Quais routes usam `currentUser`?* → dê grep em `c.get('currentUser')`.
+
+Isso não é apenas uma conveniência para humanos. A história de correção do Kata se apoia em
+invariantes multi-arquivo que um checker rápido consegue verificar mecanicamente — toda leitura scoped
+tem um middleware que a fornece, toda chave de `c.get` está registrada. Essas verificações são baratas
+*só porque* o registry é estaticamente enumerável: o checker dá grep e
+faz pattern-match em vez de rodar uma busca de prova em nível de tipos ou dar boot na sua app.
+Veja [O harness](/pt/guide/harness).
 
 ## AppRegistry
 
-Exporte o tipo do registry para reúso — contratos de middleware, helpers de teste,
-qualquer coisa que precise nomear o seu contexto:
+Exporte o tipo do registry sempre que algo precisar *nomear* o seu contexto —
+um contrato de middleware, um helper de teste, uma função genérica sobre a app:
 
 ```ts
 export type AppRegistry = typeof k.registry
 ```
 
 `AppRegistry` é o `Registry` que seus slots definem: um record readonly de cada chave
-para o seu `Singleton<T>` ou `Scoped<T>`. É o tipo sobre o qual os `defineRoute`,
-`defineMiddleware` e `createApp` vinculados são parametrizados, então nomeá-lo uma vez
+para o seu `Singleton<T>` ou `Scoped<T>`. Os `defineRoute`, `defineMiddleware`
+e `createApp` vinculados são todos parametrizados sobre ele — então nomeá-lo uma vez
 mantém o resto do seu código em sintonia com `context.ts`.
 
 ## Próximo

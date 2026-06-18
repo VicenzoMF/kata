@@ -5,18 +5,30 @@ description: Business logic lives in pure functions with no framework imports �
 
 # Services
 
-A service holds your business logic. It lives in `<domain>.service.ts` and
-contains plain functions — no framework imports, no `defineContext`, no
-`defineRoute`, no `c`. A route handler validates input, calls a service, and
-returns the result. The service does not know it is being served over HTTP.
+A service is where your business logic lives. It sits in `<domain>.service.ts` and
+is made of plain functions — and, crucially, it imports *nothing* from the
+framework: no `kata`, no Hono, no `defineContext`, no `defineRoute`, no `c`. A route
+handler validates the input, calls a service, and returns the result. The service
+itself has no idea it is being served over HTTP.
 
-This split is the point of the locked layout: the route is the contract, the
-service is the logic, the schema is the shape. Each is findable by glob and
-testable on its own.
+That separation is the whole point of the locked layout, and it sorts each domain's
+files by responsibility:
+
+- the **route** is the *contract* (method, path, input/output);
+- the **service** is the *logic*;
+- the **schema** is the *shape*.
+
+Each is findable by glob and testable on its own.
+
+Why insist that the service be framework-free? Because a function whose result
+depends only on its arguments — no hidden reads from a container, no reach into
+global state — is one you can test by just calling it, and reuse anywhere, HTTP or
+not. That property has a name — a *pure* function — and most of this page is about
+protecting it.
 
 ## A service is just functions
 
-The `hello` example keeps its whole user store in one file. Note what it does
+The `hello` example keeps its whole user store in one file. Notice what it does
 **not** import: nothing from `kata`, no Hono, no request context.
 
 ```ts
@@ -37,20 +49,23 @@ export async function createUser(input: CreateUserBody): Promise<User> {
 }
 ```
 
-The only imports are types from the sibling `<domain>.schema.ts`. The functions
-take and return those typed DTOs. That is the entire dependency surface.
+The only imports are *types* from the sibling `<domain>.schema.ts`. The functions
+take and return those typed DTOs, and that is the entire dependency surface — types
+vanish at compile time, so importing them ties the service to nothing concrete at
+runtime.
 
 ::: tip Named exports, no classes
-Services are functions, not methods on a class ([ADR-0002](/adr/0002-no-classes-no-decorators)).
-Export each one by name. There is no service object to instantiate and no `this`
-to bind.
+Services are functions, not methods on a class
+([ADR-0002](/adr/0002-no-classes-no-decorators)). Export each one by name. There is
+no service object to instantiate and no `this` to bind.
 :::
 
 ## How routes call services
 
-The route owns the HTTP concerns — method, path, `input`, `output`, status
-codes — and delegates the work. The handler reads the typed `c.input`, calls the
-service, and returns the value (which Kata validates against `output`):
+Think of the handler as a thin adapter between HTTP and your logic. The route owns
+the HTTP concerns — method, path, `input`, `output`, status codes — and hands the
+actual work to the service. The handler reads the already-validated `c.input`, calls
+the service, and returns the value (which Kata then validates against `output`):
 
 ```ts
 // src/modules/users/users.route.ts
@@ -82,17 +97,23 @@ export const createUserRoute = defineRoute({
 })
 ```
 
-The handler is a thin adapter: unwrap `c.input`, call the service, map the
-result onto a response. Keep validation in the schemas and logic in the service,
-and the handler stays small. See [/guide/routes-schemas](/guide/routes-schemas)
-for the full route surface.
+Read top to bottom, each handler is three steps: unwrap `c.input`, call the service,
+map the result onto a response. Keep validation in the schemas and logic in the
+service, and the handler has almost nothing left to get wrong. See
+[Routes & schemas](/guide/routes-schemas) for the full route surface.
 
 ## Dependencies are arguments, not imports
 
-The `hello` store is a module-level `Map` — fine for a demo, but a real service
-needs a database, and a service must stay free of the DI container to stay pure.
-The rule: **a service never calls `c.get(...)`.** It receives its dependencies as
-arguments. The route pulls them from the context and passes them in.
+The `hello` store is a module-level `Map` — fine for a demo, but a real service needs
+a database. Here is the tension: the database lives in the DI container, yet a service
+that reaches into the container is no longer pure. Kata resolves it with one rule:
+**a service never calls `c.get(...)`.** Instead it *receives* its dependencies as
+ordinary arguments, and the route — which does have `c` — pulls them from the context
+and passes them in.
+
+This is dependency inversion stated plainly: the service's signature says "I need a
+`Store`," and the *caller* decides which `Store` that is. The service commits to an
+interface, never to a concrete implementation.
 
 The `shop` example does exactly this. Its order service takes a `Store` (or a
 per-request `Transaction`) as its first parameter:
@@ -114,7 +135,7 @@ export function getOrder(store: Store, userId: string, id: string): Order | unde
 }
 ```
 
-The route wires the dependency in. `store` is a singleton slot in
+The route is where the wiring happens. `store` is a singleton slot in
 `defineContext`; the handler reads it with `c.get('store')` and hands it to the
 service:
 
@@ -130,16 +151,22 @@ export const listOrdersRoute = defineRoute({
 })
 ```
 
-`c.get('store')` and `c.get('currentUser')` live in the handler, where the
-context exists. The service sees only a `Store` and a `userId`. Swap the store
-for a real database and the service signature does not change — only the
-singleton you register does.
+So `c.get('store')` and `c.get('currentUser')` stay in the handler, where the context
+actually exists; the service sees only a `Store` and a `userId`. The payoff lands
+when you swap the in-memory store for a real database: the service signature does not
+change at all — only the singleton you register does.
 
 ## Return results, not responses
 
-A service has no `c`, so it cannot call `c.json(...)` or `c.error(...)`. When an
-operation can fail in a way the caller must branch on, return a typed
-**discriminated union** and let the route translate it into a status code.
+A service has no `c`, so it cannot call `c.json(...)` or `c.error(...)` — and that is
+a feature, not a limitation. HTTP status codes are a transport detail; the service's
+job is to report *what happened* and let the route decide how that maps onto the
+wire.
+
+When an operation can fail in a way the caller must branch on, the idiomatic move is
+to return a **discriminated union** — a type that is one of several named shapes, each
+tagged by a shared field (here `ok`, plus an `error` code on the failures). The caller
+switches on that tag, and TypeScript makes sure every case is handled.
 
 `shop`'s `checkout` returns one:
 
@@ -165,8 +192,9 @@ export function checkout(tx: Transaction, userId: string): CheckoutResult {
 }
 ```
 
-The handler maps that union onto the wire — success to `201`, each failure to
-its status via the unified error envelope ([ADR-0008](/adr/0008-unified-error-response-envelope)):
+The handler maps that union onto the wire — success to `201`, each failure to its
+status via the unified error envelope
+([ADR-0008](/adr/0008-unified-error-response-envelope)):
 
 ```ts
 // src/modules/orders/orders.route.ts
@@ -189,17 +217,17 @@ handler: (c) => {
 }
 ```
 
-The mapping itself — `describeCheckoutFailure` — is another pure function in the
-same service, so the error contract is unit-testable too. The HTTP-specific
-helpers (`c.error`, the `201`) stay in the route. See
-[/guide/errors](/guide/errors) for the envelope.
+The mapping itself — `describeCheckoutFailure` — is *also* a pure function in the same
+service, so even the error contract is unit-testable, with no `c` in sight. The
+HTTP-specific bits (`c.error`, the literal `201`) are the only things that stay in the
+route. See [Errors](/guide/errors) for the envelope.
 
 ## Services are trivially testable
 
-Because a service imports no framework and takes its dependencies as arguments,
-its test imports the functions and calls them. No app to boot, no request to
-fake, no mocks of `c`. The test file is `<domain>.service.test.ts`, the sibling
-of the service.
+Everything above pays off here. Because a service imports no framework and takes its
+dependencies as arguments, a test just imports the functions and calls them — no app
+to boot, no request to fake, no mock of `c`. The test file is
+`<domain>.service.test.ts`, sitting right beside the service.
 
 The `hello` service test calls the real functions directly:
 
@@ -223,9 +251,9 @@ describe('users.service', () => {
 })
 ```
 
-When a service takes a dependency, the test constructs a real one and passes it
-in — no mocking framework required. `shop`'s test builds an in-memory store with
-a seed catalog, then asserts on the returned union and the store's state:
+When a service takes a dependency, the test constructs a *real* one and passes it in
+— no mocking framework required. `shop`'s test builds an in-memory store with a seed
+catalog, then asserts on both the returned union and the store's state:
 
 ```ts
 // src/modules/orders/orders.service.test.ts
@@ -257,32 +285,32 @@ describe('orders.service checkout', () => {
 ```
 
 The whole business rule — stock decrement, atomic checkout, ownership, the error
-envelope — is exercised without HTTP. Run it with `pnpm test`.
+envelope — is exercised without ever touching HTTP. Run it with `pnpm test`.
 
 ::: info Pure by construction
-Keeping `c.get(...)` in the route and out of the service is what makes this
+Keeping `c.get(...)` in the route and out of the service is exactly what makes this
 possible. If a service reached into the container, you would have to fake the
-container to test it. Passing the dependency in keeps the test a plain function
+container to test it. Passing the dependency in keeps every test a plain function
 call.
 :::
 
 ## Persistence is bring-your-own
 
-Kata does not ship a database layer, an ORM, or query helpers — persistence is a
-non-goal ([/cookbook/non-goals](/cookbook/non-goals)). Both examples use an
-in-memory store as a stand-in. The pattern that keeps the swap painless: model
-your data access as a typed client, register it as a `singleton` slot, and pass
-it into services as an argument.
+Kata ships no database layer, no ORM, and no query helpers — persistence is a
+deliberate non-goal ([Non-goals](/cookbook/non-goals)). Both examples use an
+in-memory store as a stand-in. The pattern that keeps the eventual swap painless is
+the one from above: model your data access as a typed client, register it as a
+`singleton` slot, and pass it into services as an argument.
 
-When you replace the in-memory `Store` with node-postgres, Drizzle, Prisma, or
-anything else, only the singleton you register in `defineContext` changes — the
-service signatures and the route handlers stay the same. The recipe, end to end,
-is in [/cookbook/database](/cookbook/database).
+So when you replace the in-memory `Store` with node-postgres, Drizzle, Prisma, or
+anything else, only the singleton you register in `defineContext` changes — every
+service signature and every route handler stays put. The full recipe is in
+[Database](/cookbook/database).
 
 ## Rules
 
-- A service imports types from `<domain>.schema.ts` and other services. Nothing
-  from `kata`, Hono, or the request context.
+- A service imports types from `<domain>.schema.ts` and other services. Nothing from
+  `kata`, Hono, or the request context.
 - A service never calls `c.get(...)`, `c.json(...)`, or `c.error(...)`. It takes
   dependencies as arguments and returns plain values or typed result unions.
 - Services are functions with named exports — no classes, no `this`
@@ -290,5 +318,5 @@ is in [/cookbook/database](/cookbook/database).
 - Every service has a sibling `<domain>.service.test.ts`. It should run without
   booting the app.
 
-See also: [/guide/routes-schemas](/guide/routes-schemas),
-[/guide/context-di](/guide/context-di), [/guide/project-layout](/guide/project-layout).
+See also: [Routes & schemas](/guide/routes-schemas),
+[Context & DI](/guide/context-di), [Project layout](/guide/project-layout).

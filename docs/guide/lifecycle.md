@@ -38,7 +38,7 @@ serve({ fetch: app.fetch, port }, (info) => {
 ```
 
 `createApp` returns a parametric Hono app; `app.fetch` is its `Request` →
-`Response` handler. See [/reference/create-app](/reference/create-app) for the
+`Response` handler. See the [create-app reference](/reference/create-app) for the
 config it accepts.
 
 ## Why graceful shutdown
@@ -197,10 +197,10 @@ runtime's own adapter — but you do not use `gracefulShutdown`.
 
 ## See also
 
-- [/reference/create-app](/reference/create-app) — the app you serve and its config.
-- [/guide/context-di](/guide/context-di) — eager singletons and the registry you
-  reach through in `onClose`.
-- [/cookbook/database](/cookbook/database) — closing a connection pool on shutdown,
+- [create-app reference](/reference/create-app) — the app you serve and its config.
+- [Context & DI](/guide/context-di) — eager singletons and the registry you reach
+  through in `onClose`.
+- [Database cookbook](/cookbook/database) — closing a connection pool on shutdown,
   end to end.
 - [ADR-0014](/adr/0014-lifecycle-shutdown) — why teardown is a callback, not an
   auto-dispose registry.
