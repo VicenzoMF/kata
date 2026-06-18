@@ -5,11 +5,15 @@ description: Autentique requisições com kata/jwt — assine e verifique tokens
 
 # Autenticação JWT
 
-`kata/jwt` é um subpath tree-shakeable do pacote core. Ele entrega os blocos de
-construção de JWT para que você não tenha que escrever um verificador na mão:
-assinar um token, verificá-lo, autenticar uma requisição em um scoped slot e
-autorizar esse slot com guards. Não adiciona **nenhuma dependência nova** —
-`kata/jwt` é construído sobre `hono/jwt`, e `hono` já é uma peer dependency
+Um **JWT** (JSON Web Token) é uma string compacta e assinada que carrega um conjunto de
+*claims* — fatos sobre quem chama, como "id de usuário 42, email ada@…". Como ele é
+assinado com um secret que apenas o seu servidor conhece, o servidor pode confiar nesses claims após
+uma verificação de assinatura barata — sem sessão no banco, sem round-trip no banco de dados.
+
+`kata/jwt` entrega os blocos de construção para esse fluxo, para que você não tenha que escrever um verificador na mão:
+**assinar** um token, **verificá-lo**, **autenticar** uma requisição em um scoped slot e
+**autorizar** esse slot com guards. Não adiciona **nenhuma dependência nova** — `kata/jwt` é um
+subpath tree-shakeable construído sobre `hono/jwt`, e `hono` já é uma peer dependency
 ([ADR-0013](/adr/0013-jwt-delivery)).
 
 ```ts
@@ -178,9 +182,13 @@ type JwtError = {
 }
 ```
 
-Uma falha de assinatura, estrutura, algoritmo, `iss`, `aud` ou not-before
-colapsa em `invalid_token`; um token expirado em `expired`; um payload que falha
-no schema Zod em `claims_mismatch` (carregando `issues` estruturados).
+Três baldes, para que quem chama sempre saiba qual tipo de falha ocorreu:
+
+- uma falha de assinatura, estrutura, algoritmo, `iss`, `aud` ou not-before →
+  `invalid_token`
+- um token expirado → `expired`
+- um payload que falha no schema Zod → `claims_mismatch` (carregando `issues`
+  estruturados)
 
 Você raramente chama `verifyJwt` diretamente no código de uma route — `jwtAuth`
 o envolve. Recorra a ele quando verificar um token fora da cadeia de middleware

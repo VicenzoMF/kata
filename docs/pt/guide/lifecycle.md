@@ -39,7 +39,7 @@ serve({ fetch: app.fetch, port }, (info) => {
 ```
 
 `createApp` retorna uma app Hono paramétrica; `app.fetch` é o handler `Request` →
-`Response` dela. Veja [/pt/reference/create-app](/pt/reference/create-app) para a
+`Response` dela. Veja a [referência de create-app](/pt/reference/create-app) para a
 config que ele aceita.
 
 ## Por que graceful shutdown
@@ -203,10 +203,10 @@ mesma forma — entrega `app.fetch` ao adaptador próprio do runtime — mas nã
 
 ## Veja também
 
-- [/pt/reference/create-app](/pt/reference/create-app) — a app que você serve e sua config.
-- [/pt/guide/context-di](/pt/guide/context-di) — singletons eager e o registry que
-  você alcança no `onClose`.
-- [/pt/cookbook/database](/pt/cookbook/database) — fechando um pool de conexões no
+- [Referência de create-app](/pt/reference/create-app) — a app que você serve e sua config.
+- [Context & DI](/pt/guide/context-di) — singletons eager e o registry que você
+  alcança no `onClose`.
+- [Cookbook de banco de dados](/pt/cookbook/database) — fechando um pool de conexões no
   desligamento, de ponta a ponta.
 - [ADR-0014](/adr/0014-lifecycle-shutdown) — por que o teardown é um callback, não um
   registry de auto-dispose.

@@ -5,14 +5,21 @@ description: Defina uma rota com defineRoute — schemas Zod obrigatórios de in
 
 # Rotas & schemas
 
-Uma rota é uma única chamada a `defineRoute`. Ela declara um método HTTP, um path,
-os schemas para o que entra na rota, o schema para o que sai dela, uma
-cadeia opcional de middleware e um handler. Tanto `input` quanto `output` são
-obrigatórios — omitir qualquer um deles é um erro de TypeScript ([ADR-0003](/adr/0003-mandatory-input-output-schemas)).
+Uma rota é uma única chamada a `defineRoute`. Nessa única chamada você declara tudo o que
+o framework precisa saber sobre um endpoint: seu método HTTP e path, o formato do
+que entra (*in*), o formato do que sai (*out*), uma cadeia opcional de middleware e
+o handler que faz o trabalho.
 
-`defineRoute` vem do seu context, não de um import global. `defineContext`
-o retorna vinculado ao seu registry, de modo que `c.get('key')` dentro do handler só
-passa na checagem de tipos para as keys que você registrou (veja [Context & DI](/pt/guide/context-di)).
+A regra principal é que **tanto `input` quanto `output` são obrigatórios** — omita qualquer um
+e é um erro de TypeScript, não algo que você descobre em produção
+([ADR-0003](/adr/0003-mandatory-input-output-schemas)). O motivo é que o contrato de uma
+rota — o que ela aceita e o que ela retorna — nunca deve ser implícito. Ele é
+escrito, checado por tipos e (como você verá) imposto em runtime em ambas as pontas.
+
+`defineRoute` vem do *seu context*, não de um import global. `defineContext`
+o retorna já vinculado ao seu registry (veja [Context & DI](/pt/guide/context-di)),
+o que é o que permite que `c.get('key')` dentro do handler passe na checagem de tipos
+exatamente para os slots que você declarou.
 
 ```ts
 // src/modules/echo/echo.route.ts
@@ -29,11 +36,13 @@ export const echoRoute = defineRoute({
 })
 ```
 
-Um arquivo de rota contém chamadas a `defineRoute` e nada mais. Exporte cada rota
-como um const nomeado; `createApp` as coleta por meio de um namespace import do
-arquivo `.route.ts`.
+Um arquivo de rota contém chamadas a `defineRoute` e nada mais. Exporte cada rota como um
+const nomeado; `createApp` depois as coleta importando o arquivo `.route.ts` inteiro
+como um namespace, para que cada rota exportada seja captada automaticamente.
 
 ## O formato de `defineRoute`
+
+Aqui está o objeto completo, com a função de cada campo:
 
 ```ts
 defineRoute({
@@ -46,13 +55,17 @@ defineRoute({
 })
 ```
 
-`method` e `path` são inferidos como tipos literais e fluem para o cliente RPC.
-`use` assume `[]` quando omitido; o middleware de nível de app vindo de `createApp` roda
-antes dele (veja [Middleware de app](/pt/guide/app-middleware)).
+`method` e `path` não são apenas strings para o sistema de tipos — eles são inferidos como
+tipos *literais* e fluem até o cliente RPC, para que um chamador saiba que este é
+um `POST /echo` e nada mais. `use` assume `[]` quando você o omite; qualquer
+middleware de nível de app registrado em `createApp` roda *antes* da cadeia `use:`
+da própria rota (veja [Middleware de app](/pt/guide/app-middleware)).
 
 ## `input` — as quatro seções
 
-`input` é um objeto com qualquer uma de quatro keys, cada uma um schema Zod:
+Uma requisição HTTP não chega como uma coisa só. Seus dados vivem em quatro lugares
+diferentes, e `input` espelha exatamente esses quatro. Você fornece um schema Zod para cada
+seção que a rota realmente lê:
 
 ```ts
 type InputSchemas = {
@@ -66,16 +79,20 @@ type InputSchemas = {
 Você declara apenas as seções que a rota lê. Cada uma mapeia para uma parte da
 requisição:
 
-| Seção     | Origem                            |
+| Seção     | De onde vem                       |
 |-----------|-----------------------------------|
 | `params`  | parâmetros de path (`/users/:id`) |
-| `query`   | query string da URL               |
-| `body`    | corpo JSON da requisição já parseado |
+| `query`   | a query string da URL             |
+| `body`    | o corpo JSON da requisição parseado |
 | `headers` | headers da requisição (em minúsculas) |
 
-Dentro do handler, `c.input` é tipado a partir desses schemas. Uma seção que você não
-declarou é `undefined` em `c.input`, então ler `c.input.query` só passa na checagem de tipos
-quando você declarou um schema `query`.
+Declarar uma seção faz dois trabalhos de uma vez só. Em runtime, o Kata valida essa parte da
+requisição contra o seu schema *antes do handler rodar*. Em tempo de compilação, ele tipa
+o campo correspondente em `c.input` — então dentro do handler `c.input.params.id` é uma
+`string` conhecida, não `any`. Uma seção que você não declarou é tipada como `undefined` em
+`c.input`, então ler `c.input.query` só passa na checagem de tipos quando você realmente declarou um
+schema `query`. Um único schema é a fonte da verdade tanto para a checagem em runtime quanto para o
+tipo estático; eles não podem divergir.
 
 ```ts
 // src/modules/users/users.route.ts
@@ -92,8 +109,8 @@ export const getUserRoute = defineRoute({
 })
 ```
 
-Uma rota que não lê nenhuma das quatro seções ainda declara `input`
-explicitamente, como um objeto vazio:
+Uma rota que não lê *nenhuma* das quatro seções ainda declara `input` — como um objeto
+vazio:
 
 ```ts
 export const requestIdRoute = defineRoute({
@@ -106,14 +123,20 @@ export const requestIdRoute = defineRoute({
 ```
 
 ::: tip
-`input: {}` não é ruído de boilerplate — é o contrato declarando "esta rota
-não lê input". A regra de lint `kata/no-route-without-input-schema` exige que ele
-esteja presente e explícito.
+`input: {}` não é ruído de boilerplate — é o contrato declarando, em voz alta, "esta
+rota não lê input". A regra de lint `kata/no-route-without-input-schema` exige
+que ele esteja presente e explícito, para que "eu esqueci de pensar no input" e "esta rota
+genuinamente não tem nenhum" nunca pareçam iguais no código fonte.
 :::
+
+(`c.input` aqui é o objeto de input validado, e `c.requestId` é um id de correlação
+por requisição — ambos ficam pendurados no mesmo objeto de contexto `c` introduzido em
+[Context & DI](/pt/guide/context-di).)
 
 ## `output` — schema único ou map de status
 
-`output` é ou um único schema Zod ou um map de código de status HTTP para schema:
+`output` descreve o que a rota tem permissão para enviar de volta. Ele assume uma de duas
+formas:
 
 ```ts
 type OutputMap = { readonly [status: number]: z.ZodTypeAny }
@@ -122,8 +145,8 @@ type OutputSpec = z.ZodTypeAny | OutputMap
 
 ### Schema único
 
-A forma de schema único descreve o corpo de sucesso `200`. Este é o caso
-comum.
+A forma de schema único descreve o corpo de sucesso `200` — o caso comum, para uma
+rota com apenas um formato de caminho feliz:
 
 ```ts
 export const createUserRoute = defineRoute({
@@ -137,9 +160,9 @@ export const createUserRoute = defineRoute({
 
 ### Map de status para schema
 
-A forma de map declara um formato de corpo por código de status ([ADR-0011](/adr/0011-multi-status-output-schemas)).
-Use-a quando uma rota responde a mais de um status com um contrato que você quer tipado
-e validado — por exemplo, um corpo de sucesso `200` e um envelope de erro `404`:
+Recorra à forma de map quando uma rota responde a mais de um status e você quer
+que *cada* um deles seja tipado e validado — digamos um corpo de sucesso `200` e um envelope de erro
+`404` ([ADR-0011](/adr/0011-multi-status-output-schemas)):
 
 ```ts
 import { ErrorBodySchema } from 'kata'
@@ -147,42 +170,48 @@ import { ErrorBodySchema } from 'kata'
 output: { 200: UserSchema, 404: ErrorBodySchema }
 ```
 
-`ErrorBodySchema` é exportado de `kata`. É o espelho Zod do envelope de erro
-unificado que `c.error(...)` produz ([Erros](/pt/guide/errors)), então é
-o schema canônico para colocar atrás de um status `4xx`/`5xx`. Um app pode substituí-lo por
-um refinamento mais estrito (por exemplo, um código `error` literal) quando quiser um
-contrato mais apertado.
+`ErrorBodySchema` é exportado de `kata`. É o espelho Zod do envelope de erro unificado
+que `c.error(...)` produz (veja [Erros](/pt/guide/errors)), o que o torna
+o schema canônico para colocar atrás de qualquer status `4xx`/`5xx`. Quando quiser um
+contrato mais apertado, substitua-o por um refinamento mais estrito — por exemplo, travando `error`
+em um código literal.
 
-::: info Como o status é escolhido
-Um **return simples** é sempre o corpo `200` — ele é validado contra o schema
-único, ou contra `output[200]` para um map. Todo outro status é definido explicitamente
-com `c.json(body, status)` ou `c.error(...)`.
+::: info Como o Kata escolhe contra qual status validar
+Esta é a regra que liga um valor de retorno a um código de status:
 
-Um map usado com returns simples precisa, portanto, declarar uma entrada `200`. Se não
-declarar, o tipo do return simples é `never` e o handler é forçado a retornar um
-`Response` — por exemplo, uma rota de criação que sempre responde apenas `201`.
+- Um **return simples** é *sempre* o corpo `200`. O Kata o valida contra o
+  schema único, ou contra `output[200]` em um map.
+- Todo **outro status** é um que você define explicitamente, com `c.json(body, status)` ou
+  `c.error(...)`.
+
+Então um map do qual você retorna valores simples *precisa* incluir uma entrada `200`. Se não incluir,
+o tipo de return simples colapsa para `never`, e o TypeScript força você a retornar um
+`Response` em vez disso — o que é exatamente o certo para, digamos, uma rota de criação que só
+responde `201`.
 :::
 
-A forma de map é totalmente retrocompatível no nível de valor: uma rota que usa
-um único `output: Schema` compila e se comporta exatamente como antes.
+A forma de map é totalmente retrocompatível: uma rota escrita com um único
+`output: Schema` compila e se comporta exatamente como antes.
 
 ## O handler
 
-O handler recebe o context da rota `c` e retorna uma de duas coisas:
+O handler é a função que roda a requisição. Ele recebe o contexto `c` e
+retorna uma de duas coisas — e qual você retorna decide como o Kata constrói a
+resposta:
 
-- **um valor simples** — validado contra o schema de sucesso e então serializado como uma
-  resposta JSON `200`. Transforms do Zod se aplicam.
-- **um `Response`** — construído com `c.json(value, status?)` ou
-  `c.error(code, message, extra?)` para definir um status customizado.
+- **Um valor simples** — o caminho de sucesso. O Kata o valida contra o schema
+  de sucesso, aplica quaisquer transforms do Zod e o serializa como uma resposta JSON `200`.
+  Este é o caso que você escreverá com mais frequência.
+- **Um `Response`** — o caminho explícito, para qualquer status além de um simples `200`. Você
+  o constrói com `c.json(value, status?)` ou `c.error(code, message, extra?)`.
 
 ```ts
 json<T>(value: T, status?: number): Response
 error(code: string, message: string, extra?: ErrorExtra): Response
 ```
 
-`c.json` assume status `200` por padrão. `c.error` produz o envelope de erro unificado
-e assume status `400` por padrão; passe `{ status }` (e opcionalmente `issues`) em seu
-terceiro argumento para definir outro:
+`c.json` assume status `200` por padrão. `c.error` produz o envelope de erro unificado e
+assume status `400` por padrão; seu terceiro argumento define qualquer outra coisa:
 
 ```ts
 type ErrorExtra = {
@@ -191,26 +220,35 @@ type ErrorExtra = {
 }
 ```
 
-Retornar um `Response` causa um curto-circuito: a validação do corpo depende da
-forma de `output`. Na forma de map, quando o status da resposta é uma key declarada,
-o Kata valida um clone do corpo contra `output[status]` e encaminha o
-`Response` original inalterado em caso de sucesso. Na forma de schema único — e para qualquer
-status que o map não declare — um `Response` passa direto sem validação. Veja
-[ADR-0011](/adr/0011-multi-status-output-schemas) para a semântica exata de
-validação.
+(`c.json` e `c.error` são os construtores de resposta em `c`; o envelope que `c.error`
+emite é documentado em detalhes em [Erros](/pt/guide/errors).)
 
-O context da rota também expõe `c.get(key)` para dependências registradas,
-`c.requestId` (o id de correlação por requisição) e `c.raw` (o context Hono
-subjacente — uma escape hatch).
+Retornar um `Response` pula o caminho de sucesso de valor simples — então o que acontece com seu
+corpo depende de qual forma de `output` você usou:
+
+- **Forma de map, e o status da resposta é uma chave declarada** → O Kata valida um
+  *clone* do corpo contra `output[status]`, depois encaminha seu `Response`
+  original inalterado assim que ele passar.
+- **Forma de schema único, ou qualquer status que o map não declare** → o `Response`
+  passa direto sem validação.
+
+Veja [ADR-0011](/adr/0011-multi-status-output-schemas) para a semântica exata.
+
+Além dos construtores de resposta, o contexto entrega ao handler `c.get(key)` para suas
+dependências registradas (veja [Context & DI](/pt/guide/context-di)), `c.requestId` para
+o id de correlação, e `c.raw` — o contexto Hono subjacente, uma escape hatch para
+a rara coisa que o Kata não encapsula.
 
 ## Validação, em ambas as pontas
 
-O Kata valida `input` **antes** de o handler rodar e `output` **depois** que ele
-retorna ([ADR-0003](/adr/0003-mandatory-input-output-schemas)).
+Junte as duas metades e você tem a promessa central do Kata: uma rota é checada na
+entrada *e* na saída
+([ADR-0003](/adr/0003-mandatory-input-output-schemas)).
 
-Quando o input falha em seu schema, o handler nunca roda. O Kata responde `422` com um
-envelope fixo: `error: "validation_failed"`, uma `message` e um objeto `issues`
-indexado pela seção de input que falhou, cada uma um array de issues de campo:
+**Na entrada.** Se a requisição falhar no seu schema de `input`, o handler nunca roda.
+O Kata responde `422` com um envelope fixo: `error: "validation_failed"`, uma
+`message` e um objeto `issues` indexado pela seção que falhou, cada uma contendo um
+array de issues de campo:
 
 ```json
 {
@@ -227,24 +265,30 @@ indexado pela seção de input que falhou, cada uma um array de issues de campo:
 
 Cada issue de campo é `{ path, message, code }`, com `expected` / `received`
 opcionais para incompatibilidades de tipo. `path` usa notação de ponto/colchete para campos
-aninhados (`address.zip`, `tags[0]`).
+aninhados (`address.zip`, `tags[0]`), de forma que um cliente pode mapear um erro diretamente de volta
+ao campo que o causou.
 
-Quando um **return simples** não corresponde ao seu schema de `output`, o Kata responde
-`500 { "error": "internal_output_shape_mismatch" }` e loga as issues Zod
-ofensoras no lado do servidor — o formato errado nunca chega ao cliente. Este é o
+**Na saída.** Se um *return simples* não corresponde ao seu schema de `output`, o Kata
+responde `500 { "error": "internal_output_shape_mismatch" }` e loga as issues Zod
+ofensoras no lado do servidor — o formato errado nunca chega ao cliente. Esse é o
 comportamento `strict` (o padrão fora de produção); o
-[modo de validação de output](/pt/guide/errors) governa se uma incompatibilidade gera 500, loga
-e serve mesmo assim, ou é ignorada.
+[modo de validação de output](/pt/guide/errors) decide se uma incompatibilidade gera 500, loga e
+serve mesmo assim, ou é ignorada completamente.
 
-Veja [Erros](/pt/guide/errors) para a referência completa do envelope e como retornar
-seu próprio `4xx`.
+Veja [Erros](/pt/guide/errors) para a referência completa do envelope e como retornar seu
+próprio `4xx`.
 
 ## Schemas vivem em `<domain>.schema.ts`
 
-Schemas nunca são declarados inline em um arquivo `.route.ts`. Os schemas Zod de cada
-domínio vivem em `src/modules/<domain>/<domain>.schema.ts`; rotas os importam pelo
-nome ([ADR-0005](/adr/0005-dtos-in-separate-schema-file)). Um `z.object(...)`
-inline em um arquivo de rota é um erro de lint (`kata/inline-schema`).
+Uma regra de layout surge aqui: schemas **nunca** são declarados inline em um arquivo `.route.ts`.
+Os schemas Zod de cada domínio vivem em `src/modules/<domain>/<domain>.schema.ts`,
+e rotas os importam pelo nome ([ADR-0005](/adr/0005-dtos-in-separate-schema-file)).
+Um `z.object(...)` inline em um arquivo de rota é um erro de lint (`kata/inline-schema`).
+
+Isso não é organização apenas por capricho. Puxar schemas para o seu próprio arquivo é o que
+permite que uma rota *e* o seu [service](/pt/guide/services) compartilhem exatamente o mesmo tipo, e
+mantém cada DTO localizável de duas maneiras: por glob (`src/modules/**/*.schema.ts`) e por
+busca exata de símbolo (`grep "UserSchema"`).
 
 ```ts
 // src/modules/users/users.schema.ts
@@ -279,16 +323,15 @@ import { CreateUserBodySchema, GetUserParamsSchema, UserSchema } from './users.s
 import { createUser, getUser } from './users.service'
 ```
 
-Convenções de nomenclatura:
+Duas convenções de nomenclatura mantêm isso consistente:
 
-- `*Schema` para schemas Zod.
-- tipos `*` (ex.: `User`, `CreateUserBody`) inferidos via `z.infer`, declarados
-  ao lado do schema.
+- `*Schema` para os próprios schemas Zod.
+- Um tipo `*` correspondente (ex.: `User`, `CreateUserBody`) inferido via `z.infer`,
+  declarado logo ao lado do seu schema.
 
-Isso mantém o contrato User localizável por glob (`src/modules/**/*.schema.ts`) e
-por busca exata de símbolo (`grep "UserSchema"`), e permite que tanto a rota quanto seu
-[service](/pt/guide/services) importem o mesmo formato. O service permanece uma função
-pura sobre esses tipos inferidos:
+Como o tipo é inferido *a partir* do schema, os dois nunca podem divergir — e o
+[service](/pt/guide/services) permanece uma função pura sobre esses tipos inferidos, sem
+imports de framework:
 
 ```ts
 // src/modules/users/users.service.ts

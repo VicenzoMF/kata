@@ -5,9 +5,9 @@ description: One shape for every Kata error — the 422 validation envelope, the
 
 # The error envelope
 
-Kata produces **one** error shape. Every 4xx and 5xx response — validation
-failures, your own domain errors, output mismatches, uncaught throws — is the
-same JSON envelope:
+Kata produces **one** error shape. Every 4xx and 5xx response — validation failures,
+your own domain errors, output mismatches, uncaught throws — comes back as the same
+JSON envelope:
 
 ```ts
 type ErrorBody = {
@@ -23,9 +23,12 @@ type ErrorBody = {
 - `issues` — present only when there are structured field errors (today: input
   validation).
 
-This is enforced by the runtime, not by convention. Both ends of every route
-are validated, and each failure mode maps to this envelope. The two automatic
-ones come first; the ones you write come after.
+Why force every failure into one shape? Because it lets a client write **one** error
+handler instead of one per endpoint. Whatever goes wrong, the caller reads `error` to
+decide what happened and `message` to show a human — never guessing at a different
+body shape for each route. And this is enforced by the runtime, not by convention:
+both ends of every route are validated, and each failure mode maps to this envelope.
+The two automatic ones come first; the ones you write come after.
 
 | Stage | When | On failure |
 |---|---|---|
@@ -36,16 +39,17 @@ ones come first; the ones you write come after.
 
 ## The 422 validation envelope
 
-`input` is validated **before** your handler. On failure Kata never calls the
-handler — it responds `422` with `error: "validation_failed"`, the message
+`input` is validated **before** your handler — a `422` is Kata's way of saying "you
+sent something the route's `input` schema rejected." On failure Kata never calls the
+handler; it responds `422` with `error: "validation_failed"`, the message
 `"Request input validation failed"`, and an `issues` object **keyed by the input
-section** that failed (`params` / `query` / `body` / `headers`). Each key holds
-an array of field issues.
+section** that failed (`params` / `query` / `body` / `headers`). Each key holds an
+array of field issues.
 
 For the `POST /users` body `{ "name": "", "email": "not-an-email" }` against
 `CreateUserBodySchema`, the response is (this shape is asserted by
-[`examples/hello`](/guide/quickstart)'s `users.hurl`; the literal `message`
-strings are Zod's):
+[`examples/hello`](/guide/quickstart)'s `users.hurl`; the literal `message` strings
+are Zod's):
 
 ```json
 {
@@ -78,30 +82,36 @@ Rules to keep straight:
 
 - `path` uses dot notation for nested objects and `[n]` for array indices. A
   root-level error has an empty `path: ""`.
-- `expected` / `received` appear **only** when the underlying Zod issue carries
-  them (i.e. `invalid_type`) and are omitted otherwise.
-- Issues are reported in source order. When more than one section is invalid
-  (e.g. both `params` and `body`), each gets its own key under `issues`.
+- `expected` / `received` appear **only** when the underlying Zod issue carries them
+  (i.e. `invalid_type`) and are omitted otherwise.
+- Issues are reported in source order. When more than one section is invalid (e.g.
+  both `params` and `body`), each gets its own key under `issues`.
 
 ::: tip Reuse the formatter
 If you validate something yourself — a webhook payload, a re-parsed query, a
 cross-field rule — and want the response to match this exact shape,
-`formatZodIssues(error: ZodError): FieldIssue[]` is exported from `kata`. Build
-the envelope with `c.error('validation_failed', 'Request input validation failed', { status: 422, issues: { body: formatZodIssues(parsed.error) } })`.
+`formatZodIssues(error: ZodError): FieldIssue[]` is exported from `kata`. Build the
+envelope with `c.error('validation_failed', 'Request input validation failed', { status: 422, issues: { body: formatZodIssues(parsed.error) } })`.
 :::
 
 ## Output validation and `internal_output_shape_mismatch`
 
-When your handler returns a **plain value** (not a `Response`), Kata runs it
-through the route's `output` schema before serialising. What happens on a
-mismatch is set by the app's `outputValidation` mode
-([ADR-0009](/adr/0009-output-validation-mode)):
+When your handler returns a **plain value** (not a `Response`), Kata runs it through
+the route's `output` schema before serialising — a last check that the server is
+actually sending the shape it promised. What happens on a mismatch is deliberately
+configurable, because the right reaction differs by environment; it is set by the
+app's `outputValidation` mode ([ADR-0009](/adr/0009-output-validation-mode)):
 
 | Mode | On mismatch | Intended environment |
 |---|---|---|
 | `strict` | Log the issues, return `500` `internal_output_shape_mismatch` | dev / test / CI |
 | `log` | Log the issues, send the handler's data through unchanged | production |
 | `off` | Skip output validation entirely | perf-critical opt-out |
+
+The three modes trace the tension between *catching bugs* and *staying up*: `strict`
+fails loudly, so a wrong shape can never slip past in dev or CI; `log` keeps
+production serving, letting a benign drift become a log line instead of an outage;
+`off` removes the check entirely where every microsecond counts.
 
 The mode is resolved once at `createApp`, first match wins:
 
@@ -113,8 +123,8 @@ The mode is resolved once at `createApp`, first match wins:
 const app = createApp({ modules: [users], outputValidation: 'strict' })
 ```
 
-In `strict` mode the Zod issues are logged to `console.error` and the response
-is exactly:
+In `strict` mode the Zod issues are logged to `console.error` and the response is
+exactly:
 
 ```json
 { "error": "internal_output_shape_mismatch", "message": "Response did not match the declared output schema" }
@@ -122,14 +132,14 @@ is exactly:
 
 with status `500`. This catches "the handler returned _almost_ the right shape"
 before it reaches a client. In `log` mode the issues are still logged, but the
-handler's data is sent through unchanged — a benign shape drift in production
-degrades to a log line instead of a hard 500. In `off` mode there is no
-`safeParse` and no Zod transform; the data passes through as-is.
+handler's data is sent through unchanged — a benign shape drift in production degrades
+to a log line instead of a hard 500. In `off` mode there is no `safeParse` and no Zod
+transform; the data passes through as-is.
 
 ::: warning The mismatch is never leaked to the client
-On a `strict` mismatch the client receives the generic
-`internal_output_shape_mismatch` envelope. The offending Zod issues are logged
-server-side only — field names and internal shape never cross the wire.
+On a `strict` mismatch the client receives the generic `internal_output_shape_mismatch`
+envelope. The offending Zod issues are logged server-side only — field names and
+internal shape never cross the wire.
 :::
 
 ## Uncaught throws: `internal_error`
@@ -142,18 +152,19 @@ boundary and serialised through the same envelope:
 ```
 
 with status `500` and `Content-Type: application/json` — never Hono's default
-text/HTML 500 page. The raw error is logged server-side; the underlying message
-is never surfaced to the client.
+text/HTML 500 page. That boundary exists so a bug can never leak a stack trace or an
+HTML error page to a client: the raw error is logged server-side, and the underlying
+message is never surfaced.
 
-Reserve throwing for genuine bugs. For failures the client should understand,
-return `c.error(...)`.
+Reserve throwing for genuine bugs. For failures the client should understand, return
+`c.error(...)`.
 
 ## Custom statuses: `c.error` and `c.json`
 
-For domain errors — not found, forbidden, conflict — **return a `Response`** from
-the handler. The idiomatic way is `c.error(code, message, extra?)`, which builds
-the unified envelope; `c.json(value, status?)` is the escape hatch for a custom
-shape. Both are available on the route **and** middleware contexts.
+For domain errors — not found, forbidden, conflict — **return a `Response`** from the
+handler. The idiomatic way is `c.error(code, message, extra?)`, which builds the
+unified envelope; `c.json(value, status?)` is the escape hatch for a custom shape.
+Both are available on the route **and** middleware contexts.
 
 ```ts
 return c.error('not_found', 'No user with that id', { status: 404 })
@@ -173,10 +184,11 @@ type ErrorExtra = {
 
 - The `code` argument becomes the wire `error` field.
 - `status` rides inside `extra` and **defaults to `400`**.
-- Attach structured field errors via `extra.issues` (the same `FieldIssue[]`
-  shape as the 422 envelope).
+- Attach structured field errors via `extra.issues` (the same `FieldIssue[]` shape as
+  the 422 envelope).
 
-The distinction that governs the response pipeline:
+The distinction that governs the response pipeline (the same one from
+[Routes & schemas](/guide/routes-schemas)):
 
 - **return a value** → validated against `output`, sent as `200`.
 - **return `c.error(...)` / `c.json(body, status)`** → carries its own status.
@@ -184,8 +196,8 @@ The distinction that governs the response pipeline:
 ### Returned responses and the `output` schema
 
 With a **single** `output` schema, a returned `Response` (including `c.error`)
-short-circuits the route and is **not** checked against it — which is precisely
-why an error body may differ from your success shape.
+short-circuits the route and is **not** checked against it — which is precisely why an
+error body is allowed to differ from your success shape.
 
 ```ts
 export const getUserRoute = defineRoute({
@@ -201,9 +213,9 @@ export const getUserRoute = defineRoute({
 })
 ```
 
-To type **and** validate error bodies too, declare `output` as a status→schema
-map ([ADR-0011](/adr/0011-multi-status-output-schemas)). Kata ships
-`ErrorBodySchema` for exactly this — the Zod mirror of the unified envelope:
+To type **and** validate error bodies too, declare `output` as a status→schema map
+([ADR-0011](/adr/0011-multi-status-output-schemas)). Kata ships `ErrorBodySchema` for
+exactly this — the Zod mirror of the unified envelope:
 
 ```ts
 import { ErrorBodySchema } from 'kata'
@@ -221,14 +233,13 @@ export const getUserRoute = defineRoute({
 })
 ```
 
-In the map form: a plain return is the `200` body; `c.json(body, 201)` is
-validated against `output[201]`; a `c.error(...)` whose status is declared is
-validated against that status's schema. **Undeclared statuses still pass
-through** unvalidated. The original `Response` is forwarded verbatim on success —
-Kata never re-serialises a response your handler built, so a header or content
-type you set is preserved. The RPC client narrows by status:
-`InferResponseType<call, 404>`. See [`defineRoute`](/reference/define-route) for
-the full `output` contract.
+In the map form: a plain return is the `200` body; `c.json(body, 201)` is validated
+against `output[201]`; a `c.error(...)` whose status is declared is validated against
+that status's schema. **Undeclared statuses still pass through** unvalidated. The
+original `Response` is forwarded verbatim on success — Kata never re-serialises a
+response your handler built, so a header or content type you set is preserved. The RPC
+client narrows by status: `InferResponseType<call, 404>`. See
+[`defineRoute`](/reference/define-route) for the full `output` contract.
 
 ## What's automatic vs. what you write
 
@@ -242,14 +253,14 @@ the full `output` contract.
 
 ## Gotchas
 
-- **A malformed JSON body reads as `undefined`**, then fails its `body` schema —
-  so it surfaces as a normal `422`, not a parse crash.
+- **A malformed JSON body reads as `undefined`**, then fails its `body` schema — so it
+  surfaces as a normal `422`, not a parse crash.
 - **Every response carries a correlation id.** Success or error, Kata echoes an
-  `X-Request-Id` header (reusing a well-formed inbound one, otherwise a fresh
-  UUID). See [Lifecycle](/guide/lifecycle).
-- **`status` is not a positional argument on `c.error`.** It lives inside
-  `extra` and defaults to `400` — `c.error('not_found', '…')` without a status
-  returns `400`, not `404`.
+  `X-Request-Id` header (reusing a well-formed inbound one, otherwise a fresh UUID).
+  See [Lifecycle](/guide/lifecycle).
+- **`status` is not a positional argument on `c.error`.** It lives inside `extra` and
+  defaults to `400` — `c.error('not_found', '…')` without a status returns `400`, not
+  `404`.
 
 ## See also
 

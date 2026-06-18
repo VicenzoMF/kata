@@ -34,9 +34,10 @@ export const app = createApp({ modules })
 export type AppType = typeof app
 ```
 
-`createApp` infere sua tupla de modules com um type parameter `const`, então o
-`as const` em `modules` é o que mantém os tipos dos elementos literais. `AppType`
-é exatamente `KataApp<typeof modules>` — o mesmo tipo escrito de duas formas.
+`createApp` infere sua tupla de modules com um type parameter `const`, então o `as const` em
+`modules` é o que mantém os tipos dos elementos literais — sem ele, o TypeScript iria alargá-los
+e os detalhes por rota seriam perdidos. `AppType` é exatamente
+`KataApp<typeof modules>` — o mesmo tipo escrito de duas formas.
 
 ::: tip
 `KataApp` é exportado de `kata` se você quiser nomear o tipo explicitamente:
@@ -64,16 +65,16 @@ import type { AppType } from './server' // num deploy real: do pacote do servido
 const client = hc<AppType>('http://localhost:3001')
 ```
 
-Num deployment real, o servidor vive em um pacote e o cliente em outro — um
-frontend, um microsserviço, uma CLI. O artefato compartilhado é o import de
-`AppType`, nada mais. Não há cliente gerado para manter em sincronia e nenhuma
-dependência de runtime do servidor.
+Num deployment real o servidor vive em um pacote e o cliente em outro — um
+frontend, um microsserviço, uma CLI. A única coisa que eles compartilham é o import de `AppType`, e
+como um tipo é apagado em tempo de build, o cliente não carrega nenhuma dependência de runtime do
+servidor e não há cliente gerado para manter em sincronia.
 
 ## Chamando routes
 
-Cada path vira uma propriedade; cada método HTTP vira uma chamada prefixada com
-`$`. Os inputs de requisição mapeiam das seções `input` do Kata para os targets
-de cliente do Hono:
+O cliente espelha sua árvore de rotas: cada segmento de path vira uma propriedade, e cada método
+HTTP vira uma chamada prefixada com `$` (`$get`, `$post`). Os inputs de requisição que você declarou
+em `input` mapeiam para os targets de cliente do Hono assim:
 
 | Chave `input` do Kata | Target do cliente |
 | --- | --- |
@@ -98,14 +99,13 @@ const all = await client.users.$get({ query: { q: 'grace' } })
 const list = await all.json() // { id: string; name: string; email: string }[]
 ```
 
-Os tipos de requisição são derivados de `z.input` — o formato que o chamador
-envia, antes de quaisquer transforms do Zod. Os tipos de resposta são derivados
-de `z.infer` — o formato depois do parsing.
+Os tipos de requisição são derivados de `z.input` — o formato que o chamador envia, antes de quaisquer
+transforms do Zod. Os tipos de resposta são derivados de `z.infer` — o formato depois do parsing.
 
 ## Chamadas erradas são erros de compilação
 
-Como os inputs vêm dos seus schemas, uma chamada que os viola não passa na
-checagem de tipos. Estas três instruções falham no `tsc`:
+Como os inputs vêm dos seus schemas, uma chamada que os viola não passa na checagem de tipos.
+Estas três instruções falham no `tsc`:
 
 ```ts
 // O body deve satisfazer CreateUserBodySchema — email é obrigatório.
@@ -118,15 +118,13 @@ await client.users[':id'].$get({ param: { id: 123 } }) // ✗
 await client.users.$get({ query: { q: 123 } }) // ✗
 ```
 
-Você não tem uma surpresa em runtime. Você tem um rabisco vermelho no editor e
-uma checagem de tipos falhando no CI.
+Você não tem uma surpresa em runtime. Você tem um rabisco vermelho no editor e uma checagem de
+tipos falhando no CI.
 
 ## Respostas multi-status se estreitam em `res.status`
 
-Quando uma route declara um `output` mapeando status→schema (veja
-[/pt/guide/routes-schemas](/pt/guide/routes-schemas)), a resposta é uma união por
-status. Estreite-a com `res.status`, e cada branch fica tipada para o schema
-daquele status.
+Quando uma route declara um `output` mapeando status→schema (veja [Rotas & schemas](/pt/guide/routes-schemas)),
+a resposta é uma união por status. Estreite-a com `res.status`, e cada branch fica tipada para o schema daquele status.
 
 A route `/users/:id` declara `output: { 200: UserSchema, 404: ErrorBodySchema }`:
 
@@ -141,15 +139,14 @@ if (res.status === 404) {
 return res.json() // { id: string; name: string; email: string }
 ```
 
-`ErrorBodySchema` (exportado de `kata`) é o schema canônico do envelope de erro
-do Kata, então o branch 404 fica tipado de ponta a ponta. Veja
-[/pt/guide/errors](/pt/guide/errors) para o formato do envelope e `c.error(...)`.
+`ErrorBodySchema` (exportado de `kata`) é o schema canônico do envelope de erro do
+Kata, então o branch 404 fica tipado de ponta a ponta. Veja [Erros](/pt/guide/errors) para o
+formato do envelope e `c.error(...)`.
 
 ## Extraindo os tipos diretamente
 
-Se você precisa do tipo de requisição ou resposta inferido para um call site —
-para tipar o parâmetro de uma função ou um hook React — use `InferRequestType` e
-`InferResponseType` do Hono:
+Se você precisa do tipo de requisição ou resposta inferido para um call site — para tipar o parâmetro
+de uma função ou um hook React — use `InferRequestType` e `InferResponseType` do Hono:
 
 ```ts
 import type { InferRequestType, InferResponseType } from 'hono'
@@ -164,15 +161,17 @@ type NotFoundResponse = InferResponseType<(typeof client.users)[':id']['$get'], 
 // o envelope de erro, estreitado para o status 404
 ```
 
-O segundo argumento de `InferResponseType` é o status para o qual você está
-estreitando — o mesmo status em que você ramifica em runtime.
+O segundo argumento de `InferResponseType` é o status para o qual você está estreitando — o
+mesmo status em que você ramifica em runtime.
 
 ## O registry de DI nunca chega ao fio
 
-Um servidor registra dependências em `defineContext` — um logger, um pool de db,
-scoped slots como `currentUser` (veja [/pt/guide/context-di](/pt/guide/context-di)).
-Nada disso faz parte do contrato HTTP, então nada disso aparece no tipo do
-cliente. O `Env` Hono do cliente permanece `BlankEnv`.
+Um servidor registra dependências em `defineContext` — um logger, um pool de db, scoped slots
+como `currentUser` (veja [Context & DI](/pt/guide/context-di)). Nada disso faz parte do
+contrato HTTP, então nada disso aparece no tipo do cliente — o que é exatamente o que você
+quer: uma conexão de banco de dados e seus serviços internos são preocupações apenas do servidor, e eles
+não têm motivo para vazar para os tipos de um frontend. O `Env` Hono do cliente permanece
+`BlankEnv`.
 
 ```ts
 import type { Hono } from 'hono'
@@ -184,16 +183,15 @@ type EnvOf<T> = T extends Hono<infer E, infer _S, infer _B> ? E : never
 type _Proof = EnvOf<AppType> extends BlankEnv ? true : false
 ```
 
-Então `c.get('logger')` funciona dentro de um handler, mas é invisível para
-`hc<AppType>`. O fio carrega routes, inputs e outputs — nunca o seu registry.
+Então `c.get('logger')` funciona dentro de um handler, mas é invisível para `hc<AppType>`. O fio
+carrega routes, inputs e outputs — nunca o seu registry.
 
 ## Testando o cliente in-process
 
-O `testClient` de `hono/testing` vincula `hc<typeof app>` diretamente ao objeto
-do seu app, sem socket. As chamadas dirigem o pipeline completo do Kata —
-validação de input, handler, validação de output — com os mesmos tipos que o
-cliente real enxerga, de modo que seus testes e sua camada de tipos não podem
-divergir.
+O `testClient` de `hono/testing` vincula `hc<typeof app>` diretamente ao objeto do seu app, sem
+socket. As chamadas dirigem o pipeline completo do Kata — validação de input, handler, validação de
+output — com os mesmos tipos que o cliente real enxerga, de modo que seus testes e sua camada de tipos não
+podem divergir.
 
 ```ts
 import { testClient } from 'hono/testing'
@@ -227,11 +225,10 @@ describe('users RPC', () => {
 é uma demonstração executável e checada por tipos de tudo acima:
 
 - `src/server.ts` constrói o app e exporta `AppType`.
-- `src/client.ts` o consome com `hc<AppType>`, mais uma tupla de provas de tipo
-  em tempo de compilação e linhas `@ts-expect-error` que falham no `tsc` no
-  momento em que o runtime e a camada de tipos discordam.
-- `src/client.test.ts` exercita as mesmas routes em runtime através de
-  `testClient(app)`.
+- `src/client.ts` o consome com `hc<AppType>`, mais uma tupla de provas de tipo em tempo de
+  compilação e linhas `@ts-expect-error` que falham no `tsc` no momento em que o runtime e a
+  camada de tipos discordam.
+- `src/client.test.ts` exercita as mesmas rotas em runtime através de `testClient(app)`.
 
 As provas de tipo são o teste: `tsc --noEmit` roda no CI, então uma regressão na
 ponte runtime-para-tipo torna uma prova `false` e quebra o build.

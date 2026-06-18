@@ -5,9 +5,14 @@ description: Construa uma API /users totalmente tipada em seis arquivos, suba el
 
 # Início rápido
 
-Uma API `/users` totalmente tipada em seis arquivos. Isto é exatamente
+Isto constrói uma API `/users` totalmente tipada — crie um usuário, busque-o de volta, observe uma
+falha de validação e chame uma rota `/me` protegida por JWT — em seis pequenos arquivos. Isto é exatamente
 [`examples/hello`](https://github.com/VicenzoMF/kata/tree/main/examples/hello).
-Leia de cima a baixo, depois suba ela e chame ela.
+
+O plano: leia os seis arquivos de cima a baixo (cada um introduz uma ideia do Kata),
+suba o app, depois chame ele com `curl` e observe cada contrato se manter. Cada passo
+tem links para o guia de conceito que o cobre em profundidade, para que você possa dar uma olhada rápida aqui e
+se aprofundar depois.
 
 ## Instalação
 

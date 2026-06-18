@@ -5,13 +5,19 @@ description: kata init scaffolds a harness-wired project — Claude/Codex hooks,
 
 # Bootstrap CLI
 
-Kata ships one binary, `kata`. It has exactly one command: `init`. Run it inside
-a project to write the harness — the Claude Code and Codex hook configs plus the
-`AGENTS.md` / `CLAUDE.md` instruction pair. Add `--with-example` and it also
-scaffolds a runnable `GET /health` app you can boot in one more step.
+Kata ships one binary, `kata`, with two commands:
 
-The CLI does not install anything, manage versions, or generate per-route code.
-It writes a fixed set of files, idempotently, and reports what it did.
+- **`kata init`** — scaffold the harness into a project. This page covers it.
+- **`kata verify`** — run Kata's lint rules over a project; in `--json` mode it emits
+  the hook output an agent consumes. Its full surface — the rule set, `--json`, and
+  `--watch` — lives in [the harness](/guide/harness); the [`kata verify`](#kata-verify)
+  section below is a quick reference.
+
+`kata init` writes the harness — the Claude Code and Codex hook configs plus the
+`AGENTS.md` / `CLAUDE.md` instruction pair. Add `--with-example` and it also scaffolds
+a runnable `GET /health` app you can boot in one more step. It does not install
+anything, manage versions, or generate per-route code: it writes a fixed set of files,
+idempotently, and reports what it did.
 
 ## `kata init`
 
@@ -214,10 +220,29 @@ Run it in a fresh or Kata-shaped directory; skip-on-exists protects existing
 files, but the new ones still appear where you run it.
 :::
 
-## Other commands
+## `kata verify`
 
-There are none. `kata` has a single command, `init`. Running `kata` with no
-command, or with an unknown command, prints the usage help and exits non-zero:
+The second command runs Kata's deterministic lint rules over a project:
+
+```bash
+kata verify [path]      # default path: the current directory
+```
+
+It reads the project, checks the rules anchored to ADR-0003 / 0004 / 0005, and prints
+a human-readable report. Two flags shape how it runs:
+
+- `kata verify --json` — emit Claude Code `PostToolUse` hook JSON instead of the
+  terminal report. This is exactly what the generated hooks call on every file write.
+- `kata verify --watch` — keep running and re-check on change, for a tight local loop.
+
+Run `kata verify --help` for the full flag list. The rule set, the JSON contract, and
+how the hooks wire it into Claude Code and Codex are documented in
+[the harness](/guide/harness).
+
+## No command, or an unknown one
+
+Running `kata` with no command, or with an unknown command, prints the usage help and
+exits non-zero:
 
 ```bash
 kata

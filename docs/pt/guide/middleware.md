@@ -147,15 +147,17 @@ export const requireUser = defineMiddleware({
 })
 ```
 
-Veja [JWT auth](/pt/guide/jwt) para o contrato completo de `jwtAuth` e os guards
-de role/claim.
+Veja [JWT auth](/pt/guide/jwt) para o contrato completo de `jwtAuth` e os guards de role/claim.
 
 ## Short-circuit retornando uma Response
 
-O tipo de retorno do handler de um middleware é `Promise<void | Response> | void | Response`.
-Retorne `void` (ou apenas chame `await next()`) para continuar. **Retorne uma
-`Response` para parar a requisição imediatamente** — todo middleware posterior, a
-validação de input e o handler são todos pulados.
+"Short-circuit" significa: encerrar a requisição exatamente aqui, sem rodar mais nada
+cadeia abaixo. O tipo de retorno do handler de um middleware é
+`Promise<void | Response> | void | Response`, e esse valor de retorno é a chave:
+
+- Retorne `void` (ou simplesmente chame `await next()`) para **continuar**.
+- Retorne uma `Response` para **parar** — todo middleware posterior, a validação de input e
+  o handler são todos pulados.
 
 Construa essa `Response` com `c.error(...)` ou `c.json(...)`:
 
@@ -174,15 +176,17 @@ causa disso, um 401 levantado por um middleware **não** faz parte do contrato
 `output` da rota — ele nunca alcança o handler, então você não o declara em
 `output:`. Apenas os status que o seu próprio handler retorna pertencem ali.
 
-Lançar também interrompe a requisição, mas como um erro não tratado: ele é logado no
-servidor e canalizado para o envelope unificado `500 internal_error`. Use
-`return c.error(...)` para uma rejeição esperada (falha de auth, proibido); deixe
-um throw sinalizar um bug genuíno. Veja [Errors](/pt/guide/errors).
+Lançar também interrompe a requisição, mas significa algo diferente. Um
+`c.error(...)` retornado é uma rejeição *esperada* — falha de auth, acesso proibido — um
+desfecho para o qual você projetou. Um erro lançado é *inesperado*: o Kata o loga no
+servidor e o canaliza para o envelope unificado `500 internal_error`. Então use
+`return c.error(...)` para rejeições que você antecipa, e deixe um `throw` sinalizar um
+bug genuíno. Veja [Errors](/pt/guide/errors).
 
 ## Compondo middleware sobre uma rota
 
-Uma rota lista seu middleware em `use:`, em ordem. A cadeia roda da esquerda para
-a direita antes do handler:
+Uma rota lista seu middleware em `use:`, e eles rodam da esquerda para
+a direita, todos antes do handler:
 
 ```ts
 import { ErrorBodySchema } from 'kata'
@@ -210,20 +214,20 @@ export const checkoutRoute = defineRoute({
 ```
 
 `use: [requireAuth, withTransaction]` significa que `requireAuth` roda primeiro e
-`withTransaction` em segundo, então no momento em que o handler roda tanto
-`currentUser` quanto `tx` estão preenchidos. A ordem declarada do array é o
-contrato — se um slot depende de outro (um `tenantId` derivado de `currentUser`),
-coloque o provedor mais cedo.
+`withTransaction` em segundo, então no momento em que o handler roda, tanto `currentUser`
+quanto `tx` estão preenchidos. Essa ordem do array *é* o contrato: se um slot é derivado de
+outro (um `tenantId` computado a partir de `currentUser`), coloque seu provedor mais
+cedo na lista.
 
-A mesma instância de middleware compõe sobre quantas rotas você quiser; não há
-duplicação por rota. `requireAuth` acima guarda o checkout, a listagem de pedidos
-e a busca de um único pedido a partir de uma única definição.
+Uma definição compõe sobre quantas rotas você quiser; não há duplicação por
+rota. O único `requireAuth` acima guarda o checkout, a listagem de pedidos e a
+busca de um único pedido de uma só vez.
 
 ## Middleware no nível do app
 
-Uma preocupação que se aplica a toda rota — CORS, headers seguros, um limite de
-tamanho de corpo — não pertence ao `use:` de cada rota. Declare-a uma vez no app
-com `createApp({ middlewares })`:
+Algumas preocupações se aplicam a *toda* rota — CORS, headers seguros, um limite de
+tamanho de corpo — e repeti-las no `use:` de cada rota seria ruído. Declare-as uma vez
+no app com `createApp({ middlewares })`:
 
 ```ts
 import { bodyLimit, cors, secureHeaders } from 'kata'
@@ -238,31 +242,31 @@ export const app = createApp({
 })
 ```
 
-A cadeia no nível do app roda **antes** do `use:` próprio de cada rota. A cadeia
-efetiva para qualquer rota é:
+A cadeia no nível do app roda **antes** do `use:` próprio de cada rota. Então a cadeia
+efetiva para qualquer rota é simplesmente as duas concatenadas:
 
 ```ts
 effective = [...config.middlewares, ...route.use]
 ```
 
 É o mesmo contrato `Middleware<R>`, o mesmo pipeline de runtime e o mesmo store
-scoped por requisição. Um middleware global pode fazer short-circuit com uma
-`Response` exatamente como um middleware de rota faz, e um scoped slot que ele
-`provides:` é legível via `c.get` em **todos** os handlers — um `requireAuth`
-global torna `currentUser` disponível em todo o app sem nenhuma rota listá-lo em
+scoped por requisição de ponta a ponta. Um middleware global pode fazer short-circuit com uma
+`Response` exatamente como um middleware de rota faz, e qualquer scoped slot que ele
+`provides:` se torna legível via `c.get` em **todos** os handlers — um `requireAuth`
+global torna `currentUser` disponível em todo o app sem uma única rota listá-lo em
 `use:`.
 
-Recorra a `use:` quando uma preocupação é específica de uma rota ou de poucas
+A regra de ouro: recorra a `use:` quando uma preocupação é específica de uma rota ou de poucas
 rotas, e a `middlewares:` quando ela é genuinamente transversal. Veja
-[App-level middleware](/pt/guide/app-middleware) para as regras de ordenação e o
-trade-off contra o rastro explícito de dependências por rota da ADR-0004.
+[App-level middleware](/pt/guide/app-middleware) para as regras de ordenação e o trade-off
+contra o rastro explícito de dependências por rota da ADR-0004.
 
 ## Exemplo trabalhado: um slot de transação
 
-O app `examples/shop` provê uma unidade de trabalho por requisição como um scoped
-slot. O middleware abre uma transação a partir do singleton `store`, preenche o
-slot `tx` e — criticamente — **faz rollback em qualquer caminho que não tenha
-feito commit**:
+Este é o modelo onion justificando seu valor. O app `examples/shop` expõe uma unidade
+de trabalho por requisição como um scoped slot. O middleware abre uma transação a partir
+do singleton `store`, preenche o slot `tx` e — criticamente — **faz rollback em qualquer caminho
+que não tenha feito commit**:
 
 ```ts
 import { defineMiddleware } from '../context'
@@ -285,8 +289,9 @@ export const withTransaction = defineMiddleware({
 })
 ```
 
-Esta é a forma canônica de um middleware que provê slot e também é dono da
-limpeza:
+É a forma canônica de um middleware que provê slot e também é dono da
+limpeza, e você pode lê-la direto da onion — passos 1–2 acontecem na entrada, passos 4–5 na
+saída:
 
 1. **Abra** o recurso a partir de um singleton (`c.get('store').begin()`).
 2. **Preencha** o scoped slot (`c.set('tx', tx)`) para que o handler possa montar trabalho sobre ele.
@@ -298,8 +303,8 @@ limpeza:
    transação ainda `open`.
 
 O handler lê o slot, monta suas escritas e faz commit explicitamente no sucesso;
-qualquer outra coisa deixa a transação sem commit e o middleware descarta o
-trabalho montado, então uma escrita parcial nunca alcança o store. O tipo do slot
+qualquer outra coisa deixa a transação sem commit, e o middleware descarta o
+trabalho montado — então uma escrita parcial nunca alcança o store. O tipo do slot
 vem de `defineContext` (`tx: scoped<Transaction>()`), então `c.get('tx')` é
 totalmente tipado no handler.
 

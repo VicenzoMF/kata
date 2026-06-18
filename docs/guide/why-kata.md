@@ -43,8 +43,9 @@ Read the table by its columns:
 
 - **Nest** is opinionated, but the opinions are classes, decorators, and a
   runtime IoC container. Dependencies are resolved by reflection at runtime, so
-  the wiring is not statically enumerable, and schemas are a convention you opt
-  into per route. Kata keeps the opinionatedness and drops the machinery.
+  the wiring is not *statically enumerable* — you cannot list every dependency by
+  reading one file — and schemas are a convention you opt into per route. Kata
+  keeps the opinionatedness and drops the machinery.
 - **Elysia** is functional and validation-first, but it is Bun-only and its
   schema and DI discipline is by convention, not lint-enforced (`⚠️`). Nothing
   fails the build when a route ships without a contract.

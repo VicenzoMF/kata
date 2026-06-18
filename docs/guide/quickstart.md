@@ -5,9 +5,15 @@ description: Build a fully-typed /users API in six files, boot it, and call it �
 
 # Quickstart
 
-A fully-typed `/users` API in six files. This is exactly
+This builds a fully-typed `/users` API — create a user, fetch one back, watch a
+validation failure, and hit a JWT-protected `/me` route — in six small files. It
+is exactly
 [`examples/hello`](https://github.com/VicenzoMF/kata/tree/main/examples/hello).
-Read it top to bottom, then boot it and call it.
+
+The plan: read the six files top to bottom (each one introduces one Kata idea),
+boot the app, then call it with `curl` and watch every contract hold. Each step
+links out to the concept guide that covers it in depth, so you can skim here and
+dig in later.
 
 ## Install
 

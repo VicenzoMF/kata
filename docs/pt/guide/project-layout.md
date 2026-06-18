@@ -38,10 +38,10 @@ e assim por diante. Uma pasta, um prefixo, sem exceções.
 
 ## Por que a localizabilidade importa
 
-O sufixo é o tipo do arquivo. Um arquivo chamado `users.route.ts` contém declarações
-de route; `users.schema.ts` contém DTOs Zod; `users.service.ts` contém
-funções puras. Como o sufixo é estrutural, tanto o ferramental quanto as pessoas conseguem
-localizar qualquer arquivo só pelo nome:
+Aqui está a ideia estrutural: **o sufixo é o tipo do arquivo.** Um arquivo chamado
+`users.route.ts` contém declarações de route; `users.schema.ts` contém DTOs Zod;
+`users.service.ts` contém funções puras. Como o sufixo carrega esse significado,
+tanto o ferramental quanto as pessoas conseguem localizar qualquer arquivo só pelo nome:
 
 ```bash
 # toda route do app
@@ -54,34 +54,33 @@ ls src/modules/*/*.schema.ts
 cat src/modules/users/users.service.ts
 ```
 
-`kata verify` percorre `src/` e despacha regras pelo sufixo — sem biblioteca de glob, sem
-config. A varredura pula os diretórios `node_modules`, `dist`, `build`, `coverage`, `data`
-e `.git`, e descarta arquivos `*.test.ts`, `*.d.ts` e `*.schema.ts`
-antes de qualquer regra rodar. Cada arquivo restante é roteado pelo seu nome:
+`kata verify` percorre `src/` e despacha regras pelo sufixo — sem biblioteca de glob, sem config.
+A varredura pula os diretórios `node_modules`, `dist`, `build`, `coverage`, `data` e `.git`,
+e descarta arquivos `*.test.ts`, `*.d.ts` e `*.schema.ts` antes de qualquer regra
+rodar. Cada arquivo restante é roteado pelo seu nome:
 
 - `*.route.ts` → verificado quanto a `input` / `output` obrigatórios, schemas inline e
   chaves de contexto não registradas ou não providas.
 - `*.service.ts` → verificado quanto a schemas inline (um service é o outro lugar onde um
   `z.object(...)` perdido é rejeitado).
-- `*.schema.ts` → o único lugar onde um schema Zod pode viver, então ele é excluído
-  da varredura; nenhuma regra o lê.
+- `*.schema.ts` → o único lugar onde um schema Zod pode viver, então ele é excluído da varredura;
+  nenhuma regra o lê.
 
 Se você fizer inline de um schema em um `.route.ts`, ou colocar uma route em um arquivo com nome errado, as
-verificações se baseiam no sufixo errado e o harness reporta isso. A estrutura é o que
-torna as regras baratas e exatas. Veja [/pt/guide/harness](/pt/guide/harness) para o
-conjunto completo de regras.
+verificações se baseiam no sufixo errado e o harness reporta isso. A estrutura é o que torna as regras
+baratas e exatas. Veja [O harness](/pt/guide/harness) para o conjunto completo de regras.
 
 ::: warning Um prefixo por arquivo
 `users.route.ts` está correto. `routes/users.ts`, `user-routes.ts` ou um
-`UsersController` não estão — o sufixo carrega o significado, e o harness
-casa com ele. Renomear `context.ts` quebra as verificações de DI da mesma forma.
+`UsersController` não estão — o sufixo carrega o significado, e o harness casa com
+ele. Renomear `context.ts` quebra as verificações de DI da mesma forma.
 :::
 
 ## `app.ts` vs. dobrá-lo em `main.ts`
 
-`app.ts` constrói a aplicação — uma chamada `createApp({ modules, middlewares? })`
-— e a exporta. `main.ts` é o entrypoint de runtime: ele importa o app
-e entrega `app.fetch` a um servidor.
+`app.ts` constrói a aplicação — uma chamada `createApp({ modules, middlewares? })` — e
+a exporta. `main.ts` é o entrypoint de runtime: ele importa o app e entrega
+`app.fetch` a um servidor.
 
 ```ts
 // src/app.ts
@@ -106,12 +105,12 @@ serve({ fetch: app.fetch, port }, (info) => {
 })
 ```
 
-Dividi-los mantém o app construível em isolamento — seus testes e o
-[cliente RPC tipado](/pt/guide/rpc-client) importam `AppType` de `app.ts` sem
-subir um servidor, e `main.ts` continua um script de boot enxuto.
+Por que dividi-los? Porque isso mantém o app construível em isolamento — seus testes e o
+[cliente RPC tipado](/pt/guide/rpc-client) importam `AppType` de `app.ts` sem subir um
+servidor, enquanto `main.ts` continua um script de boot enxuto que é dono do socket.
 
-Para um serviço pequeno você pode **dobrar `app.ts` em `main.ts`** — chamar `createApp`
-inline e servi-lo em um único arquivo. Ambos os exemplos prontos fazem exatamente isso:
+Para um serviço pequeno você pode **dobrar `app.ts` em `main.ts`** — chamar `createApp` inline
+e servi-lo em um único arquivo. Ambos os exemplos prontos fazem exatamente isso:
 
 ```ts
 // src/main.ts — examples/hello
@@ -136,23 +135,23 @@ serve({ fetch: app.fetch, port }, (info) => {
 })
 ```
 
-`app.ts` é o único arquivo opcional na árvore. A divisão é o padrão certo
-quando você tem um cliente RPC ou quer o app importável a partir dos testes; o dobramento é
-adequado enquanto o app for um único arquivo. `context.ts` e os arquivos de módulo nunca são
-opcionais.
+`app.ts` é o único arquivo opcional na árvore. A divisão é o padrão certo quando você
+tem um cliente RPC ou quer o app importável a partir dos testes; o dobramento é
+adequado enquanto o app for um único arquivo. `context.ts` e os arquivos de módulo
+nunca são opcionais.
 
 ## Dentro de um módulo
 
 Cada pasta `<domain>/` é autocontida, com uma responsabilidade por arquivo:
 
-- **`<domain>.schema.ts`** — schemas Zod e seus tipos inferidos. Os DTOs vivem
-  aqui e em nenhum outro lugar ([/pt/reference/define-route](/pt/reference/define-route),
-  ADR-0005). Uma route importa seus schemas `input` / `output` desse arquivo.
+- **`<domain>.schema.ts`** — schemas Zod e seus tipos inferidos. Os DTOs vivem aqui e
+  em nenhum outro lugar ([`defineRoute`](/pt/reference/define-route), ADR-0005). Uma route importa seus
+  schemas `input` / `output` desse arquivo.
 - **`<domain>.service.ts`** — [funções puras](/pt/guide/services). Sem imports de framework,
   sem `c`. Trivial de testar unitariamente em isolamento.
-- **`<domain>.route.ts`** — apenas chamadas de `defineRoute`. O handler valida
-  `c.input`, chama services e retorna um valor (verificado contra `output`) ou
-  `c.json(...)` / `c.error(...)`. Veja [/pt/guide/routes-schemas](/pt/guide/routes-schemas).
+- **`<domain>.route.ts`** — apenas chamadas de `defineRoute`. O handler valida `c.input`,
+  chama services e retorna um valor (verificado contra `output`) ou `c.json(...)` /
+  `c.error(...)`. Veja [Routes & schemas](/pt/guide/routes-schemas).
 - **`<domain>.test.ts`** — testes unitários, tipicamente sobre o service.
 - **`<domain>.hurl`** — requisições [Hurl](https://hurl.dev) que exercitam a superfície
   HTTP viva de ponta a ponta.
@@ -169,16 +168,16 @@ src/modules/users/
 ```
 
 ::: tip Middleware transversal
-Middleware que mais de um domínio usa — auth JWT, um slot de transação —
-pertence a `src/middlewares/`, não dentro de um módulo. Cada um declara os scoped
-slots que `provides`; veja [/pt/guide/middleware](/pt/guide/middleware) e
-[/pt/guide/app-middleware](/pt/guide/app-middleware). Infraestrutura compartilhada não-HTTP
-(um `store.ts`, um pool de conexões) fica na raiz de `src/`, como em `examples/shop`.
+Middleware que mais de um domínio usa — auth JWT, um slot de transação — pertence a
+`src/middlewares/`, não dentro de um módulo. Cada um declara os scoped slots que `provides`;
+veja [Middleware](/pt/guide/middleware) e [App-level middleware](/pt/guide/app-middleware).
+Infraestrutura compartilhada não-HTTP (um `store.ts`, um pool de conexões) fica na raiz de `src/`,
+como em `examples/shop`.
 :::
 
 ## Scaffolding
 
 `kata init --with-example` escreve a estrutura travada para você — `src/context.ts`,
 `src/main.ts` e um domínio `src/modules/health/` com seu `health.route.ts` e
-`health.schema.ts` — para que um projeto novo comece no formato que o harness espera.
-Veja [/pt/guide/cli](/pt/guide/cli).
+`health.schema.ts` — para que um projeto novo comece no formato que o harness espera. Veja
+[Bootstrap CLI](/pt/guide/cli).
