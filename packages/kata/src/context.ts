@@ -15,10 +15,12 @@ import type { Registry, ResolvedValue, Scoped, ScopedKeys, Singleton } from './t
 // ────────────────────────────────────────────────────────────────────────────
 
 export function singleton<T>(value: T): Singleton<T> {
+  // kata-allow: hono-boundary
   return { __value: value, __kind: 'singleton' } as unknown as Singleton<T>
 }
 
 export function scoped<T>(): Scoped<T> {
+  // kata-allow: hono-boundary
   return { __kind: 'scoped' } as unknown as Scoped<T>
 }
 
@@ -221,6 +223,7 @@ export function defineContext<const R extends Registry>(registry: R) {
     // the built `Hono` to the schema derived from `Mods` is sound (issue #13) —
     // it is the single hand-maintained bridge between the runtime and the type
     // layer. `examples/hello-client` type-checks this bridge in CI (spike item 5).
+    // kata-allow: hono-boundary
     return buildHonoApp(registry, config) as unknown as KataApp<Mods>
   }
 
@@ -278,9 +281,11 @@ function buildHonoApp<R extends Registry>(registry: R, config: AppConfig<R>): Ho
 const SCOPED_STORE = Symbol('kata.scoped-store')
 
 function getScopedStore(c: import('hono').Context): Map<string, unknown> {
+  // kata-allow: hono-boundary
   let store = c.get(SCOPED_STORE as never) as Map<string, unknown> | undefined
   if (!store) {
     store = new Map<string, unknown>()
+    // kata-allow: hono-boundary
     c.set(SCOPED_STORE as never, store as never)
   }
   return store
@@ -298,6 +303,7 @@ function errorResponse(
   message: string,
   extra?: ErrorExtra,
 ): Response {
+  // kata-allow: hono-boundary
   return c.json(buildErrorBody(code, message, extra) as never, (extra?.status ?? 400) as never)
 }
 
@@ -311,12 +317,14 @@ function makeMiddlewareContext<R extends Registry>(
     get(key) {
       const slot = registry[key as string]
       if (!slot) throw new Error(`kata: key '${String(key)}' not registered in defineContext`)
+      // kata-allow: hono-boundary
       if (slot.__kind === 'singleton') return (slot as Singleton<unknown>).__value as never
       if (!store.has(key as string)) {
         throw new Error(
           `kata: scoped slot '${String(key)}' read before being set. Did the providing middleware run?`,
         )
       }
+      // kata-allow: hono-boundary
       return store.get(key as string) as never
     },
     set(key, value) {
@@ -328,6 +336,7 @@ function makeMiddlewareContext<R extends Registry>(
     },
     raw: c,
     header: (name) => c.req.header(name),
+    // kata-allow: hono-boundary
     json: (value, status) => c.json(value as never, (status ?? 200) as never),
     error: (code, message, extra) => errorResponse(c, code, message, extra),
     requestId,
@@ -345,16 +354,19 @@ function makeRouteContext<R extends Registry, I extends InputSchemas>(
     get(key) {
       const slot = registry[key as string]
       if (!slot) throw new Error(`kata: key '${String(key)}' not registered in defineContext`)
+      // kata-allow: hono-boundary
       if (slot.__kind === 'singleton') return (slot as Singleton<unknown>).__value as never
       if (!store.has(key as string)) {
         throw new Error(
           `kata: scoped slot '${String(key)}' read before being set. Did the providing middleware run?`,
         )
       }
+      // kata-allow: hono-boundary
       return store.get(key as string) as never
     },
     input,
     raw: c,
+    // kata-allow: hono-boundary
     json: (value, status) => c.json(value as never, (status ?? 200) as never),
     error: (code, message, extra) => errorResponse(c, code, message, extra),
     requestId,
@@ -459,10 +471,12 @@ function buildOutputResponse<R extends Registry>(
   mode: OutputValidationMode,
 ): Response {
   if (mode === 'off' || !schema) {
+    // kata-allow: hono-boundary
     return c.json(result as never)
   }
   const parsed = schema.safeParse(result)
   if (parsed.success) {
+    // kata-allow: hono-boundary
     return c.json(parsed.data as never)
   }
   logOutputMismatch(route, SUCCESS_STATUS, parsed.error.issues)
@@ -470,6 +484,7 @@ function buildOutputResponse<R extends Registry>(
     return outputMismatchResponse(c)
   }
   // mode === 'log': keep serving — send the handler's data through unchanged.
+  // kata-allow: hono-boundary
   return c.json(result as never)
 }
 
@@ -571,6 +586,7 @@ function registerRoute<R extends Registry>(
 ): void {
   const method = route.method.toLowerCase() as Lowercase<HttpMethod>
   // Hono router: app.get(path, ...handlers)
+  // kata-allow: hono-boundary
   const register = (app as unknown as Record<string, (path: string, ...h: unknown[]) => unknown>)[
     method
   ]
