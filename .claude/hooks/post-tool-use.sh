@@ -23,6 +23,8 @@ esac
 # File may have been deleted by a MultiEdit / Write that removes content.
 [ -f "$file" ] || exit 0
 
+abs_file="$(cd "$(dirname "$file")" && pwd)/$(basename "$file")"
+
 # Run from repo root so workspace bin resolution works regardless of cwd.
 ROOT="$(git -C "$(dirname "$file")" rev-parse --show-toplevel 2>/dev/null || pwd)"
 cd "$ROOT"
@@ -46,7 +48,54 @@ case "$file" in
     ;;
 esac
 
+# Phase 3 — run kata verify if inside a Kata project's src/
+kata_json="{}"
+
+# Verify only globs src/**
+if [[ "$abs_file" == */src/* ]]; then
+  search_dir="$(dirname "$abs_file")"
+  kata_app_dir=""
+  
+  while [ -n "$search_dir" ] && [ "$search_dir" != "/" ] && [ "$search_dir" != "." ]; do
+    if [ -f "$search_dir/src/context.ts" ]; then
+      kata_app_dir="$search_dir"
+      break
+    fi
+    search_dir="$(dirname "$search_dir")"
+  done
+  
+  if [ -n "$kata_app_dir" ]; then
+    kata_json="$(cd "$kata_app_dir" && pnpm exec kata verify --json 2>/dev/null || true)"
+    if [ -z "$kata_json" ]; then
+      kata_json="{}"
+    fi
+  fi
+fi
+
+has_kata="$(jq -r 'has("hookSpecificOutput")' <<< "$kata_json")"
+
+if [ -z "$remaining" ] && [ "$has_kata" != "true" ]; then
+  exit 0
+fi
+
+if [ "$has_kata" != "true" ]; then
+  msg="kata harness — remaining violations in $file:
+
+$remaining
+
+Fix these before the next edit. The harness will re-run on every Write/Edit/MultiEdit."
+
+  jq -Rn --arg msg "$msg" '{
+    hookSpecificOutput: {
+      hookEventName: "PostToolUse",
+      additionalContext: $msg
+    }
+  }'
+  exit 0
+fi
+
 if [ -z "$remaining" ]; then
+  echo "$kata_json"
   exit 0
 fi
 
@@ -56,9 +105,6 @@ $remaining
 
 Fix these before the next edit. The harness will re-run on every Write/Edit/MultiEdit."
 
-jq -Rn --arg msg "$msg" '{
-  hookSpecificOutput: {
-    hookEventName: "PostToolUse",
-    additionalContext: $msg
-  }
-}'
+jq -n --arg msg "$msg" --argjson kata "$kata_json" '
+  $kata | .hookSpecificOutput.additionalContext = ($msg + "\n\n" + .hookSpecificOutput.additionalContext)
+'

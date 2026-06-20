@@ -47,6 +47,7 @@ $out"
 }
 
 run_step "pnpm typecheck" pnpm typecheck
+run_step "kata verify" pnpm --silent --filter=hello exec kata verify
 run_step "pnpm test" pnpm test
 
 if ! command -v hurl >/dev/null 2>&1; then

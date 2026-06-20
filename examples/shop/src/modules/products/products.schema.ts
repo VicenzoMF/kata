@@ -27,7 +27,8 @@ export const CreateProductBodySchema = z.object({
   stock: z.number().int().nonnegative(),
 })
 
-export const GetProductParamsSchema = z.object({ id: z.string() })
-
 export type Product = z.infer<typeof ProductSchema>
 export type CreateProductBody = z.infer<typeof CreateProductBodySchema>
+
+export const GetProductParamsSchema = z.object({ id: z.string() })
+export type GetProductParams = z.infer<typeof GetProductParamsSchema>

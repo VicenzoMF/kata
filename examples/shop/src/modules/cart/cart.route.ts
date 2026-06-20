@@ -1,4 +1,3 @@
-
 import { defineRoute } from '../../context'
 import { requireAuth } from '../../middlewares/auth'
 
