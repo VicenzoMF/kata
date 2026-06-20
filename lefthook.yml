@@ -30,5 +30,11 @@ pre-commit:
           pnpm exec kata verify "$app" || status=1
         done
         exit $status
+      # verify enforces Kata's ADR rules and is cross-file (a route can
+      # reference middleware/schemas in sibling files), so — like typecheck —
+      # it runs project-wide rather than over staged files. Checks every Kata
+      # example app; a non-zero exit fails the commit. No pipe: verify's exit
+      # code must propagate to the `|| exit 1` guard.
+      run: for app in examples/*/; do pnpm exec kata verify "$app" || exit 1; done
 
 # Personal overrides go in lefthook-local.yml (gitignored).
