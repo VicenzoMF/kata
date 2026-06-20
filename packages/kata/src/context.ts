@@ -365,16 +365,31 @@ async function readInputs<I extends InputSchemas>(
   input: I,
   c: import('hono').Context,
 ): Promise<
-  { ok: true; value: InferInput<I> } | { ok: false; issues: Record<string, FieldIssue[]> }
+  | { ok: true; value: InferInput<I> }
+  | { ok: false; issues: Record<string, FieldIssue[]> }
+  | { ok: false; response: Response }
 > {
   const raw: Record<string, unknown> = {}
   if (input.params) raw['params'] = c.req.param()
   if (input.query) raw['query'] = c.req.query()
   if (input.body) {
-    try {
-      raw['body'] = await c.req.json()
-    } catch {
+    const text = await c.req.text()
+    if (!text) {
       raw['body'] = undefined
+    } else {
+      try {
+        raw['body'] = JSON.parse(text)
+      } catch {
+        return {
+          ok: false,
+          response: errorResponse(c, 'validation_failed', 'Malformed JSON body', {
+            status: 400,
+            issues: {
+              body: [{ path: '', message: 'Request body is not valid JSON', code: 'custom' }],
+            },
+          }),
+        }
+      }
     }
   }
   if (input.headers) {
@@ -593,6 +608,10 @@ function registerRoute<R extends Registry>(
         // 2. Validate input
         const inputResult = await readInputs(route.input, c)
         if (!inputResult.ok) {
+          if ('response' in inputResult) {
+            shortCircuit = inputResult.response
+            return
+          }
           shortCircuit = errorResponse(c, 'validation_failed', 'Request input validation failed', {
             status: 422,
             issues: inputResult.issues,
