@@ -41,6 +41,5 @@ export function isAnalysable(name: string): boolean {
   if (!name.endsWith('.ts')) return false
   if (name.endsWith('.d.ts')) return false
   if (name.endsWith('.test.ts')) return false
-  if (name.endsWith('.schema.ts')) return false
   return true
 }

@@ -60,6 +60,12 @@ describe('parseArgs()', () => {
   it('keeps the first positional as the command, ignoring later ones', () => {
     expect(parseArgs(['init', 'extra']).command).toBe('init')
   })
+
+  it('parses new command with domain', () => {
+    const args = parseArgs(['new', 'ping'])
+    expect(args.command).toBe('new')
+    expect(args.domain).toBe('ping')
+  })
 })
 
 describe('run()', () => {
@@ -131,6 +137,30 @@ describe('run()', () => {
     expect(await exists(join(dir, 'src/main.ts'))).toBe(false)
     expect(await exists(join(dir, 'package.json'))).toBe(false)
     expect(await exists(join(dir, 'tsconfig.json'))).toBe(false)
+  })
+})
+
+describe('run() — new', () => {
+  it('errors on missing domain', async () => {
+    const result = await run(['new'])
+    expect(result.code).toBe(1)
+    expect(result.stderr).toContain('missing domain name')
+  })
+
+  it('generates the five-file module skeleton', async () => {
+    const result = await run(['new', 'ping', '--cwd', dir])
+    expect(result.code).toBe(0)
+    expect(result.stdout).toContain('ping.route.ts')
+    expect(result.stdout).toContain('ping.service.ts')
+    expect(result.stdout).toContain('ping.schema.ts')
+    expect(result.stdout).toContain('ping.test.ts')
+    expect(result.stdout).toContain('ping.hurl')
+
+    expect(await exists(join(dir, 'src/modules/ping/ping.route.ts'))).toBe(true)
+    expect(await exists(join(dir, 'src/modules/ping/ping.service.ts'))).toBe(true)
+    expect(await exists(join(dir, 'src/modules/ping/ping.schema.ts'))).toBe(true)
+    expect(await exists(join(dir, 'src/modules/ping/ping.test.ts'))).toBe(true)
+    expect(await exists(join(dir, 'src/modules/ping/ping.hurl'))).toBe(true)
   })
 })
 

@@ -44,6 +44,17 @@ jobs:
 
       - run: pnpm test
 
+      - name: Run kata verify (L3 guardrail)
+        # Mirrors the local pre-commit gate (#127, lefthook 04-verify) so CI and
+        # hooks agree. Runs after typecheck, whose `pretypecheck` script builds
+        # the `kata` bin, so the `kata verify` entry resolves. Iterates every
+        # example app (hello, shop, ...); a non-zero exit fails the build. No
+        # pipe so verify's exit code propagates to the `|| exit 1` guard.
+        run: |
+          for app in examples/*/; do
+            pnpm exec kata verify "$app" || exit 1
+          done
+
       - name: Install hurl
         run: |
           curl -fsSL -o /tmp/hurl.deb \

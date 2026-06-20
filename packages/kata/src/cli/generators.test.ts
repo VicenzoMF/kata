@@ -11,6 +11,12 @@ import {
   renderExampleMain,
   renderExamplePackageJson,
   renderExampleTsconfig,
+  renderLefthookYml,
+  renderModuleHurl,
+  renderModuleRoute,
+  renderModuleSchema,
+  renderModuleService,
+  renderModuleTest,
   serialize,
 } from './generators'
 import { examplePackageJson, exampleTsconfig } from './templates/example'
@@ -85,11 +91,11 @@ describe('renderClaudeSettings() — issues #27, #29', () => {
     }
   })
 
-  it('runs `kata verify --json` on Pre/PostToolUse and `pnpm test` on Stop', () => {
+  it('runs `kata verify --json` on Pre/PostToolUse and `kata verify && pnpm test` on Stop', () => {
     const { hooks } = parseClaude()
     expect(hooks.PreToolUse?.[0]?.hooks[0]?.command).toBe('kata verify --json')
     expect(hooks.PostToolUse?.[0]?.hooks[0]?.command).toBe('kata verify --json')
-    expect(hooks.Stop?.[0]?.hooks[0]?.command).toBe('pnpm test')
+    expect(hooks.Stop?.[0]?.hooks[0]?.command).toBe('kata verify && pnpm test')
   })
 
   it('matches the file-writing tools on Pre/PostToolUse', () => {
@@ -133,11 +139,11 @@ describe('renderCodexHooks() — issue #28', () => {
     expect(hooks.PostToolUse?.[0]?.matcher).toBe('Bash|apply_patch')
   })
 
-  it('runs `kata verify --json` on Pre/PostToolUse and `pnpm test` on Stop', () => {
+  it('runs `kata verify --json` on Pre/PostToolUse and `kata verify && pnpm test` on Stop', () => {
     const { hooks } = parseCodex()
     expect(hooks.PreToolUse?.[0]?.hooks[0]?.command).toBe('kata verify --json')
     expect(hooks.PostToolUse?.[0]?.hooks[0]?.command).toBe('kata verify --json')
-    expect(hooks.Stop?.[0]?.hooks[0]?.command).toBe('pnpm test')
+    expect(hooks.Stop?.[0]?.hooks[0]?.command).toBe('kata verify && pnpm test')
   })
 
   it('gives the Stop gate a 180s timeout and no matcher', () => {
@@ -157,7 +163,11 @@ describe('Claude/Codex parity (the point of #27 + #28)', () => {
       h.Stop?.[0]?.hooks[0]?.command,
     ]
     expect(commandsOf(claude)).toEqual(commandsOf(codex))
-    expect(commandsOf(claude)).toEqual(['kata verify --json', 'kata verify --json', 'pnpm test'])
+    expect(commandsOf(claude)).toEqual([
+      'kata verify --json',
+      'kata verify --json',
+      'kata verify && pnpm test',
+    ])
   })
 
   it('registers the same three events with the same Stop timeout', () => {
@@ -200,6 +210,16 @@ describe('renderAgentsMd() / renderClaudeMd() — issue #31', () => {
     expect(renderAgentsMd().endsWith('\n\n')).toBe(false)
     expect(renderClaudeMd().endsWith('\n')).toBe(true)
     expect(renderClaudeMd().endsWith('\n\n')).toBe(false)
+  })
+})
+
+describe('renderLefthookYml() — issue #130', () => {
+  it('renders the lefthook pre-commit configuration with kata verify', () => {
+    const yml = renderLefthookYml()
+    expect(yml).toContain('pre-commit:')
+    expect(yml).toContain('pnpm exec kata verify')
+    expect(yml).toContain('pnpm exec biome check')
+    expect(yml).toContain('pnpm exec oxlint')
   })
 })
 
@@ -280,12 +300,68 @@ describe('renderExample* — `kata init --with-example` source files (ADR-0015 /
   })
 })
 
+describe('renderModule* — `kata new <domain>` source files (Issue #102)', () => {
+  it('route imports service and schema, defines route with domain', () => {
+    const src = renderModuleRoute('ping')
+    expect(src).toContain("import { defineRoute } from '../../context'")
+    expect(src).toContain("import { pingAction } from './ping.service'")
+    expect(src).toContain("import { PingSchema } from './ping.schema'")
+    expect(src).toContain("path: '/ping'")
+    expect(src).toContain('output: PingSchema')
+    expect(src).toContain('handler: () => pingAction()')
+  })
+
+  it('service implements action', () => {
+    const src = renderModuleService('ping')
+    expect(src).toContain("import type { Ping } from './ping.schema'")
+    expect(src).toContain('export function pingAction(): Ping {')
+    expect(src).toContain("return { status: 'ok' }")
+  })
+
+  it('schema defines Zod object', () => {
+    const src = renderModuleSchema('ping')
+    expect(src).toContain("import { z } from 'zod'")
+    expect(src).toContain('export const PingSchema = z.object({')
+    expect(src).toContain('export type Ping = z.infer<typeof PingSchema>')
+  })
+
+  it('test imports and asserts service output', () => {
+    const src = renderModuleTest('ping')
+    expect(src).toContain("import { describe, expect, it } from 'vitest'")
+    expect(src).toContain("import { pingAction } from './ping.service'")
+    expect(src).toContain("describe('pingAction', () => {")
+    expect(src).toContain("expect(pingAction()).toEqual({ status: 'ok' })")
+  })
+
+  it('hurl defines end-to-end API test', () => {
+    const src = renderModuleHurl('ping')
+    expect(src).toContain('GET {{host}}/ping')
+    expect(src).toContain('HTTP 200')
+    expect(src).toContain('jsonpath "$.status" == "ok"')
+  })
+
+  it('every generated file ends in exactly one trailing newline', () => {
+    const sources = [
+      renderModuleRoute('ping'),
+      renderModuleService('ping'),
+      renderModuleSchema('ping'),
+      renderModuleTest('ping'),
+      renderModuleHurl('ping'),
+    ]
+    for (const src of sources) {
+      expect(src.endsWith('\n')).toBe(true)
+      expect(src.endsWith('\n\n')).toBe(false)
+    }
+  })
+})
+
 describe('determinism', () => {
   it('renders byte-identical output on repeated calls', () => {
     expect(renderClaudeSettings()).toBe(renderClaudeSettings())
     expect(renderCodexHooks()).toBe(renderCodexHooks())
     expect(renderAgentsMd()).toBe(renderAgentsMd())
     expect(renderClaudeMd()).toBe(renderClaudeMd())
+    expect(renderLefthookYml()).toBe(renderLefthookYml())
   })
 
   it('renders byte-identical example files on repeated calls', () => {
@@ -295,5 +371,13 @@ describe('determinism', () => {
     expect(renderExampleHealthSchema()).toBe(renderExampleHealthSchema())
     expect(renderExamplePackageJson()).toBe(renderExamplePackageJson())
     expect(renderExampleTsconfig()).toBe(renderExampleTsconfig())
+  })
+
+  it('renders byte-identical module template files on repeated calls', () => {
+    expect(renderModuleRoute('ping')).toBe(renderModuleRoute('ping'))
+    expect(renderModuleService('ping')).toBe(renderModuleService('ping'))
+    expect(renderModuleSchema('ping')).toBe(renderModuleSchema('ping'))
+    expect(renderModuleTest('ping')).toBe(renderModuleTest('ping'))
+    expect(renderModuleHurl('ping')).toBe(renderModuleHurl('ping'))
   })
 })

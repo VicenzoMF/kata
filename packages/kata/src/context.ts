@@ -272,7 +272,12 @@ function buildHonoApp<R extends Registry>(registry: R, config: AppConfig<R>): Ho
   // still serialises through the unified envelope instead of Hono's default
   // text/HTML 500.
   app.onError((err, c) => {
-    console.error('kata: unhandled error escaped the route pipeline', err)
+    const msg = 'kata: unhandled error escaped the route pipeline'
+    if (options.logger?.error) {
+      options.logger.error(msg, { err })
+    } else {
+      console.error(msg, err)
+    }
     return errorResponse(c, 'internal_error', 'Internal server error', { status: 500 })
   })
   return app
@@ -377,16 +382,31 @@ async function readInputs<I extends InputSchemas>(
   input: I,
   c: import('hono').Context,
 ): Promise<
-  { ok: true; value: InferInput<I> } | { ok: false; issues: Record<string, FieldIssue[]> }
+  | { ok: true; value: InferInput<I> }
+  | { ok: false; issues: Record<string, FieldIssue[]> }
+  | { ok: false; response: Response }
 > {
   const raw: Record<string, unknown> = {}
   if (input.params) raw['params'] = c.req.param()
   if (input.query) raw['query'] = c.req.query()
   if (input.body) {
-    try {
-      raw['body'] = await c.req.json()
-    } catch {
+    const text = await c.req.text()
+    if (!text) {
       raw['body'] = undefined
+    } else {
+      try {
+        raw['body'] = JSON.parse(text)
+      } catch {
+        return {
+          ok: false,
+          response: errorResponse(c, 'validation_failed', 'Malformed JSON body', {
+            status: 400,
+            issues: {
+              body: [{ path: '', message: 'Request body is not valid JSON', code: 'custom' }],
+            },
+          }),
+        }
+      }
     }
   }
   if (input.headers) {
@@ -441,18 +461,18 @@ async function buildResponse<R extends Registry>(
   c: import('hono').Context,
   route: Route<R>,
   result: unknown,
-  mode: OutputValidationMode,
+  options: RuntimeOptions<R>,
 ): Promise<Response> {
   const output = route.output
   if (result instanceof Response) {
-    if (mode !== 'off' && !isZodSchema(output)) {
+    if (options.outputValidation !== 'off' && !isZodSchema(output)) {
       const schema = output[result.status]
-      if (schema) return validateResponseBody(c, route, result, schema, mode)
+      if (schema) return validateResponseBody(c, route, result, schema, options)
     }
     return result
   }
   const successSchema = isZodSchema(output) ? output : output[SUCCESS_STATUS]
-  return buildOutputResponse(c, route, result, successSchema, mode)
+  return buildOutputResponse(c, route, result, successSchema, options)
 }
 
 /**
@@ -468,9 +488,9 @@ function buildOutputResponse<R extends Registry>(
   route: Route<R>,
   result: unknown,
   schema: z.ZodTypeAny | undefined,
-  mode: OutputValidationMode,
+  options: RuntimeOptions<R>,
 ): Response {
-  if (mode === 'off' || !schema) {
+  if (options.outputValidation === 'off' || !schema) {
     // kata-allow: hono-boundary
     return c.json(result as never)
   }
@@ -479,8 +499,8 @@ function buildOutputResponse<R extends Registry>(
     // kata-allow: hono-boundary
     return c.json(parsed.data as never)
   }
-  logOutputMismatch(route, SUCCESS_STATUS, parsed.error.issues)
-  if (mode === 'strict') {
+  logOutputMismatch(route, SUCCESS_STATUS, parsed.error.issues, options)
+  if (options.outputValidation === 'strict') {
     return outputMismatchResponse(c)
   }
   // mode === 'log': keep serving — send the handler's data through unchanged.
@@ -500,7 +520,7 @@ async function validateResponseBody<R extends Registry>(
   route: Route<R>,
   response: Response,
   schema: z.ZodTypeAny,
-  mode: OutputValidationMode,
+  options: RuntimeOptions<R>,
 ): Promise<Response> {
   let body: unknown
   try {
@@ -513,8 +533,8 @@ async function validateResponseBody<R extends Registry>(
   if (parsed.success) {
     return response
   }
-  logOutputMismatch(route, response.status, parsed.error.issues)
-  if (mode === 'strict') {
+  logOutputMismatch(route, response.status, parsed.error.issues, options)
+  if (options.outputValidation === 'strict') {
     return outputMismatchResponse(c)
   }
   // mode === 'log': keep serving the handler's original response.
@@ -526,11 +546,14 @@ function logOutputMismatch<R extends Registry>(
   route: Route<R>,
   status: number,
   issues: unknown,
+  options: RuntimeOptions<R>,
 ): void {
-  console.error(
-    `kata: output schema mismatch in ${route.method} ${route.path} (status ${status})`,
-    issues,
-  )
+  const msg = `kata: output schema mismatch in ${route.method} ${route.path} (status ${status})`
+  if (options.logger?.error) {
+    options.logger.error(msg, { issues })
+  } else {
+    console.error(msg, issues)
+  }
 }
 
 /** The 500 envelope (ADR-0008) `strict` returns when a response violates its declared output schema. */
@@ -609,6 +632,10 @@ function registerRoute<R extends Registry>(
         // 2. Validate input
         const inputResult = await readInputs(route.input, c)
         if (!inputResult.ok) {
+          if ('response' in inputResult) {
+            shortCircuit = inputResult.response
+            return
+          }
           shortCircuit = errorResponse(c, 'validation_failed', 'Request input validation failed', {
             status: 422,
             issues: inputResult.issues,
@@ -621,7 +648,7 @@ function registerRoute<R extends Registry>(
         // 4. Build + validate the response against the route's output contract —
         //    single schema (ADR-0003) or status→schema map (ADR-0011) — per the
         //    configured mode (ADR-0009).
-        shortCircuit = await buildResponse(c, route, result, options.outputValidation)
+        shortCircuit = await buildResponse(c, route, result, options)
         return
       }
       const mw = chain[i++]!
@@ -638,7 +665,12 @@ function registerRoute<R extends Registry>(
     try {
       await runChain()
     } catch (err) {
-      console.error(`kata: unhandled error in ${route.method} ${route.path}`, err)
+      const msg = `kata: unhandled error in ${route.method} ${route.path}`
+      if (options.logger?.error) {
+        options.logger.error(msg, { err })
+      } else {
+        console.error(msg, err)
+      }
       shortCircuit = errorResponse(c, 'internal_error', 'Internal server error', { status: 500 })
     }
     // 5. Echo the correlation id and emit the per-request log line (issue #63).
