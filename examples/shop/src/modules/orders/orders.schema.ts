@@ -18,5 +18,7 @@ export const OrderSchema = z.object({
 
 export const OrderListSchema = z.array(OrderSchema)
 
+export const GetOrderParamsSchema = z.object({ id: z.string() })
+
 export type OrderLine = z.infer<typeof OrderLineSchema>
 export type Order = z.infer<typeof OrderSchema>

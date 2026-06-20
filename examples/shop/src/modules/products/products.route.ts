@@ -1,10 +1,10 @@
-import { z } from 'zod'
 
 import { defineRoute } from '../../context'
 import { requireAuth } from '../../middlewares/auth'
 
 import {
   CreateProductBodySchema,
+  GetProductParamsSchema,
   ListProductsQuerySchema,
   ProductListSchema,
   ProductSchema,
@@ -22,7 +22,7 @@ export const listProductsRoute = defineRoute({
 export const getProductRoute = defineRoute({
   method: 'GET',
   path: '/products/:id',
-  input: { params: z.object({ id: z.string() }) },
+  input: { params: GetProductParamsSchema },
   output: ProductSchema,
   handler: (c) => {
     const product = getProduct(c.get('store'), c.input.params.id)

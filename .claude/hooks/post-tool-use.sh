@@ -42,7 +42,7 @@ remaining=""
 case "$file" in
   *.ts | *.tsx | *.js | *.jsx)
     # Oxlint emits `path:line:col: severity rule: message` per finding.
-    remaining="$(pnpm exec oxlint "$file" 2>&1 | grep -E ":[0-9]+:[0-9]+:" || true)"
+    remaining="$(pnpm exec oxlint --format=unix "$file" 2>&1 | grep -E ":[0-9]+:[0-9]+:" || true)"
     ;;
 esac
 

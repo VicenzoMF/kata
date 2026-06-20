@@ -1,11 +1,10 @@
 import { ErrorBodySchema } from 'kata'
-import { z } from 'zod'
 
 import { defineRoute } from '../../context'
 import { requireAuth } from '../../middlewares/auth'
 import { withTransaction } from '../../middlewares/transaction'
 
-import { OrderListSchema, OrderSchema } from './orders.schema'
+import { GetOrderParamsSchema, OrderListSchema, OrderSchema } from './orders.schema'
 import { checkout, describeCheckoutFailure, getOrder, listOrders } from './orders.service'
 
 /**
@@ -61,7 +60,7 @@ export const getOrderRoute = defineRoute({
   method: 'GET',
   path: '/orders/:id',
   use: [requireAuth],
-  input: { params: z.object({ id: z.string() }) },
+  input: { params: GetOrderParamsSchema },
   output: OrderSchema,
   handler: (c) => {
     const order = getOrder(c.get('store'), c.get('currentUser').id, c.input.params.id)

@@ -23,6 +23,10 @@ export const AddCartItemBodySchema = z.object({
   qty: z.number().int().positive(),
 })
 
+export const RemoveCartItemParamsSchema = z.object({
+  productId: z.string(),
+})
+
 export type CartLine = z.infer<typeof CartLineSchema>
 export type Cart = z.infer<typeof CartSchema>
 export type AddCartItemBody = z.infer<typeof AddCartItemBodySchema>
