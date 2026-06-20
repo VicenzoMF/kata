@@ -461,3 +461,73 @@ describe('app-level middleware (ADR-0012)', () => {
     expect(order).toEqual(['route-mw', 'handler'])
   })
 })
+
+// ────────────────────────────────────────────────────────────────────────────
+// Input validation (issue #152)
+// ────────────────────────────────────────────────────────────────────────────
+
+describe('input validation (body parsing)', () => {
+  it('returns 400 for a malformed JSON body when body schema is required', async () => {
+    const k = defineContext({})
+    const route = k.defineRoute({
+      method: 'POST',
+      path: '/malformed',
+      input: { body: z.object({ foo: z.string() }) },
+      output: z.object({ ok: z.boolean() }),
+      handler: () => ({ ok: true }),
+    })
+    const app = k.createApp({ modules: [{ route }] })
+
+    const res = await app.request('/malformed', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: '{ malformed',
+    })
+
+    expect(res.status).toBe(400)
+    const body = await res.json()
+    expect(body).toEqual({
+      error: 'validation_failed',
+      message: 'Malformed JSON body',
+      issues: {
+        body: [{ path: '', message: 'Request body is not valid JSON', code: 'custom' }],
+      },
+    })
+  })
+
+  it('leaves an empty body as undefined, allowing optional body schemas to pass', async () => {
+    const k = defineContext({})
+    const route = k.defineRoute({
+      method: 'POST',
+      path: '/empty-optional',
+      input: { body: z.object({ foo: z.string() }).optional() },
+      output: z.object({ ok: z.boolean() }),
+      handler: () => ({ ok: true }),
+    })
+    const app = k.createApp({ modules: [{ route }] })
+
+    const res = await app.request('/empty-optional', { method: 'POST' })
+    expect(res.status).toBe(200)
+  })
+
+  it('returns 422 for a missing body when body schema is required', async () => {
+    const k = defineContext({})
+    const route = k.defineRoute({
+      method: 'POST',
+      path: '/empty-required',
+      input: { body: z.object({ foo: z.string() }) },
+      output: z.object({ ok: z.boolean() }),
+      handler: () => ({ ok: true }),
+    })
+    const app = k.createApp({ modules: [{ route }] })
+
+    const res = await app.request('/empty-required', { method: 'POST' })
+    expect(res.status).toBe(422)
+    const body = await res.json()
+    expect(body).toEqual(
+      expect.objectContaining({
+        error: 'validation_failed',
+      }),
+    )
+  })
+})
