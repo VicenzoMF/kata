@@ -74,7 +74,11 @@ export function parseArgs(argv: readonly string[]): ParsedArgs {
       withExample = true
     } else if (arg === '-C' || arg === '--cwd') {
       i += 1
-      cwd = argv[i]
+      const next = argv[i]
+      if (next === undefined || next.startsWith('-')) {
+        throw new Error('kata: --cwd requires a directory value')
+      }
+      cwd = next
     } else if (arg.startsWith('--cwd=')) {
       cwd = arg.slice('--cwd='.length)
     } else if (command === undefined && !arg.startsWith('-')) {
@@ -157,7 +161,16 @@ export async function run(
     return { code: exitCode, stdout: output, stderr: '' }
   }
 
-  const args = parseArgs(argv)
+  let args: ParsedArgs
+  try {
+    args = parseArgs(argv)
+  } catch (err) {
+    return {
+      code: 1,
+      stdout: '',
+      stderr: err instanceof Error ? err.message : String(err),
+    }
+  }
 
   if (args.help) {
     return { code: 0, stdout: HELP_TEXT, stderr: '' }
