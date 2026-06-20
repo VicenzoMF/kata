@@ -11,6 +11,7 @@ import {
   renderExampleMain,
   renderExamplePackageJson,
   renderExampleTsconfig,
+  renderLefthookYml,
   renderModuleHurl,
   renderModuleRoute,
   renderModuleSchema,
@@ -90,11 +91,11 @@ describe('renderClaudeSettings() — issues #27, #29', () => {
     }
   })
 
-  it('runs `kata verify --json` on Pre/PostToolUse and `pnpm test` on Stop', () => {
+  it('runs `kata verify --json` on Pre/PostToolUse and `kata verify && pnpm test` on Stop', () => {
     const { hooks } = parseClaude()
     expect(hooks.PreToolUse?.[0]?.hooks[0]?.command).toBe('kata verify --json')
     expect(hooks.PostToolUse?.[0]?.hooks[0]?.command).toBe('kata verify --json')
-    expect(hooks.Stop?.[0]?.hooks[0]?.command).toBe('pnpm test')
+    expect(hooks.Stop?.[0]?.hooks[0]?.command).toBe('kata verify && pnpm test')
   })
 
   it('matches the file-writing tools on Pre/PostToolUse', () => {
@@ -138,11 +139,11 @@ describe('renderCodexHooks() — issue #28', () => {
     expect(hooks.PostToolUse?.[0]?.matcher).toBe('Bash|apply_patch')
   })
 
-  it('runs `kata verify --json` on Pre/PostToolUse and `pnpm test` on Stop', () => {
+  it('runs `kata verify --json` on Pre/PostToolUse and `kata verify && pnpm test` on Stop', () => {
     const { hooks } = parseCodex()
     expect(hooks.PreToolUse?.[0]?.hooks[0]?.command).toBe('kata verify --json')
     expect(hooks.PostToolUse?.[0]?.hooks[0]?.command).toBe('kata verify --json')
-    expect(hooks.Stop?.[0]?.hooks[0]?.command).toBe('pnpm test')
+    expect(hooks.Stop?.[0]?.hooks[0]?.command).toBe('kata verify && pnpm test')
   })
 
   it('gives the Stop gate a 180s timeout and no matcher', () => {
@@ -162,7 +163,11 @@ describe('Claude/Codex parity (the point of #27 + #28)', () => {
       h.Stop?.[0]?.hooks[0]?.command,
     ]
     expect(commandsOf(claude)).toEqual(commandsOf(codex))
-    expect(commandsOf(claude)).toEqual(['kata verify --json', 'kata verify --json', 'pnpm test'])
+    expect(commandsOf(claude)).toEqual([
+      'kata verify --json',
+      'kata verify --json',
+      'kata verify && pnpm test',
+    ])
   })
 
   it('registers the same three events with the same Stop timeout', () => {
@@ -205,6 +210,16 @@ describe('renderAgentsMd() / renderClaudeMd() — issue #31', () => {
     expect(renderAgentsMd().endsWith('\n\n')).toBe(false)
     expect(renderClaudeMd().endsWith('\n')).toBe(true)
     expect(renderClaudeMd().endsWith('\n\n')).toBe(false)
+  })
+})
+
+describe('renderLefthookYml() — issue #130', () => {
+  it('renders the lefthook pre-commit configuration with kata verify', () => {
+    const yml = renderLefthookYml()
+    expect(yml).toContain('pre-commit:')
+    expect(yml).toContain('pnpm exec kata verify')
+    expect(yml).toContain('pnpm exec biome check')
+    expect(yml).toContain('pnpm exec oxlint')
   })
 })
 
@@ -346,6 +361,7 @@ describe('determinism', () => {
     expect(renderCodexHooks()).toBe(renderCodexHooks())
     expect(renderAgentsMd()).toBe(renderAgentsMd())
     expect(renderClaudeMd()).toBe(renderClaudeMd())
+    expect(renderLefthookYml()).toBe(renderLefthookYml())
   })
 
   it('renders byte-identical example files on repeated calls', () => {
