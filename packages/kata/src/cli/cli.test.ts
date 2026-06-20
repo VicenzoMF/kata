@@ -57,6 +57,13 @@ describe('parseArgs()', () => {
     expect(parseArgs(['-h']).help).toBe(true)
   })
 
+  it('throws when --cwd is missing a value', () => {
+    expect(() => parseArgs(['init', '--cwd'])).toThrow('kata: --cwd requires a directory value')
+    expect(() => parseArgs(['init', '-C', '--force'])).toThrow(
+      'kata: --cwd requires a directory value',
+    )
+  })
+
   it('keeps the first positional as the command, ignoring later ones', () => {
     expect(parseArgs(['init', 'extra']).command).toBe('init')
   })
@@ -81,6 +88,13 @@ describe('run()', () => {
     const result = await run(['frobnicate'])
     expect(result.code).toBe(1)
     expect(result.stderr).toContain("unknown command 'frobnicate'")
+  })
+
+  it('errors when --cwd is missing a value', async () => {
+    const result = await run(['init', '--cwd'])
+    expect(result.code).toBe(1)
+    expect(result.stdout).toBe('')
+    expect(result.stderr).toContain('kata: --cwd requires a directory value')
   })
 
   it('runs init into the given --cwd and reports the files', async () => {
