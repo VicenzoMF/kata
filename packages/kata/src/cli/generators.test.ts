@@ -11,6 +11,11 @@ import {
   renderExampleMain,
   renderExamplePackageJson,
   renderExampleTsconfig,
+  renderModuleHurl,
+  renderModuleRoute,
+  renderModuleSchema,
+  renderModuleService,
+  renderModuleTest,
   serialize,
 } from './generators'
 import { examplePackageJson, exampleTsconfig } from './templates/example'
@@ -280,6 +285,61 @@ describe('renderExample* — `kata init --with-example` source files (ADR-0015 /
   })
 })
 
+describe('renderModule* — `kata new <domain>` source files (Issue #102)', () => {
+  it('route imports service and schema, defines route with domain', () => {
+    const src = renderModuleRoute('ping')
+    expect(src).toContain("import { defineRoute } from '../../context'")
+    expect(src).toContain("import { pingAction } from './ping.service'")
+    expect(src).toContain("import { PingSchema } from './ping.schema'")
+    expect(src).toContain("path: '/ping'")
+    expect(src).toContain('output: PingSchema')
+    expect(src).toContain('handler: () => pingAction()')
+  })
+
+  it('service implements action', () => {
+    const src = renderModuleService('ping')
+    expect(src).toContain("import type { Ping } from './ping.schema'")
+    expect(src).toContain('export function pingAction(): Ping {')
+    expect(src).toContain("return { status: 'ok' }")
+  })
+
+  it('schema defines Zod object', () => {
+    const src = renderModuleSchema('ping')
+    expect(src).toContain("import { z } from 'zod'")
+    expect(src).toContain('export const PingSchema = z.object({')
+    expect(src).toContain('export type Ping = z.infer<typeof PingSchema>')
+  })
+
+  it('test imports and asserts service output', () => {
+    const src = renderModuleTest('ping')
+    expect(src).toContain("import { describe, expect, it } from 'vitest'")
+    expect(src).toContain("import { pingAction } from './ping.service'")
+    expect(src).toContain("describe('pingAction', () => {")
+    expect(src).toContain("expect(pingAction()).toEqual({ status: 'ok' })")
+  })
+
+  it('hurl defines end-to-end API test', () => {
+    const src = renderModuleHurl('ping')
+    expect(src).toContain('GET {{host}}/ping')
+    expect(src).toContain('HTTP 200')
+    expect(src).toContain('jsonpath "$.status" == "ok"')
+  })
+
+  it('every generated file ends in exactly one trailing newline', () => {
+    const sources = [
+      renderModuleRoute('ping'),
+      renderModuleService('ping'),
+      renderModuleSchema('ping'),
+      renderModuleTest('ping'),
+      renderModuleHurl('ping'),
+    ]
+    for (const src of sources) {
+      expect(src.endsWith('\n')).toBe(true)
+      expect(src.endsWith('\n\n')).toBe(false)
+    }
+  })
+})
+
 describe('determinism', () => {
   it('renders byte-identical output on repeated calls', () => {
     expect(renderClaudeSettings()).toBe(renderClaudeSettings())
@@ -295,5 +355,13 @@ describe('determinism', () => {
     expect(renderExampleHealthSchema()).toBe(renderExampleHealthSchema())
     expect(renderExamplePackageJson()).toBe(renderExamplePackageJson())
     expect(renderExampleTsconfig()).toBe(renderExampleTsconfig())
+  })
+
+  it('renders byte-identical module template files on repeated calls', () => {
+    expect(renderModuleRoute('ping')).toBe(renderModuleRoute('ping'))
+    expect(renderModuleService('ping')).toBe(renderModuleService('ping'))
+    expect(renderModuleSchema('ping')).toBe(renderModuleSchema('ping'))
+    expect(renderModuleTest('ping')).toBe(renderModuleTest('ping'))
+    expect(renderModuleHurl('ping')).toBe(renderModuleHurl('ping'))
   })
 })

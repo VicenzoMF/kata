@@ -77,3 +77,33 @@ export function renderExamplePackageJson(): string {
 export function renderExampleTsconfig(): string {
   return serialize(exampleTsconfig)
 }
+
+// ── `kata new <domain>` source files (Issue #102) ──────────
+
+import {
+  moduleHurlSource,
+  moduleRouteSource,
+  moduleSchemaSource,
+  moduleServiceSource,
+  moduleTestSource,
+} from './templates/new'
+
+export function renderModuleRoute(domain: string): string {
+  return moduleRouteSource(domain)
+}
+
+export function renderModuleService(domain: string): string {
+  return moduleServiceSource(domain)
+}
+
+export function renderModuleSchema(domain: string): string {
+  return moduleSchemaSource(domain)
+}
+
+export function renderModuleTest(domain: string): string {
+  return moduleTestSource(domain)
+}
+
+export function renderModuleHurl(domain: string): string {
+  return moduleHurlSource(domain)
+}

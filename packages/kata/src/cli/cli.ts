@@ -6,9 +6,11 @@
 import { runCli } from '@kata/verify'
 
 import { type InitResult, init } from './init'
+import { createModule, type NewResult } from './new'
 
 export type ParsedArgs = {
   command: string | undefined
+  domain: string | undefined
   cwd: string | undefined
   force: boolean
   help: boolean
@@ -25,6 +27,7 @@ export const HELP_TEXT = `kata — agent-driven web framework with the harness s
 
 Usage:
   kata init [options]    Scaffold harness config files into a project
+  kata new <domain>      Generate a new module skeleton under src/modules/<domain>/
   kata verify [path]     Run Kata's lint rules over a project (default path: cwd)
 
 Options:
@@ -53,6 +56,7 @@ Code PostToolUse hook JSON. Run \`kata verify --help\` for its flags.
 
 export function parseArgs(argv: readonly string[]): ParsedArgs {
   let command: string | undefined
+  let domain: string | undefined
   let cwd: string | undefined
   let force = false
   let help = false
@@ -75,10 +79,12 @@ export function parseArgs(argv: readonly string[]): ParsedArgs {
       cwd = arg.slice('--cwd='.length)
     } else if (command === undefined && !arg.startsWith('-')) {
       command = arg
+    } else if (command === 'new' && domain === undefined && !arg.startsWith('-')) {
+      domain = arg
     }
   }
 
-  return { command, cwd, force, help, withExample }
+  return { command, domain, cwd, force, help, withExample }
 }
 
 /** Human-readable summary of what `init` did. */
@@ -90,6 +96,28 @@ export function formatResult(result: InitResult): string {
   }
 
   const lines = [`kata init → ${result.cwd}`]
+  for (const file of result.files) {
+    lines.push(`  ${mark[file.status]}  ${file.path}`)
+  }
+
+  if (result.files.some((file) => file.status === 'skipped')) {
+    lines.push('')
+    lines.push('Some files already existed and were left untouched.')
+    lines.push('Re-run with --force to overwrite them.')
+  }
+
+  return `${lines.join('\n')}\n`
+}
+
+/** Human-readable summary of what `new` did. */
+export function formatNewResult(result: NewResult): string {
+  const mark: Record<NewResult['files'][number]['status'], string> = {
+    created: 'create',
+    overwritten: 'update',
+    skipped: '  skip',
+  }
+
+  const lines = [`kata new ${result.domain} → ${result.cwd}`]
   for (const file of result.files) {
     lines.push(`  ${mark[file.status]}  ${file.path}`)
   }
@@ -143,12 +171,24 @@ export async function run(
     }
   }
 
-  if (args.command !== 'init') {
+  if (args.command !== 'init' && args.command !== 'new') {
     return {
       code: 1,
       stdout: '',
       stderr: `kata: unknown command '${args.command}'\n\n${HELP_TEXT}`,
     }
+  }
+
+  if (args.command === 'new') {
+    if (!args.domain) {
+      return {
+        code: 1,
+        stdout: '',
+        stderr: `kata new: missing domain name\n\n${HELP_TEXT}`,
+      }
+    }
+    const result = await createModule({ domain: args.domain, cwd: args.cwd, force: args.force })
+    return { code: 0, stdout: formatNewResult(result), stderr: '' }
   }
 
   const result = await init({ cwd: args.cwd, force: args.force, withExample: args.withExample })
