@@ -22,6 +22,7 @@ const CLAUDE = '.claude/settings.json'
 const CODEX = '.codex/hooks.json'
 const AGENTS_MD = 'AGENTS.md'
 const CLAUDE_MD = 'CLAUDE.md'
+const LEFTHOOK_YML = 'lefthook.yml'
 
 const CONTEXT_TS = 'src/context.ts'
 const MAIN_TS = 'src/main.ts'
@@ -62,13 +63,15 @@ async function seed(relPath: string, content: string): Promise<void> {
 }
 
 describe('init()', () => {
-  it('creates both harness config files', async () => {
+  it('creates harness config files and lefthook', async () => {
     const result = await init({ cwd: dir })
 
     expect(statusOf(result, CLAUDE)).toBe('created')
     expect(statusOf(result, CODEX)).toBe('created')
+    expect(statusOf(result, LEFTHOOK_YML)).toBe('created')
     expect(await exists(join(dir, CLAUDE))).toBe(true)
     expect(await exists(join(dir, CODEX))).toBe(true)
+    expect(await exists(join(dir, LEFTHOOK_YML))).toBe(true)
   })
 
   it('creates the AGENTS.md / CLAUDE.md instruction pair (#31)', async () => {
@@ -87,6 +90,8 @@ describe('init()', () => {
     expect(await readFile(join(dir, CODEX), 'utf8')).toBe(renderCodexHooks())
     expect(await readFile(join(dir, AGENTS_MD), 'utf8')).toBe(renderAgentsMd())
     expect(await readFile(join(dir, CLAUDE_MD), 'utf8')).toBe(renderClaudeMd())
+    const { renderLefthookYml } = await import('./generators')
+    expect(await readFile(join(dir, LEFTHOOK_YML), 'utf8')).toBe(renderLefthookYml())
   })
 
   it('creates the .claude and .codex parent directories', async () => {

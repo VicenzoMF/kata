@@ -14,6 +14,7 @@ import {
   examplePackageJson,
   exampleTsconfig,
 } from './templates/example'
+import { lefthookYmlTemplate } from './templates/lefthook-yml'
 
 /** Serialise a template to its on-disk form: 2-space JSON + trailing newline,
  *  matching Biome's JSON formatter so the generated file is already canonical
@@ -40,6 +41,11 @@ export function renderAgentsMd(): string {
 /** Render `CLAUDE.md` — the Claude entrypoint that imports AGENTS.md (#31). */
 export function renderClaudeMd(): string {
   return claudeMd
+}
+
+/** Render `lefthook.yml` — the local feedback layer (#130). */
+export function renderLefthookYml(): string {
+  return lefthookYmlTemplate
 }
 
 // ── `kata init --with-example` source files (ADR-0015 / issue #101) ──────────
