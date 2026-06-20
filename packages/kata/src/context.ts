@@ -557,7 +557,7 @@ function finalizeResponse<R extends Registry>(
       method: route.method,
       path: route.path,
       status: response?.status ?? 404,
-      durationMs: Date.now() - startedAt,
+      durationMs: Math.round(performance.now() - startedAt),
     })
   }
   return response
@@ -583,7 +583,7 @@ function registerRoute<R extends Registry>(
   const chain = options.middlewares.length > 0 ? [...options.middlewares, ...route.use] : route.use
   register.call(app, route.path, async (c: import('hono').Context) => {
     const requestId = resolveRequestId(c.req.header(REQUEST_ID_HEADER))
-    const startedAt = Date.now()
+    const startedAt = performance.now()
     // 1. Run the effective middleware chain manually (Hono's native middleware
     //    would also work, but threading the kata context is cleaner this way).
     let i = 0
