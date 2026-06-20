@@ -18,6 +18,15 @@
             "command": "bash $CLAUDE_PROJECT_DIR/.claude/hooks/pre-tool-use.sh"
           }
         ]
+      },
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash $CLAUDE_PROJECT_DIR/.claude/hooks/bash-pre-tool-use.sh"
+          }
+        ]
       }
     ],
     "PostToolUse": [
