@@ -134,8 +134,31 @@ describe('request logging', () => {
     })
     await k.createApp({ modules: [{ route }] }).request('/boom')
 
-    expect(logger.calls[0]?.level).toBe('error')
-    expect(logger.calls[0]?.message).toContain('500')
+    const errors = logger.calls.filter((c) => c.level === 'error')
+    expect(errors).toHaveLength(2)
+    expect(errors[0]?.message).toBe('kata: unhandled error in GET /boom')
+    expect(errors[0]?.extra).toHaveProperty('err')
+    expect(errors[1]?.message).toContain('500')
+  })
+
+  it('logs a 5xx through the injected logger when an error escapes the pipeline', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    const logger = recordingLogger()
+    const k = defineContext({ logger: singleton<Logger>(logger) })
+    const app = k.createApp({ modules: [], requestLogging: false })
+
+    // Mount a raw Hono handler that throws, simulating something escaping the Kata pipeline
+    app.get('/raw', () => {
+      throw new Error('escaped')
+    })
+
+    const res = await app.request('/raw')
+    expect(res.status).toBe(500)
+
+    const errors = logger.calls.filter((c) => c.level === 'error')
+    expect(errors).toHaveLength(1)
+    expect(errors[0]?.message).toBe('kata: unhandled error escaped the route pipeline')
+    expect(errors[0]?.extra).toHaveProperty('err')
   })
 
   it('does not log when requestLogging is false', async () => {
@@ -174,8 +197,8 @@ describe('request logging', () => {
 // ────────────────────────────────────────────────────────────────────────────
 
 describe('output validation mode', () => {
-  function appWith(mode: OutputValidationMode, handlerReturn: unknown) {
-    const k = defineContext({})
+  function appWith(mode: OutputValidationMode, handlerReturn: unknown, logger?: Logger) {
+    const k = defineContext(logger ? { logger: singleton<Logger>(logger) } : {})
     const route = k.defineRoute({
       method: 'GET',
       path: '/out',
@@ -186,15 +209,23 @@ describe('output validation mode', () => {
     return k.createApp({ modules: [{ route }], outputValidation: mode, requestLogging: false })
   }
 
-  it('strict: a mismatch is logged and becomes a 500 envelope', async () => {
+  it('strict: a mismatch is logged through the injected logger and becomes a 500 envelope', async () => {
     const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
-    const res = await appWith('strict', { wrong: 'shape' }).request('/out')
+    const logger = recordingLogger()
+    const res = await appWith('strict', { wrong: 'shape' }, logger).request('/out')
+
     expect(res.status).toBe(500)
     expect(await res.json()).toEqual({
       error: 'internal_output_shape_mismatch',
       message: 'Response did not match the declared output schema',
     })
-    expect(errSpy).toHaveBeenCalled()
+
+    expect(errSpy).not.toHaveBeenCalled()
+
+    const errors = logger.calls.filter((c) => c.level === 'error')
+    expect(errors).toHaveLength(1)
+    expect(errors[0]?.message).toMatch(/kata: output schema mismatch in GET \/out \(status 200\)/)
+    expect(errors[0]?.extra).toHaveProperty('issues')
   })
 
   it('log: a mismatch is logged but the handler data passes through with 200', async () => {
