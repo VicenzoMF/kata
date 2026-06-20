@@ -18,5 +18,17 @@ pre-commit:
       # typecheck is project-wide (incremental TS); scoping to staged files is
       # unreliable since one file's change can break unrelated ones.
       run: pnpm typecheck
+    04-verify:
+      # kata verify is project-wide too: its rules are cross-file (a route in
+      # one module references context/middleware declared in another), so
+      # scoping to staged files would miss violations. Runs the verifier over
+      # every example app, mirroring the L3 CI gate so local and CI agree.
+      run: |
+        status=0
+        for app in examples/*/; do
+          [ -d "${app}src" ] || continue
+          pnpm exec kata verify "$app" || status=1
+        done
+        exit $status
 
 # Personal overrides go in lefthook-local.yml (gitignored).
