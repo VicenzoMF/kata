@@ -4,6 +4,7 @@ import type { Rule } from '../types'
 import { contextKeyNotRegistered } from './context-key-not-registered'
 import { inlineSchema } from './inline-schema'
 import { middlewareProvidesMismatch } from './middleware-provides-mismatch'
+import { noClass } from './no-class'
 import { noDecorator } from './no-decorator'
 import { noRawBoundaryCast } from './no-raw-boundary-cast'
 import { noRouteWithoutInputSchema } from './no-route-without-input-schema'
@@ -14,6 +15,7 @@ import { scopedSlotNotProvided } from './scoped-slot-not-provided'
 export { contextKeyNotRegistered } from './context-key-not-registered'
 export { inlineSchema } from './inline-schema'
 export { middlewareProvidesMismatch } from './middleware-provides-mismatch'
+export { noClass } from './no-class'
 export { noDecorator } from './no-decorator'
 export { noRawBoundaryCast } from './no-raw-boundary-cast'
 export { noRouteWithoutInputSchema } from './no-route-without-input-schema'
@@ -31,4 +33,5 @@ export const rules: readonly Rule[] = [
   noRawBoundaryCast,
   schemaFileNaming,
   noDecorator,
+  noClass,
 ]
