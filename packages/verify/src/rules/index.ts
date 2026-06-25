@@ -3,6 +3,7 @@ import type { Rule } from '../types'
 
 import { contextKeyNotRegistered } from './context-key-not-registered'
 import { inlineSchema } from './inline-schema'
+import { jwtAuthProvidesSlot } from './jwt-auth-provides-slot'
 import { middlewareProvidesMismatch } from './middleware-provides-mismatch'
 import { noAdhocErrorShape } from './no-adhoc-error-shape'
 import { noClass } from './no-class'
@@ -18,6 +19,7 @@ import { scopedSlotNotProvided } from './scoped-slot-not-provided'
 export {
   contextKeyNotRegistered,
   inlineSchema,
+  jwtAuthProvidesSlot,
   middlewareProvidesMismatch,
   noAdhocErrorShape,
   noClass,
@@ -36,6 +38,7 @@ export const rules: readonly Rule[] = [
   contextKeyNotRegistered,
   scopedSlotNotProvided,
   middlewareProvidesMismatch,
+  jwtAuthProvidesSlot,
   noAdhocErrorShape,
   noRawBoundaryCast,
   schemaFileNaming,
