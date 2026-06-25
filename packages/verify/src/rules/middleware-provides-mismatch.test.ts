@@ -141,6 +141,60 @@ describe('kata/middleware-provides-mismatch', () => {
     expect(issues[0]?.message).toContain('tenantId')
   })
 
+  it('warns (does not error) when the handler sets a key not listed in provides', () => {
+    const p = mwFile(`
+      export const auth = defineMiddleware({
+        provides: ['currentUser'] as const,
+        handler: async (c, next) => {
+          c.set('currentUser', await getUser(c))
+          c.set('tenantId', 1)
+          await next()
+        },
+      })
+    `)
+    const issues = middlewareProvidesMismatch.check(p)
+    expect(issues).toHaveLength(1)
+    expect(issues[0]?.rule).toBe('kata/middleware-provides-mismatch')
+    expect(issues[0]?.severity).toBe('warning')
+    expect(issues[0]?.message).toContain('tenantId')
+    expect(issues[0]?.message).toContain('not listed in its provides')
+    expect(issues[0]?.why).toContain('ADR-0004')
+    // Reported at the offending `c.set` call, not the provides entry.
+    expect(issues[0]?.line).toBe(6)
+  })
+
+  it('reports both a missing-set error and an over-provide warning together', () => {
+    const p = mwFile(`
+      export const auth = defineMiddleware({
+        provides: ['currentUser'] as const,
+        handler: async (c, next) => {
+          c.set('tenantId', 1)
+          await next()
+        },
+      })
+    `)
+    const issues = middlewareProvidesMismatch.check(p)
+    expect(issues).toHaveLength(2)
+    const error = issues.find((i) => i.severity === 'error')
+    const warning = issues.find((i) => i.severity === 'warning')
+    expect(error?.message).toContain('currentUser')
+    expect(warning?.message).toContain('tenantId')
+  })
+
+  it('does not warn when every set key is also provided', () => {
+    const p = mwFile(`
+      export const auth = defineMiddleware({
+        provides: ['currentUser', 'tenantId'] as const,
+        handler: async (c, next) => {
+          c.set('currentUser', await getUser(c))
+          c.set('tenantId', 1)
+          await next()
+        },
+      })
+    `)
+    expect(middlewareProvidesMismatch.check(p)).toEqual([])
+  })
+
   it('ignores files with no defineMiddleware call', () => {
     expect(middlewareProvidesMismatch.check(mwFile('export const x = 1'))).toEqual([])
   })

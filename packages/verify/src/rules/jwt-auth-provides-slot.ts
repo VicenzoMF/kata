@@ -34,6 +34,7 @@ import {
   parseSource,
   positionOf,
   propertyName,
+  providesOf,
   unwrapExpression,
 } from '../parse'
 import type { Issue, Rule } from '../types'
@@ -63,7 +64,7 @@ export const jwtAuthProvidesSlot: Rule = {
         const slot = jwtAuthSlot(handler)
         if (slot === undefined) return // dynamic / unreadable slot → can't prove
 
-        const provided = declaredProvides(config)
+        const provided = providesOf(node)
         if (provided === null) return // indeterminate `provides` shape → bail
         if (provided.has(slot)) return
 
@@ -91,25 +92,6 @@ function jwtAuthSlot(call: ts.CallExpression): string | undefined {
     return ts.isStringLiteralLike(value) ? value.text : undefined
   }
   return DEFAULT_SLOT
-}
-
-/**
- * The set of string-literal keys in the middleware's `provides` array. An empty
- * set when `provides` is absent (provides nothing). `null` (bail) when `provides`
- * is present but not an array literal — an indeterminate shape we can't prove.
- */
-function declaredProvides(config: ts.ObjectLiteralExpression): ReadonlySet<string> | null {
-  for (const member of config.properties) {
-    if (!ts.isPropertyAssignment(member) || propertyName(member) !== 'provides') continue
-    const value = unwrapExpression(member.initializer)
-    if (!ts.isArrayLiteralExpression(value)) return null
-    const keys = new Set<string>()
-    for (const element of value.elements) {
-      if (ts.isStringLiteralLike(element)) keys.add(element.text)
-    }
-    return keys
-  }
-  return new Set()
 }
 
 /** The unwrapped value expression of object-literal property `name`, or `undefined`. */
