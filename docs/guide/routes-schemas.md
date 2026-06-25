@@ -83,6 +83,14 @@ type InputSchemas = {
 | `body`    | the parsed JSON request body    |
 | `headers` | request headers (lowercased)    |
 
+::: warning Header keys are lowercased
+HTTP header names are case-insensitive, so Kata lowercases every incoming header
+key before validation. Your `headers` schema must therefore key its fields in
+lowercase — `z.object({ authorization: z.string() })`, never `Authorization`. A
+schema keyed on `Authorization` never matches, and the request fails validation
+with a `422`.
+:::
+
 Declaring a section does two jobs at once. At runtime, Kata validates that part of
 the request against your schema *before the handler runs*. At compile time, it types
 the matching field on `c.input` — so inside the handler `c.input.params.id` is a

@@ -14,11 +14,44 @@ import type { Registry, ResolvedValue, Scoped, ScopedKeys, Singleton } from './t
 // Slot constructors (top-level — used to build the registry)
 // ────────────────────────────────────────────────────────────────────────────
 
+/**
+ * Declare a **singleton** DI slot (ADR-0004): one value that lives for the whole
+ * process lifetime — a db pool, logger, cache, mailer. The `value` is built once,
+ * here, and every request reads that same instance via `c.get(key)`.
+ *
+ * Pass the result to {@link defineContext} under a key; that key then resolves
+ * (typed as `T`) from any middleware or route handler:
+ *
+ * ```ts
+ * const context = defineContext({
+ *   db: singleton(makeDb(env)), // c.get('db') → Db, always the same instance
+ * })
+ * ```
+ *
+ * Contrast with {@link scoped}, whose value is created per request and must be
+ * populated by a providing middleware before it can be read.
+ */
 export function singleton<T>(value: T): Singleton<T> {
   // kata-allow: hono-boundary
   return { __value: value, __kind: 'singleton' } as unknown as Singleton<T>
 }
 
+/**
+ * Declare a **scoped** DI slot (ADR-0004): a value that is distinct per HTTP
+ * request — the current user, tenant id, an active transaction. Unlike
+ * {@link singleton}, no value is supplied here; the slot is declared empty, and a
+ * middleware listed in the route's `use:` chain must fill it via `c.set(key, …)`
+ * before any handler reads it with `c.get(key)`.
+ *
+ * ```ts
+ * const context = defineContext({
+ *   user: scoped<User>(), // set per request by an auth middleware that provides 'user'
+ * })
+ * ```
+ *
+ * Reading a scoped slot whose providing middleware did not run throws at runtime;
+ * the `kata/scoped-slot-not-provided` lint rule catches it statically (ADR-0004).
+ */
 export function scoped<T>(): Scoped<T> {
   // kata-allow: hono-boundary
   return { __kind: 'scoped' } as unknown as Scoped<T>
@@ -181,6 +214,29 @@ export type AppConfig<
 // defineContext — returns the typed factory
 // ────────────────────────────────────────────────────────────────────────────
 
+/**
+ * Define the application's DI registry and return the typed factory bound to it
+ * (ADR-0004). This is the single entry point for wiring a Kata app: every member
+ * of the returned object is typed against this exact registry `R`, so the harness
+ * can verify `c.get` / `c.set` keys against it.
+ *
+ * `registry` maps keys to slots built with {@link singleton} (process-lifetime
+ * values) and {@link scoped} (per-request values). The returned factory exposes:
+ *
+ * - `registry` — the passed registry, re-exposed for reference.
+ * - `defineMiddleware` — declare a middleware; its `provides` keys and the slots
+ *   its handler reads/writes via `c.get` / `c.set` are checked against `R`.
+ * - `defineRoute` — declare a route with `input` / `output` schemas; its handler's
+ *   `c.get(key)` only compiles for keys present in `R`.
+ * - `createApp` — assemble the declared modules into a runnable app.
+ *
+ * ```ts
+ * const { defineRoute, defineMiddleware, createApp } = defineContext({
+ *   db: singleton(makeDb(env)),
+ *   user: scoped<User>(),
+ * })
+ * ```
+ */
 export function defineContext<const R extends Registry>(registry: R) {
   function defineMiddleware<const P extends readonly ScopedKeys<R>[]>(config: {
     provides: P
@@ -410,6 +466,9 @@ async function readInputs<I extends InputSchemas>(
     }
   }
   if (input.headers) {
+    // Header keys are normalised to lowercase before validation: HTTP header
+    // names are case-insensitive, so an `input.headers` Zod schema must key its
+    // fields in lowercase (e.g. `authorization`, not `Authorization`).
     const all: Record<string, string> = {}
     for (const [k, v] of Object.entries(c.req.header())) all[k.toLowerCase()] = v
     raw['headers'] = all

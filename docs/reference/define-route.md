@@ -88,6 +88,10 @@ Each key maps to a part of the request, read and validated before the handler:
 | `body`    | parsed JSON request body              |
 | `headers` | request headers, keys lowercased      |
 
+Header keys are normalised to lowercase before validation (HTTP header names are
+case-insensitive), so a `headers` schema must use lowercase keys —
+`z.object({ authorization: z.string() })`, not `Authorization`.
+
 Declare only the sections the route reads. A route that reads none still
 declares `input` explicitly as `{}` — the contract for "this route takes no
 input".
