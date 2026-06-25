@@ -110,3 +110,60 @@ export function firstParameterName(fn: FunctionLike): string | undefined {
   if (!first || !ts.isIdentifier(first.name)) return undefined
   return first.name.text
 }
+
+/**
+ * The `provides` array-literal of a `defineMiddleware` config object literal:
+ * `undefined` when there is no `provides` property, `null` when `provides` exists
+ * but is not an array literal (an indeterminate shape), otherwise the literal.
+ * Shared core of {@link declaredProvides} and {@link providesOf}.
+ */
+function providesArrayLiteral(
+  config: ts.ObjectLiteralExpression,
+): ts.ArrayLiteralExpression | null | undefined {
+  for (const member of config.properties) {
+    if (!ts.isPropertyAssignment(member) || propertyName(member) !== 'provides') continue
+    const value = unwrapExpression(member.initializer)
+    return ts.isArrayLiteralExpression(value) ? value : null
+  }
+  return undefined
+}
+
+/**
+ * The string-literal keys in a config's `provides`, each paired with its node so
+ * a rule can report the exact offending entry. Non-literal elements (a spread or
+ * computed key) are skipped rather than fatal; an absent or non-array `provides`
+ * yields `[]` (nothing provable). Contrast {@link providesOf}, which collapses
+ * any indeterminacy to `null`.
+ */
+export function declaredProvides(
+  config: ts.ObjectLiteralExpression,
+): { key: string; node: ts.Node }[] {
+  const array = providesArrayLiteral(config)
+  if (!array) return [] // absent (undefined) or non-array (null) → nothing provable
+  const out: { key: string; node: ts.Node }[] = []
+  for (const element of array.elements) {
+    if (ts.isStringLiteralLike(element)) out.push({ key: element.text, node: element })
+  }
+  return out
+}
+
+/**
+ * A middleware's `provides` as a flat key set, or `null` when it cannot be fully
+ * enumerated — a spread config, a non-array `provides`, or a non-literal element
+ * (a spread or computed key) any of which could inject unknown keys. An absent
+ * `provides` is the determinate empty set. Contrast {@link declaredProvides},
+ * which keeps each key's node and tolerates non-literal elements.
+ */
+export function providesOf(call: ts.CallExpression): ReadonlySet<string> | null {
+  const config = call.arguments[0]
+  if (!config || !ts.isObjectLiteralExpression(config) || hasSpread(config)) return null
+  const array = providesArrayLiteral(config)
+  if (array === undefined) return new Set() // no `provides` property → provides nothing
+  if (array === null) return null // present but not an array literal → indeterminate
+  const keys = new Set<string>()
+  for (const element of array.elements) {
+    if (!ts.isStringLiteralLike(element)) return null // spread / computed → can't enumerate
+    keys.add(element.text)
+  }
+  return keys
+}
