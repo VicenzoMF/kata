@@ -11,6 +11,7 @@ import { noRawBoundaryCast } from './no-raw-boundary-cast'
 import { noRouteWithoutInputSchema } from './no-route-without-input-schema'
 import { noRouteWithoutOutputSchema } from './no-route-without-output-schema'
 import { schemaFileNaming } from './schema-file-naming'
+import { scopedReadOutsideRequest } from './scoped-read-outside-request'
 import { scopedSlotNotProvided } from './scoped-slot-not-provided'
 
 // Re-export the imported bindings for direct consumers; the same bindings feed
@@ -26,6 +27,7 @@ export {
   noRouteWithoutInputSchema,
   noRouteWithoutOutputSchema,
   schemaFileNaming,
+  scopedReadOutsideRequest,
   scopedSlotNotProvided,
 }
 
@@ -35,6 +37,7 @@ export const rules: readonly Rule[] = [
   inlineSchema,
   contextKeyNotRegistered,
   scopedSlotNotProvided,
+  scopedReadOutsideRequest,
   middlewareProvidesMismatch,
   noAdhocErrorShape,
   noRawBoundaryCast,

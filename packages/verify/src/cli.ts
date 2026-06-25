@@ -33,6 +33,7 @@ Rules:
   kata/no-route-without-input-schema    every defineRoute declares input          (ADR-0003)
   kata/inline-schema                    Zod schemas live in *.schema.ts           (ADR-0005)
   kata/scoped-slot-not-provided         scoped c.get has a providing middleware   (ADR-0004)
+  kata/scoped-read-outside-request      scoped c.get only inside a request handler (ADR-0004)
   kata/middleware-provides-mismatch     provides[] matches the handler's c.set    (ADR-0004)
   kata/context-key-not-registered       c.get('key') is a registered context key  (ADR-0004)
 `
