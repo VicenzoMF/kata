@@ -98,6 +98,29 @@ describe('bodyLimit()', () => {
     expect(res.status).toBe(413)
     expect(await res.json()).toEqual({ error: 'too_big' })
   })
+
+  // Pin the inclusive boundary: the limit is "reject when size > maxSize", so a
+  // body of *exactly* maxSize passes and one byte more is rejected. A `>` -> `>=`
+  // off-by-one would flip the first case to 413 and fail this pair.
+  const WRAPPER_BYTES = JSON.stringify({ msg: '' }).length // bytes of `{"msg":""}`
+  const bodyOfBytes = (n: number) => JSON.stringify({ msg: 'x'.repeat(n - WRAPPER_BYTES) })
+
+  it('accepts a body of exactly maxSize bytes', async () => {
+    const maxSize = 64
+    const body = bodyOfBytes(maxSize)
+    expect(new TextEncoder().encode(body).byteLength).toBe(maxSize)
+    const res = await post([bodyLimit({ maxSize })], body)
+    expect(res.status).toBe(200)
+    expect(await res.json()).toEqual(JSON.parse(body))
+  })
+
+  it('rejects a body one byte over maxSize with 413', async () => {
+    const maxSize = 64
+    const body = bodyOfBytes(maxSize + 1)
+    expect(new TextEncoder().encode(body).byteLength).toBe(maxSize + 1)
+    const res = await post([bodyLimit({ maxSize })], body)
+    expect(res.status).toBe(413)
+  })
 })
 
 describe('composition + opt-in defaults', () => {

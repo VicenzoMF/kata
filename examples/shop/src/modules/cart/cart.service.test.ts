@@ -49,4 +49,23 @@ describe('cart.service', () => {
     expect(cart.lines.map((line) => line.productId)).toEqual(['kbd'])
     expect(cart.totalCents).toBe(12000)
   })
+
+  it('removeItem is an idempotent no-op for a product not in the cart', () => {
+    // `removeItem` is a `.filter` (cart.service.ts): removing a product the cart
+    // never held returns it unchanged rather than erroring. There is no 404 path —
+    // surfacing one would be a service-signature design change, not a bug here.
+    const store = createStore(CATALOG)
+    addItem(store, 'u1', { productId: 'mouse', qty: 2 })
+
+    const cart = removeItem(store, 'u1', 'kbd')
+    expect(cart.lines).toEqual([
+      { productId: 'mouse', name: 'Mouse', unitPriceCents: 4500, qty: 2 },
+    ])
+    expect(cart.totalCents).toBe(9000)
+    // the persisted cart is untouched too — nothing was filtered out
+    expect(readCart(store, 'u1')).toEqual(cart)
+
+    // and removing from an already-empty cart is likewise a no-op
+    expect(removeItem(store, 'u2', 'mouse')).toEqual({ userId: 'u2', lines: [], totalCents: 0 })
+  })
 })
