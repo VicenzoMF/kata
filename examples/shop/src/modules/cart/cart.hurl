@@ -74,10 +74,28 @@ HTTP 422
 jsonpath "$.error" == "validation_failed"
 jsonpath "$.issues.body[0].path" == "qty"
 
-# 7. DELETE /cart/items/prod-mouse — removes the line.
+# 7. POST /cart/items — add a second, distinct line. With only one line a delete
+#    can't tell "removed that line" from "wiped the whole cart"; two lines makes
+#    the next step prove it removed exactly one.
+POST http://localhost:3000/cart/items
+Content-Type: application/json
+X-User-Id: u-cart
+{
+  "productId": "prod-keyboard",
+  "qty": 1
+}
+HTTP 200
+[Asserts]
+jsonpath "$.lines" count == 2
+jsonpath "$.totalCents" == 25500
+
+# 8. DELETE /cart/items/prod-mouse — removes only the mouse line; the keyboard
+#    line must survive (count == 1, not a wiped cart) with the correct remainder.
 DELETE http://localhost:3000/cart/items/prod-mouse
 X-User-Id: u-cart
 HTTP 200
 [Asserts]
-jsonpath "$.lines" count == 0
-jsonpath "$.totalCents" == 0
+jsonpath "$.lines" count == 1
+jsonpath "$.lines[0].productId" == "prod-keyboard"
+jsonpath "$.lines[0].qty" == 1
+jsonpath "$.totalCents" == 12000

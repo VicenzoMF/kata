@@ -75,6 +75,27 @@ describe('orders.service checkout', () => {
     expect(getOrder(store, 'owner', result.order.id)?.id).toBe(result.order.id)
     expect(getOrder(store, 'intruder', result.order.id)).toBeUndefined()
   })
+
+  it('listOrders is tenant-isolated: a user sees only their own orders', () => {
+    const store = createStore(CATALOG)
+
+    addItem(store, 'a', { productId: 'mouse', qty: 1 })
+    const txA = store.begin()
+    const resultA = checkout(txA, 'a')
+    if (!resultA.ok) throw new Error('expected ok')
+    txA.commit()
+
+    addItem(store, 'b', { productId: 'kbd', qty: 1 })
+    const txB = store.begin()
+    const resultB = checkout(txB, 'b')
+    if (!resultB.ok) throw new Error('expected ok')
+    txB.commit()
+
+    const aIds = listOrders(store, 'a').map((o) => o.id)
+    expect(aIds).toEqual([resultA.order.id])
+    expect(aIds).not.toContain(resultB.order.id)
+    expect(listOrders(store, 'b').map((o) => o.id)).toEqual([resultB.order.id])
+  })
 })
 
 describe('describeCheckoutFailure', () => {
