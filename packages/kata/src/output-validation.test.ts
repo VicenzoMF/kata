@@ -1,6 +1,10 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { resolveOutputValidationMode } from './output-validation'
+
+afterEach(() => {
+  vi.unstubAllGlobals()
+})
 
 describe('resolveOutputValidationMode()', () => {
   it('prefers an explicit configured mode over everything else', () => {
@@ -36,5 +40,13 @@ describe('resolveOutputValidationMode()', () => {
 
   it('defaults to strict when the environment is empty', () => {
     expect(resolveOutputValidationMode(undefined, {})).toBe('strict')
+  })
+
+  it('falls back to strict when globalThis.process is undefined (edge runtime)', () => {
+    // Omitting the `env` arg exercises the internal `readEnv()`. On edge
+    // runtimes (Workers/Deno) `process` may be absent — reading the mode must
+    // not assume it exists, and defaults to strict.
+    vi.stubGlobal('process', undefined)
+    expect(resolveOutputValidationMode(undefined)).toBe('strict')
   })
 })

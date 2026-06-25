@@ -183,3 +183,110 @@ describe('global error boundary (#62)', () => {
     expect(loggedTheRealError).toBe(true)
   })
 })
+
+describe('scoped slot access errors', () => {
+  afterEach(() => {
+    vi.restoreAllMocks()
+  })
+
+  // The thrown error is funnelled into the 5xx envelope and the original is
+  // logged server-side; assert on the logged Error to check the thrown message.
+  const thrownError = (errSpy: { mock: { calls: unknown[][] } }): Error | undefined =>
+    errSpy.mock.calls.flat().find((arg): arg is Error => arg instanceof Error)
+
+  it('throws "read before being set" when a route reads a scoped slot never provided', async () => {
+    const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const k = defineContext({ user: scoped<{ id: string }>() })
+    const route = k.defineRoute({
+      method: 'GET',
+      path: '/early-read',
+      input: {},
+      output: z.object({ id: z.string() }),
+      // No middleware provides `user`, so the slot is read before it is set.
+      handler: (c) => ({ id: c.get('user').id }),
+    })
+    const app = k.createApp({ modules: [{ route }] })
+    const res = await app.request('/early-read')
+
+    expect(res.status).toBe(500)
+    expect(thrownError(errSpy)?.message).toContain('read before being set')
+  })
+
+  it('throws "read before being set" when a middleware reads a scoped slot never provided', async () => {
+    const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const k = defineContext({ user: scoped<{ id: string }>() })
+    const readEarly = k.defineMiddleware({
+      provides: [],
+      handler: async (c, next) => {
+        c.get('user') // reads the scoped slot before any middleware sets it
+        await next()
+      },
+    })
+    const route = k.defineRoute({
+      method: 'GET',
+      path: '/early-read-mw',
+      use: [readEarly],
+      input: {},
+      output: z.object({ ok: z.boolean() }),
+      handler: () => ({ ok: true }),
+    })
+    const app = k.createApp({ modules: [{ route }] })
+    const res = await app.request('/early-read-mw')
+
+    expect(res.status).toBe(500)
+    expect(thrownError(errSpy)?.message).toContain('read before being set')
+  })
+
+  it('throws "not a scoped slot" when c.set() targets a singleton key', async () => {
+    const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const k = defineContext({ counter: singleton(0), user: scoped<{ id: string }>() })
+    const badSet = k.defineMiddleware({
+      provides: [],
+      handler: async (c, next) => {
+        // `counter` is a singleton, not a scoped slot — set() must reject it at
+        // runtime. The type system already forbids it (set() is keyed to
+        // ScopedKeys), so the directive both proves and suppresses that.
+        // @ts-expect-error — exercising the runtime guard the types prevent.
+        c.set('counter', 99)
+        await next()
+      },
+    })
+    const route = k.defineRoute({
+      method: 'GET',
+      path: '/bad-set',
+      use: [badSet],
+      input: {},
+      output: z.object({ ok: z.boolean() }),
+      handler: () => ({ ok: true }),
+    })
+    const app = k.createApp({ modules: [{ route }] })
+    const res = await app.request('/bad-set')
+
+    expect(res.status).toBe(500)
+    expect(thrownError(errSpy)?.message).toContain('not a scoped slot')
+  })
+})
+
+describe('finalizeResponse with an immutable Response', () => {
+  it('skips the x-request-id echo instead of throwing when headers are immutable', async () => {
+    const k = defineContext({})
+    const route = k.defineRoute({
+      method: 'GET',
+      path: '/frozen',
+      input: {},
+      output: z.object({ ok: z.boolean() }),
+      // `Response.redirect()` yields immutable headers — like a Response handed
+      // back straight from `fetch()`. finalizeResponse must not throw trying to
+      // set the correlation-id header on it.
+      handler: () => Response.redirect('https://example.test/elsewhere', 302),
+    })
+    const app = k.createApp({ modules: [{ route }] })
+    const res = await app.request('/frozen')
+
+    // No throw into the 5xx funnel: the original redirect passes through, and
+    // the header was skipped (immutable) rather than set.
+    expect(res.status).toBe(302)
+    expect(res.headers.get('x-request-id')).toBeNull()
+    expect(res.headers.get('location')).toBe('https://example.test/elsewhere')
+  })
+})
