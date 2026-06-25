@@ -11,8 +11,12 @@
  * Detection: AST-match each `defineMiddleware({ ... })` call, read the literal
  * keys in `provides` (unwrapping a trailing `as const`), then scan the handler
  * for `<ctx>.set('<key>', ...)` calls — where `<ctx>` is the handler's first
- * parameter, resolved per-middleware rather than assumed to be `c`. Any provided
- * key with no matching set is flagged.
+ * parameter, resolved per-middleware rather than assumed to be `c`. Two passes:
+ *   • forward — any *declared* key with no matching set is a broken contract,
+ *     flagged as an **error** (a route trusting it throws at runtime);
+ *   • reverse — any *set* literal key absent from `provides` is over-providing,
+ *     flagged as a **warning** (an extra populated slot is benign and another
+ *     middleware may legitimately declare it, so this never fails the build).
  *
  * Bails (no issues) — to keep the false-positive rate at zero — when the config
  * is spread, `provides` is not an array literal, the handler is missing or its
@@ -22,6 +26,7 @@
 import ts from 'typescript'
 
 import {
+  declaredProvides,
   type FunctionLike,
   firstParameterName,
   forEachDescendant,
@@ -30,8 +35,6 @@ import {
   isCalleeNamed,
   parseSource,
   positionOf,
-  propertyName,
-  unwrapExpression,
 } from '../parse'
 import type { Issue, Rule } from '../types'
 
@@ -62,10 +65,22 @@ export const middlewareProvidesMismatch: Rule = {
         const sets = collectSetKeys(handler, ctx)
         if (sets.dynamic) return // a dynamic key could be any provided slot → bail
 
+        const declaredKeys = new Set(declared.map(({ key }) => key))
+
+        // Forward pass: every declared key must be set (a broken contract → error).
         for (const { key, node: keyNode } of declared) {
           if (sets.keys.has(key)) continue
           const { line, column } = positionOf(sf, keyNode)
           issues.push(makeIssue(file.relPath, line, column, key))
+        }
+
+        // Reverse pass: a key the handler sets but never declares in `provides`.
+        // Benign (an extra populated slot harms nothing, and another middleware
+        // may legitimately declare it), so emit a warning, not an error.
+        for (const [key, setNode] of sets.keys) {
+          if (declaredKeys.has(key)) continue
+          const { line, column } = positionOf(sf, setNode)
+          issues.push(makeOverProvidesIssue(file.relPath, line, column, key))
         }
       })
     }
@@ -73,27 +88,16 @@ export const middlewareProvidesMismatch: Rule = {
   },
 }
 
-/** The string-literal keys in `provides`, each with its node (for precise reporting). */
-function declaredProvides(config: ts.ObjectLiteralExpression): { key: string; node: ts.Node }[] {
-  for (const member of config.properties) {
-    if (!ts.isPropertyAssignment(member) || propertyName(member) !== 'provides') continue
-    const value = unwrapExpression(member.initializer)
-    if (!ts.isArrayLiteralExpression(value)) return [] // indeterminate shape → nothing provable
-    const out: { key: string; node: ts.Node }[] = []
-    for (const element of value.elements) {
-      if (ts.isStringLiteralLike(element)) out.push({ key: element.text, node: element })
-    }
-    return out
-  }
-  return []
-}
-
-/** Collect `<ctx>.set('key', ...)` keys in the handler, flagging any dynamic (non-literal) key. */
+/**
+ * Collect `<ctx>.set('key', ...)` calls in the handler, mapping each literal key
+ * to the node of its (first) set for precise reporting, and flagging any dynamic
+ * (non-literal) key.
+ */
 function collectSetKeys(
   handler: FunctionLike,
   ctx: string,
-): { keys: ReadonlySet<string>; dynamic: boolean } {
-  const keys = new Set<string>()
+): { keys: ReadonlyMap<string, ts.Node>; dynamic: boolean } {
+  const keys = new Map<string, ts.Node>()
   let dynamic = false
   forEachDescendant(handler, (node) => {
     if (!ts.isCallExpression(node)) return
@@ -103,8 +107,9 @@ function collectSetKeys(
 
     const arg = node.arguments[0]
     if (!arg) return
-    if (ts.isStringLiteralLike(arg)) keys.add(arg.text)
-    else dynamic = true
+    if (ts.isStringLiteralLike(arg)) {
+      if (!keys.has(arg.text)) keys.set(arg.text, arg)
+    } else dynamic = true
   })
   return { keys, dynamic }
 }
@@ -134,6 +139,47 @@ function makeIssue(file: string, line: number, column: number, key: string): Iss
         "  provides: ['currentUser'] as const,",
         '  handler: async (c, next) => {',
         "    c.set('currentUser', await getUserFromJWT(c))",
+        '    await next()',
+        '  },',
+        '})',
+      ].join('\n'),
+    },
+  }
+}
+
+/**
+ * The complement of {@link makeIssue}: the handler sets a slot the middleware
+ * never lists in `provides`. Surfaced as a **warning** — an extra populated slot
+ * is benign, and another middleware may legitimately declare it — so it nudges
+ * the contract back into alignment without failing the build on a false positive.
+ */
+function makeOverProvidesIssue(file: string, line: number, column: number, key: string): Issue {
+  return {
+    rule: NAME,
+    severity: 'warning',
+    file,
+    line,
+    column,
+    message: `middleware handler calls c.set('${key}', ...) but '${key}' is not listed in its provides`,
+    why: "ADR-0004 (Pattern C): a middleware's `provides` is the contract downstream routes depend on — `kata/scoped-slot-not-provided` trusts it to prove a scoped read is satisfied. A slot the handler sets but omits from `provides` is invisible to that proof, so a route relying on it is flagged as unprovided even though it is populated at runtime. (Benign — another middleware may declare the slot — hence a warning.)",
+    fix: `Add '${key}' to this middleware's \`provides\` array so the slot it populates is part of its declared contract, or drop the \`c.set('${key}', ...)\` if the slot is unintended.`,
+    example: {
+      bad: [
+        'defineMiddleware({',
+        "  provides: ['currentUser'] as const,",
+        '  handler: async (c, next) => {',
+        "    c.set('currentUser', await getUserFromJWT(c))",
+        "    c.set('tenantId', c.get('currentUser').tenantId) // sets tenantId, never declared",
+        '    await next()',
+        '  },',
+        '})',
+      ].join('\n'),
+      good: [
+        'defineMiddleware({',
+        "  provides: ['currentUser', 'tenantId'] as const,",
+        '  handler: async (c, next) => {',
+        "    c.set('currentUser', await getUserFromJWT(c))",
+        "    c.set('tenantId', c.get('currentUser').tenantId)",
         '    await next()',
         '  },',
         '})',

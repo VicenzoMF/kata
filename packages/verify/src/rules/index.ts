@@ -13,17 +13,21 @@ import { noRouteWithoutOutputSchema } from './no-route-without-output-schema'
 import { schemaFileNaming } from './schema-file-naming'
 import { scopedSlotNotProvided } from './scoped-slot-not-provided'
 
-export { contextKeyNotRegistered } from './context-key-not-registered'
-export { inlineSchema } from './inline-schema'
-export { middlewareProvidesMismatch } from './middleware-provides-mismatch'
-export { noAdhocErrorShape } from './no-adhoc-error-shape'
-export { noClass } from './no-class'
-export { noDecorator } from './no-decorator'
-export { noRawBoundaryCast } from './no-raw-boundary-cast'
-export { noRouteWithoutInputSchema } from './no-route-without-input-schema'
-export { noRouteWithoutOutputSchema } from './no-route-without-output-schema'
-export { schemaFileNaming } from './schema-file-naming'
-export { scopedSlotNotProvided } from './scoped-slot-not-provided'
+// Re-export the imported bindings for direct consumers; the same bindings feed
+// the ordered `rules` array below.
+export {
+  contextKeyNotRegistered,
+  inlineSchema,
+  middlewareProvidesMismatch,
+  noAdhocErrorShape,
+  noClass,
+  noDecorator,
+  noRawBoundaryCast,
+  noRouteWithoutInputSchema,
+  noRouteWithoutOutputSchema,
+  schemaFileNaming,
+  scopedSlotNotProvided,
+}
 
 export const rules: readonly Rule[] = [
   noRouteWithoutOutputSchema,

@@ -37,6 +37,7 @@ import {
   parseSource,
   positionOf,
   propertyName,
+  providesOf,
   unwrapExpression,
 } from '../parse'
 import type { Issue, Rule, SourceFile } from '../types'
@@ -113,24 +114,6 @@ function bindingName(call: ts.CallExpression): string | undefined {
     return parent.name.text
   }
   return undefined
-}
-
-/** A middleware's provides: the literal key set, or `null` when it can't be fully enumerated. */
-function providesOf(call: ts.CallExpression): Provides {
-  const config = call.arguments[0]
-  if (!config || !ts.isObjectLiteralExpression(config) || hasSpread(config)) return null
-  for (const member of config.properties) {
-    if (!ts.isPropertyAssignment(member) || propertyName(member) !== 'provides') continue
-    const value = unwrapExpression(member.initializer)
-    if (!ts.isArrayLiteralExpression(value)) return null
-    const keys = new Set<string>()
-    for (const element of value.elements) {
-      if (!ts.isStringLiteralLike(element)) return null // spread / computed → can't enumerate
-      keys.add(element.text)
-    }
-    return keys
-  }
-  return new Set() // no `provides` property → provides nothing (determinate)
 }
 
 /** Merge a middleware's provides into the map; collisions union, indeterminate wins. */
