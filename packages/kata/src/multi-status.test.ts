@@ -1,10 +1,16 @@
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { z } from 'zod'
 
 import { defineContext } from './context'
 import { ErrorBodySchema } from './errors'
 import type { OutputValidationMode } from './output-validation'
 import type { ModulesToHonoSchema } from './rpc'
+
+// A test that throws before its tail cleanup would otherwise leak the
+// `console.error` spy into the next test; restore after every test instead.
+afterEach(() => {
+  vi.restoreAllMocks()
+})
 
 const UserSchema = z.object({ id: z.string(), name: z.string() })
 const CreatedSchema = z.object({ id: z.string() })
@@ -43,7 +49,6 @@ describe('multi-status output: plain return is the 200 body', () => {
       message: 'Response did not match the declared output schema',
     })
     expect(errSpy).toHaveBeenCalled()
-    vi.restoreAllMocks()
   })
 
   it('log: a plain mismatch is logged but the data passes through with 200', async () => {
@@ -52,7 +57,6 @@ describe('multi-status output: plain return is the 200 body', () => {
     expect(res.status).toBe(200)
     expect(await res.json()).toEqual({ id: 'a' })
     expect(errSpy).toHaveBeenCalled()
-    vi.restoreAllMocks()
   })
 })
 
@@ -123,7 +127,6 @@ describe('multi-status output: a Response is validated against output[status]', 
       message: 'Response did not match the declared output schema',
     })
     expect(errSpy).toHaveBeenCalled()
-    vi.restoreAllMocks()
   })
 
   it('log: a declared-status Response mismatch is logged but the original is served', async () => {
@@ -146,7 +149,6 @@ describe('multi-status output: a Response is validated against output[status]', 
     expect(res.status).toBe(201)
     expect(await res.json()).toEqual({ wrong: true })
     expect(errSpy).toHaveBeenCalled()
-    vi.restoreAllMocks()
   })
 
   it('off: the map form skips Response validation entirely', async () => {
@@ -169,7 +171,6 @@ describe('multi-status output: a Response is validated against output[status]', 
     expect(res.status).toBe(201)
     expect(await res.json()).toEqual({ wrong: true })
     expect(errSpy).not.toHaveBeenCalled()
-    vi.restoreAllMocks()
   })
 
   it('passes an undeclared status through unvalidated, even in strict', async () => {
@@ -236,7 +237,6 @@ describe('multi-status output: single-schema back-compat', () => {
     expect(res.status).toBe(201)
     expect(await res.json()).toEqual({ totally: 'wrong' })
     expect(errSpy).not.toHaveBeenCalled()
-    vi.restoreAllMocks()
   })
 
   it('a plain return is still validated against the single schema (strict 500 on mismatch)', async () => {
@@ -258,7 +258,6 @@ describe('multi-status output: single-schema back-compat', () => {
 
     expect(res.status).toBe(500)
     expect(errSpy).toHaveBeenCalled()
-    vi.restoreAllMocks()
   })
 })
 
