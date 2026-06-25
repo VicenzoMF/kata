@@ -152,6 +152,22 @@ describe('gracefulShutdown()', () => {
     expect(onClose).not.toHaveBeenCalled()
   })
 
+  it('force-exits non-zero when the drain reports a close error', async () => {
+    const exits = mockExit()
+    const srv = fakeServer()
+    const onClose = vi.fn()
+    const trigger = arm(srv.server, { onClose, signals: ['SIGUSR2'], timeoutMs: 10_000 })
+
+    const done = trigger()
+    // server.close(cb) reports an error (e.g. the server was never listening) →
+    // closeServer rejects, so the drain fails before onClose can run.
+    srv.finishDrain(new Error('server was not listening'))
+    await done
+
+    expect(onClose).not.toHaveBeenCalled()
+    expect(exits).toEqual([1])
+  })
+
   it('force-exits non-zero when onClose rejects', async () => {
     const exits = mockExit()
     const srv = fakeServer()

@@ -672,6 +672,11 @@ function registerRoute<R extends Registry>(
   const register = (app as unknown as Record<string, (path: string, ...h: unknown[]) => unknown>)[
     method
   ]
+  // Defensive / dead code (issue #176): `route.method` is typed `HttpMethod` — a
+  // closed union whose lowercased members (get/post/put/patch/delete) are all real
+  // Hono router methods — so `register` is always defined when reached through the
+  // typed `defineRoute` API. The guard only fires for an untyped/raw construction;
+  // it is unreachable through the public surface, hence left untested by design.
   if (!register) throw new Error(`kata: Hono does not support method '${route.method}'`)
   // Effective chain (ADR-0012): app-level middleware runs before the route's own
   // `use:`, each in declared order, the global chain outermost. Built once here at
