@@ -11,7 +11,7 @@ const app = createApp({ modules: [products, cart, orders] })
 const port = Number(process.env['PORT'] ?? 3000)
 
 const server = serve({ fetch: app.fetch, port }, (info) => {
-  k.registry.logger.__value.info(`shop listening on http://localhost:${info.port}`)
+  k.resolve('logger').info(`shop listening on http://localhost:${info.port}`)
 })
 
 // Graceful shutdown (ADR-0014). On SIGTERM (orchestrator stop) or SIGINT
@@ -21,7 +21,7 @@ const server = serve({ fetch: app.fetch, port }, (info) => {
 // drain ordering, and a force-exit timer; teardown order stays the app's.
 gracefulShutdown(server, {
   onClose: async () => {
-    await k.registry.store.__value.close()
-    k.registry.logger.__value.info('store closed; shutdown complete')
+    await k.resolve('store').close()
+    k.resolve('logger').info('store closed; shutdown complete')
   },
 })

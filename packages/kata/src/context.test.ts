@@ -47,6 +47,25 @@ describe('defineContext()', () => {
     expect(mw.provides).toEqual(['user'])
   })
 
+  it('resolve returns a singleton value outside a request', () => {
+    const logger = { info: () => {} }
+    const app = defineContext({ counter: singleton(7), logger: singleton(logger) })
+    expect(app.resolve('counter')).toBe(7)
+    expect(app.resolve('logger')).toBe(logger)
+  })
+
+  it('resolve throws for an unregistered key', () => {
+    // @ts-expect-error — 'missing' is not a registered singleton key.
+    expect(() => k.resolve('missing')).toThrow(/not registered/)
+  })
+
+  it('resolve throws when the key is a scoped slot', () => {
+    // `user` is scoped, so it has no value outside a request. The type bound
+    // (SingletonKeys) already forbids it; the directive proves the runtime guard.
+    // @ts-expect-error — exercising the runtime guard the types prevent.
+    expect(() => k.resolve('user')).toThrow(/only singleton slots/)
+  })
+
   it('defineRoute tags the result and preserves method/path/use', () => {
     const route = k.defineRoute({
       method: 'GET',
