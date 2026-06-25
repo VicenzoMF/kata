@@ -86,6 +86,14 @@ requisição:
 | `body`    | o corpo JSON da requisição parseado |
 | `headers` | headers da requisição (em minúsculas) |
 
+::: warning Chaves de header são minúsculas
+Nomes de header HTTP são case-insensitive, então o Kata converte toda chave de
+header recebida para minúsculas antes de validar. Por isso o seu schema de
+`headers` precisa usar chaves em minúsculas — `z.object({ authorization: z.string() })`,
+nunca `Authorization`. Um schema com a chave `Authorization` nunca casa, e a
+requisição falha na validação com `422`.
+:::
+
 Declarar uma seção faz dois trabalhos de uma vez só. Em runtime, o Kata valida essa parte da
 requisição contra o seu schema *antes do handler rodar*. Em tempo de compilação, ele tipa
 o campo correspondente em `c.input` — então dentro do handler `c.input.params.id` é uma

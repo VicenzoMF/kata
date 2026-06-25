@@ -88,6 +88,10 @@ Cada chave mapeia para uma parte da requisição, lida e validada antes do handl
 | `body`    | corpo JSON da requisição já parseado  |
 | `headers` | headers da requisição, chaves em minúsculas |
 
+As chaves de header são normalizadas para minúsculas antes da validação (nomes de
+header HTTP são case-insensitive), então um schema de `headers` precisa usar
+chaves em minúsculas — `z.object({ authorization: z.string() })`, não `Authorization`.
+
 Declare apenas as seções que a rota lê. Uma rota que não lê nenhuma ainda
 declara `input` explicitamente como `{}` — o contrato para "esta rota não recebe
 input".

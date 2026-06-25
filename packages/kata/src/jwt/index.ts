@@ -278,6 +278,7 @@ export function jwtAuth<R extends Registry, S extends z.ZodTypeAny>(
     // `set` to its string-keyed form. The slot's membership in `ScopedKeys<R>`
     // and that the value matches its declared type are enforced at the call site
     // (`provides` + lint), exactly as ADR-0004 documents for scoped reads.
+    // kata-allow: hono-boundary
     const setSlot = c.set as unknown as (key: string, value: unknown) => void
     setSlot(slot, value)
     await next()
@@ -341,6 +342,7 @@ export function guard<R extends Registry, C = unknown>(
   const code = options.code ?? DEFAULT_FORBIDDEN_CODE
   const message = options.message ?? DEFAULT_FORBIDDEN_MESSAGE
   return async (c, next) => {
+    // kata-allow: hono-boundary
     const getSlot = c.get as unknown as (key: string) => C
     const allowed = await options.authorize(getSlot(slot), c)
     if (!allowed) {
