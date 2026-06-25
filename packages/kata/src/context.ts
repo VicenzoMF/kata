@@ -15,10 +15,12 @@ import type { Registry, ResolvedValue, Scoped, ScopedKeys, Singleton } from './t
 // ────────────────────────────────────────────────────────────────────────────
 
 export function singleton<T>(value: T): Singleton<T> {
+  // kata-allow: hono-boundary
   return { __value: value, __kind: 'singleton' } as unknown as Singleton<T>
 }
 
 export function scoped<T>(): Scoped<T> {
+  // kata-allow: hono-boundary
   return { __kind: 'scoped' } as unknown as Scoped<T>
 }
 
@@ -221,6 +223,7 @@ export function defineContext<const R extends Registry>(registry: R) {
     // the built `Hono` to the schema derived from `Mods` is sound (issue #13) —
     // it is the single hand-maintained bridge between the runtime and the type
     // layer. `examples/hello-client` type-checks this bridge in CI (spike item 5).
+    // kata-allow: hono-boundary
     return buildHonoApp(registry, config) as unknown as KataApp<Mods>
   }
 
@@ -269,7 +272,12 @@ function buildHonoApp<R extends Registry>(registry: R, config: AppConfig<R>): Ho
   // still serialises through the unified envelope instead of Hono's default
   // text/HTML 500.
   app.onError((err, c) => {
-    console.error('kata: unhandled error escaped the route pipeline', err)
+    const msg = 'kata: unhandled error escaped the route pipeline'
+    if (options.logger?.error) {
+      options.logger.error(msg, { err })
+    } else {
+      console.error(msg, err)
+    }
     return errorResponse(c, 'internal_error', 'Internal server error', { status: 500 })
   })
   return app
@@ -278,9 +286,11 @@ function buildHonoApp<R extends Registry>(registry: R, config: AppConfig<R>): Ho
 const SCOPED_STORE = Symbol('kata.scoped-store')
 
 function getScopedStore(c: import('hono').Context): Map<string, unknown> {
+  // kata-allow: hono-boundary
   let store = c.get(SCOPED_STORE as never) as Map<string, unknown> | undefined
   if (!store) {
     store = new Map<string, unknown>()
+    // kata-allow: hono-boundary
     c.set(SCOPED_STORE as never, store as never)
   }
   return store
@@ -298,6 +308,7 @@ function errorResponse(
   message: string,
   extra?: ErrorExtra,
 ): Response {
+  // kata-allow: hono-boundary
   return c.json(buildErrorBody(code, message, extra) as never, (extra?.status ?? 400) as never)
 }
 
@@ -311,12 +322,14 @@ function makeMiddlewareContext<R extends Registry>(
     get(key) {
       const slot = registry[key as string]
       if (!slot) throw new Error(`kata: key '${String(key)}' not registered in defineContext`)
+      // kata-allow: hono-boundary
       if (slot.__kind === 'singleton') return (slot as Singleton<unknown>).__value as never
       if (!store.has(key as string)) {
         throw new Error(
           `kata: scoped slot '${String(key)}' read before being set. Did the providing middleware run?`,
         )
       }
+      // kata-allow: hono-boundary
       return store.get(key as string) as never
     },
     set(key, value) {
@@ -328,6 +341,7 @@ function makeMiddlewareContext<R extends Registry>(
     },
     raw: c,
     header: (name) => c.req.header(name),
+    // kata-allow: hono-boundary
     json: (value, status) => c.json(value as never, (status ?? 200) as never),
     error: (code, message, extra) => errorResponse(c, code, message, extra),
     requestId,
@@ -345,16 +359,19 @@ function makeRouteContext<R extends Registry, I extends InputSchemas>(
     get(key) {
       const slot = registry[key as string]
       if (!slot) throw new Error(`kata: key '${String(key)}' not registered in defineContext`)
+      // kata-allow: hono-boundary
       if (slot.__kind === 'singleton') return (slot as Singleton<unknown>).__value as never
       if (!store.has(key as string)) {
         throw new Error(
           `kata: scoped slot '${String(key)}' read before being set. Did the providing middleware run?`,
         )
       }
+      // kata-allow: hono-boundary
       return store.get(key as string) as never
     },
     input,
     raw: c,
+    // kata-allow: hono-boundary
     json: (value, status) => c.json(value as never, (status ?? 200) as never),
     error: (code, message, extra) => errorResponse(c, code, message, extra),
     requestId,
@@ -365,16 +382,31 @@ async function readInputs<I extends InputSchemas>(
   input: I,
   c: import('hono').Context,
 ): Promise<
-  { ok: true; value: InferInput<I> } | { ok: false; issues: Record<string, FieldIssue[]> }
+  | { ok: true; value: InferInput<I> }
+  | { ok: false; issues: Record<string, FieldIssue[]> }
+  | { ok: false; response: Response }
 > {
   const raw: Record<string, unknown> = {}
   if (input.params) raw['params'] = c.req.param()
   if (input.query) raw['query'] = c.req.query()
   if (input.body) {
-    try {
-      raw['body'] = await c.req.json()
-    } catch {
+    const text = await c.req.text()
+    if (!text) {
       raw['body'] = undefined
+    } else {
+      try {
+        raw['body'] = JSON.parse(text)
+      } catch {
+        return {
+          ok: false,
+          response: errorResponse(c, 'validation_failed', 'Malformed JSON body', {
+            status: 400,
+            issues: {
+              body: [{ path: '', message: 'Request body is not valid JSON', code: 'custom' }],
+            },
+          }),
+        }
+      }
     }
   }
   if (input.headers) {
@@ -429,18 +461,18 @@ async function buildResponse<R extends Registry>(
   c: import('hono').Context,
   route: Route<R>,
   result: unknown,
-  mode: OutputValidationMode,
+  options: RuntimeOptions<R>,
 ): Promise<Response> {
   const output = route.output
   if (result instanceof Response) {
-    if (mode !== 'off' && !isZodSchema(output)) {
+    if (options.outputValidation !== 'off' && !isZodSchema(output)) {
       const schema = output[result.status]
-      if (schema) return validateResponseBody(c, route, result, schema, mode)
+      if (schema) return validateResponseBody(c, route, result, schema, options)
     }
     return result
   }
   const successSchema = isZodSchema(output) ? output : output[SUCCESS_STATUS]
-  return buildOutputResponse(c, route, result, successSchema, mode)
+  return buildOutputResponse(c, route, result, successSchema, options)
 }
 
 /**
@@ -456,20 +488,23 @@ function buildOutputResponse<R extends Registry>(
   route: Route<R>,
   result: unknown,
   schema: z.ZodTypeAny | undefined,
-  mode: OutputValidationMode,
+  options: RuntimeOptions<R>,
 ): Response {
-  if (mode === 'off' || !schema) {
+  if (options.outputValidation === 'off' || !schema) {
+    // kata-allow: hono-boundary
     return c.json(result as never)
   }
   const parsed = schema.safeParse(result)
   if (parsed.success) {
+    // kata-allow: hono-boundary
     return c.json(parsed.data as never)
   }
-  logOutputMismatch(route, SUCCESS_STATUS, parsed.error.issues)
-  if (mode === 'strict') {
+  logOutputMismatch(route, SUCCESS_STATUS, parsed.error.issues, options)
+  if (options.outputValidation === 'strict') {
     return outputMismatchResponse(c)
   }
   // mode === 'log': keep serving — send the handler's data through unchanged.
+  // kata-allow: hono-boundary
   return c.json(result as never)
 }
 
@@ -485,7 +520,7 @@ async function validateResponseBody<R extends Registry>(
   route: Route<R>,
   response: Response,
   schema: z.ZodTypeAny,
-  mode: OutputValidationMode,
+  options: RuntimeOptions<R>,
 ): Promise<Response> {
   let body: unknown
   try {
@@ -498,8 +533,8 @@ async function validateResponseBody<R extends Registry>(
   if (parsed.success) {
     return response
   }
-  logOutputMismatch(route, response.status, parsed.error.issues)
-  if (mode === 'strict') {
+  logOutputMismatch(route, response.status, parsed.error.issues, options)
+  if (options.outputValidation === 'strict') {
     return outputMismatchResponse(c)
   }
   // mode === 'log': keep serving the handler's original response.
@@ -511,11 +546,14 @@ function logOutputMismatch<R extends Registry>(
   route: Route<R>,
   status: number,
   issues: unknown,
+  options: RuntimeOptions<R>,
 ): void {
-  console.error(
-    `kata: output schema mismatch in ${route.method} ${route.path} (status ${status})`,
-    issues,
-  )
+  const msg = `kata: output schema mismatch in ${route.method} ${route.path} (status ${status})`
+  if (options.logger?.error) {
+    options.logger.error(msg, { issues })
+  } else {
+    console.error(msg, issues)
+  }
 }
 
 /** The 500 envelope (ADR-0008) `strict` returns when a response violates its declared output schema. */
@@ -557,7 +595,7 @@ function finalizeResponse<R extends Registry>(
       method: route.method,
       path: route.path,
       status: response?.status ?? 404,
-      durationMs: Date.now() - startedAt,
+      durationMs: Math.round(performance.now() - startedAt),
     })
   }
   return response
@@ -571,6 +609,7 @@ function registerRoute<R extends Registry>(
 ): void {
   const method = route.method.toLowerCase() as Lowercase<HttpMethod>
   // Hono router: app.get(path, ...handlers)
+  // kata-allow: hono-boundary
   const register = (app as unknown as Record<string, (path: string, ...h: unknown[]) => unknown>)[
     method
   ]
@@ -583,7 +622,7 @@ function registerRoute<R extends Registry>(
   const chain = options.middlewares.length > 0 ? [...options.middlewares, ...route.use] : route.use
   register.call(app, route.path, async (c: import('hono').Context) => {
     const requestId = resolveRequestId(c.req.header(REQUEST_ID_HEADER))
-    const startedAt = Date.now()
+    const startedAt = performance.now()
     // 1. Run the effective middleware chain manually (Hono's native middleware
     //    would also work, but threading the kata context is cleaner this way).
     let i = 0
@@ -593,6 +632,10 @@ function registerRoute<R extends Registry>(
         // 2. Validate input
         const inputResult = await readInputs(route.input, c)
         if (!inputResult.ok) {
+          if ('response' in inputResult) {
+            shortCircuit = inputResult.response
+            return
+          }
           shortCircuit = errorResponse(c, 'validation_failed', 'Request input validation failed', {
             status: 422,
             issues: inputResult.issues,
@@ -605,7 +648,7 @@ function registerRoute<R extends Registry>(
         // 4. Build + validate the response against the route's output contract —
         //    single schema (ADR-0003) or status→schema map (ADR-0011) — per the
         //    configured mode (ADR-0009).
-        shortCircuit = await buildResponse(c, route, result, options.outputValidation)
+        shortCircuit = await buildResponse(c, route, result, options)
         return
       }
       const mw = chain[i++]!
@@ -622,7 +665,12 @@ function registerRoute<R extends Registry>(
     try {
       await runChain()
     } catch (err) {
-      console.error(`kata: unhandled error in ${route.method} ${route.path}`, err)
+      const msg = `kata: unhandled error in ${route.method} ${route.path}`
+      if (options.logger?.error) {
+        options.logger.error(msg, { err })
+      } else {
+        console.error(msg, err)
+      }
       shortCircuit = errorResponse(c, 'internal_error', 'Internal server error', { status: 500 })
     }
     // 5. Echo the correlation id and emit the per-request log line (issue #63).

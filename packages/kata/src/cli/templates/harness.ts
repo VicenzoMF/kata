@@ -16,7 +16,7 @@ export const VERIFY_COMMAND = 'kata verify --json'
 /** The Stop gate runs the project's test suite. `kata verify` is a fast lint
  *  engine, not a test runner, so "done" is gated on the actual tests (#30) —
  *  mirroring this repo's own reference Stop hook, which runs the test ladder. */
-export const STOP_COMMAND = 'pnpm test'
+export const STOP_COMMAND = 'kata verify && pnpm test'
 
 /** Stop runs the test suite; give it headroom over the millisecond Pre/Post
  *  hooks. Matches the timeout on this repo's own reference Stop hook. */

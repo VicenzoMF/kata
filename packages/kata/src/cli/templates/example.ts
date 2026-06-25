@@ -79,6 +79,7 @@ export const examplePackageJson = {
   scripts: {
     dev: 'tsx watch src/main.ts',
     start: 'tsx src/main.ts',
+    test: 'echo "No tests yet"',
     typecheck: 'tsc --noEmit',
   },
   dependencies: {

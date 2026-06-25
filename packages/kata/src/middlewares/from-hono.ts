@@ -21,7 +21,10 @@ import type { Registry } from '../types'
  * This runs the wrapped middleware's post-`next` logic BEFORE the downstream
  * handler, so it is correct for middleware that only set response headers or
  * reject a request — not for response-transformers (compression, ETag) that
- * must observe the final body.
+ * must observe the final body. For those, ADR-0016 introduces an opt-in
+ * `fromHonoTransform()` that wires a real `next` and threads Kata's final
+ * `Response` back through the wrapped middleware. See
+ * `docs/adr/0016-cors-preflight-and-response-transform-seam.md`.
  */
 export function fromHono<R extends Registry>(mw: MiddlewareHandler): Middleware<R>['handler'] {
   return async (c, next) => {
