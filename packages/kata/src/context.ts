@@ -8,7 +8,7 @@ import { type Logger, logRequest, resolveLogger } from './logger'
 import { type OutputValidationMode, resolveOutputValidationMode } from './output-validation'
 import { REQUEST_ID_HEADER, resolveRequestId } from './request-id'
 import type { KataApp } from './rpc'
-import type { Registry, ResolvedValue, Scoped, ScopedKeys, Singleton } from './types'
+import type { Registry, ResolvedValue, Scoped, ScopedKeys, Singleton, SingletonKeys } from './types'
 
 // ────────────────────────────────────────────────────────────────────────────
 // Slot constructors (top-level — used to build the registry)
@@ -283,7 +283,43 @@ export function defineContext<const R extends Registry>(registry: R) {
     return buildHonoApp(registry, config) as unknown as KataApp<Mods>
   }
 
-  return { registry, defineMiddleware, defineRoute, createApp } as const
+  /**
+   * Read a {@link singleton}'s value **outside** a request (issue #172).
+   *
+   * Inside a middleware or route handler, prefer `c.get(key)` — the request
+   * context resolves both singleton and scoped slots. But bootstrap and teardown
+   * code runs with no request in flight: the `serve(...)` callback that logs the
+   * listening port, a graceful-shutdown `onClose` that closes the db pool. There
+   * `resolve` is the sanctioned way to reach a process-lifetime value, instead of
+   * reaching into the slot's internal `__value` field.
+   *
+   * Only **singleton** keys are accepted: a scoped slot holds no value until a
+   * middleware `c.set`s it during a request, so it has nothing to resolve here.
+   * The `SingletonKeys<R>` bound rejects scoped keys at compile time, and the
+   * runtime guard throws if one slips through an untyped call.
+   *
+   * ```ts
+   * const k = defineContext({ logger: singleton(makeLogger()) })
+   * // …
+   * serve({ fetch: app.fetch, port }, (info) => {
+   *   k.resolve('logger').info(`listening on :${info.port}`)
+   * })
+   * ```
+   *
+   * @throws if `key` is not registered, or is registered as a scoped slot.
+   */
+  function resolve<K extends SingletonKeys<R>>(key: K): ResolvedValue<R[K]> {
+    const slot = registry[key as string]
+    if (!slot) throw new Error(`kata: key '${String(key)}' not registered in defineContext`)
+    if (slot.__kind !== 'singleton') {
+      throw new Error(
+        `kata: cannot resolve '${String(key)}' outside a request — only singleton slots hold a process-lifetime value`,
+      )
+    }
+    return (slot as Singleton<unknown>).__value as ResolvedValue<R[K]>
+  }
+
+  return { registry, defineMiddleware, defineRoute, createApp, resolve } as const
 }
 
 // ────────────────────────────────────────────────────────────────────────────

@@ -9,5 +9,5 @@ import { app } from './server'
 const port = Number(process.env['PORT'] ?? 3001)
 
 serve({ fetch: app.fetch, port }, (info) => {
-  k.registry.logger.__value.info(`hello-client listening on http://localhost:${info.port}`)
+  k.resolve('logger').info(`hello-client listening on http://localhost:${info.port}`)
 })
