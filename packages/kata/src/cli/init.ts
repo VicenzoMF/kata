@@ -18,6 +18,7 @@ import {
   renderExampleMain,
   renderExamplePackageJson,
   renderExampleTsconfig,
+  renderLefthookYml,
 } from './generators'
 
 export type InitOptions = {
@@ -62,6 +63,7 @@ const TARGETS: readonly Target[] = [
   { path: '.codex/hooks.json', render: renderCodexHooks },
   { path: 'AGENTS.md', render: renderAgentsMd },
   { path: 'CLAUDE.md', render: renderClaudeMd },
+  { path: 'lefthook.yml', render: renderLefthookYml },
 ]
 
 /** The runnable example app `kata init --with-example` adds on top of the harness
