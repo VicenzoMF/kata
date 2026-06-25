@@ -410,4 +410,10 @@ relevant one before deviating.
 
 ## License
 
-TBD (will be open-source).
+[Apache License 2.0](LICENSE) © 2026 Vicenzo Frusciante.
+
+Kata is open source. You're free to use, modify, and distribute it — including
+in commercial and closed-source products — provided you keep the copyright and
+attribution notices (see [`NOTICE`](NOTICE)). Apache-2.0 also includes an
+express patent grant and does **not** grant rights to the "Kata" name or
+trademarks.

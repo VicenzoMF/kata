@@ -2,6 +2,8 @@
   "name": "kata",
   "version": "0.1.0",
   "type": "module",
+  "license": "Apache-2.0",
+  "author": "Vicenzo Frusciante",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": {
@@ -23,7 +25,9 @@
   },
   "files": [
     "dist",
-    "README.md"
+    "README.md",
+    "LICENSE",
+    "NOTICE"
   ],
   "scripts": {
     "build": "tsup",
