@@ -230,8 +230,8 @@ O segundo comando roda as regras determinísticas de lint do Kata sobre um proje
 kata verify [path]      # caminho padrão: o diretório atual
 ```
 
-Ele lê o projeto, verifica as regras ancoradas nas ADR-0003 / 0004 / 0005, e imprime
-um relatório legível para humanos. Duas flags moldam como ele roda:
+Ele lê o projeto, verifica as regras ancoradas nas ADR-0002 / 0003 / 0004 / 0005 /
+0008 / 0013 / 0016, e imprime um relatório legível para humanos. Duas flags moldam como ele roda:
 
 - `kata verify --json` — emite JSON de hook `PostToolUse` do Claude Code em vez do
   relatório no terminal. Isso é exatamente o que os hooks gerados chamam a cada escrita de arquivo.
