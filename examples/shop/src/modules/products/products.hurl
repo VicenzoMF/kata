@@ -5,13 +5,13 @@
 #   pnpm --filter=shop hurl
 
 # 1. GET /products — the seeded catalog (>= 3 items on a fresh boot).
-GET http://localhost:3000/products
+GET {{host}}/products
 HTTP 200
 [Asserts]
 jsonpath "$" count >= 3
 
 # 2. GET /products/prod-keyboard — a seeded product round-trips.
-GET http://localhost:3000/products/prod-keyboard
+GET {{host}}/products/prod-keyboard
 HTTP 200
 [Asserts]
 jsonpath "$.id" == "prod-keyboard"
@@ -20,7 +20,7 @@ jsonpath "$.priceCents" == 12000
 jsonpath "$.stock" == 5
 
 # 3. GET /products?inStock=false — only the out-of-stock monitor.
-GET http://localhost:3000/products?inStock=false
+GET {{host}}/products?inStock=false
 HTTP 200
 [Asserts]
 jsonpath "$" count == 1
@@ -28,14 +28,14 @@ jsonpath "$[0].id" == "prod-monitor"
 jsonpath "$[0].stock" == 0
 
 # 4. GET /products/{unknown} — unified 404 envelope (ADR-0008).
-GET http://localhost:3000/products/does-not-exist
+GET {{host}}/products/does-not-exist
 HTTP 404
 [Asserts]
 jsonpath "$.error" == "not_found"
 jsonpath "$.message" exists
 
 # 5. POST /products — no auth header, requireAuth short-circuits with 401.
-POST http://localhost:3000/products
+POST {{host}}/products
 Content-Type: application/json
 {
   "name": "Webcam",
@@ -47,7 +47,7 @@ HTTP 401
 jsonpath "$.error" == "unauthorized"
 
 # 6. POST /products — authenticated, creates a product with a uuid id.
-POST http://localhost:3000/products
+POST {{host}}/products
 Content-Type: application/json
 X-User-Id: admin
 {
@@ -64,14 +64,14 @@ jsonpath "$.name" == "Webcam"
 jsonpath "$.stock" == 4
 
 # 7. GET /products/{created} — the newly created product is retrievable.
-GET http://localhost:3000/products/{{created_id}}
+GET {{host}}/products/{{created_id}}
 HTTP 200
 [Asserts]
 jsonpath "$.id" == "{{created_id}}"
 jsonpath "$.name" == "Webcam"
 
 # 8. POST /products — authenticated but invalid body, unified 422 envelope.
-POST http://localhost:3000/products
+POST {{host}}/products
 Content-Type: application/json
 X-User-Id: admin
 {

@@ -5,13 +5,13 @@
 #   pnpm --filter=shop hurl
 
 # 1. GET /cart — no auth header, 401.
-GET http://localhost:3000/cart
+GET {{host}}/cart
 HTTP 401
 [Asserts]
 jsonpath "$.error" == "unauthorized"
 
 # 2. GET /cart — authenticated, empty cart for a fresh user.
-GET http://localhost:3000/cart
+GET {{host}}/cart
 X-User-Id: u-cart
 HTTP 200
 [Asserts]
@@ -20,7 +20,7 @@ jsonpath "$.lines" count == 0
 jsonpath "$.totalCents" == 0
 
 # 3. POST /cart/items — add 2 of the seeded mouse; price snapshotted, total computed.
-POST http://localhost:3000/cart/items
+POST {{host}}/cart/items
 Content-Type: application/json
 X-User-Id: u-cart
 {
@@ -36,7 +36,7 @@ jsonpath "$.lines[0].qty" == 2
 jsonpath "$.totalCents" == 9000
 
 # 4. POST /cart/items — same product again merges quantity.
-POST http://localhost:3000/cart/items
+POST {{host}}/cart/items
 Content-Type: application/json
 X-User-Id: u-cart
 {
@@ -50,7 +50,7 @@ jsonpath "$.lines[0].qty" == 3
 jsonpath "$.totalCents" == 13500
 
 # 5. POST /cart/items — unknown product, 404.
-POST http://localhost:3000/cart/items
+POST {{host}}/cart/items
 Content-Type: application/json
 X-User-Id: u-cart
 {
@@ -62,7 +62,7 @@ HTTP 404
 jsonpath "$.error" == "product_not_found"
 
 # 6. POST /cart/items — invalid body (qty must be positive), unified 422.
-POST http://localhost:3000/cart/items
+POST {{host}}/cart/items
 Content-Type: application/json
 X-User-Id: u-cart
 {
@@ -77,7 +77,7 @@ jsonpath "$.issues.body[0].path" == "qty"
 # 7. POST /cart/items — add a second, distinct line. With only one line a delete
 #    can't tell "removed that line" from "wiped the whole cart"; two lines makes
 #    the next step prove it removed exactly one.
-POST http://localhost:3000/cart/items
+POST {{host}}/cart/items
 Content-Type: application/json
 X-User-Id: u-cart
 {
@@ -91,7 +91,7 @@ jsonpath "$.totalCents" == 25500
 
 # 8. DELETE /cart/items/prod-mouse — removes only the mouse line; the keyboard
 #    line must survive (count == 1, not a wiped cart) with the correct remainder.
-DELETE http://localhost:3000/cart/items/prod-mouse
+DELETE {{host}}/cart/items/prod-mouse
 X-User-Id: u-cart
 HTTP 200
 [Asserts]

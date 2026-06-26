@@ -7,7 +7,7 @@
     "dev": "tsx watch src/main.ts",
     "start": "tsx src/main.ts",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "hurl": "hurl --test --color src/modules/products/products.hurl src/modules/cart/cart.hurl src/modules/orders/orders.hurl"
+    "hurl": "hurl --test --color --variable host=http://localhost:3000 src/modules/products/products.hurl src/modules/cart/cart.hurl src/modules/orders/orders.hurl"
   },
   "dependencies": {
     "@hono/node-server": "^1.13",
