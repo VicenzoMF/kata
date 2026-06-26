@@ -64,6 +64,27 @@ npm install kata hono zod @hono/node-server
 > pnpm --filter=hello dev      # boots examples/hello on http://localhost:3000
 > ```
 
+## Scaffold a new app — `kata init`
+
+The fastest path from zero to a running server is the bundled CLI. `kata init`
+scaffolds a complete, runnable app following the mandatory layout — `src/app.ts`,
+`src/context.ts`, a `middlewares/` folder, and two example modules (`GET /health`
+and `POST` + `GET /greetings`, each with service / schema / test / hurl) — on top
+of the agent harness (`.claude` / `.codex` / `.agents` + `AGENTS.md` / `CLAUDE.md`)
+and a lefthook pre-commit:
+
+```bash
+kata init my-app
+cd my-app && pnpm install
+pnpm dev          # → http://localhost:3000/health
+kata verify       # fast deterministic checks
+pnpm test         # unit tests
+```
+
+Add more modules with `kata new <domain>`. Use `kata init --minimal` to write
+only the harness into an existing project. The walkthrough below shows, by hand,
+what the generated modules look like.
+
 ## Quickstart
 
 A fully-typed `/users` API in six files. This is exactly

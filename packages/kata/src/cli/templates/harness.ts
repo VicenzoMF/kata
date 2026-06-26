@@ -29,6 +29,13 @@ export const CLAUDE_EDIT_MATCHER = 'Write|Edit|MultiEdit'
  *  Write/Edit/MultiEdit, so writes are detected from the Bash command itself. */
 export const CODEX_TOOL_MATCHER = 'Bash|apply_patch'
 
+/** Vendor-neutral matcher for the generic `.agents/hooks.json` (issue #200): the
+ *  union of the file-writing tool names both conventions use, so any harness that
+ *  adopts the emerging `.agents/` directory matches whichever names it exposes.
+ *  `.agents/` has no published schema yet; this mirror reuses the same hook
+ *  commands as the Claude/Codex configs so the three stay in lockstep. */
+export const AGENTS_TOOL_MATCHER = 'Write|Edit|MultiEdit|Bash|apply_patch'
+
 /** Commit/push cheat paths the harness bans via Claude's `permissions.deny`
  *  (ADR-0010). Codex has no equivalent slot, so `kata verify` enforces the same
  *  set there on PreToolUse — the ban is identical across harnesses. */
