@@ -19,7 +19,7 @@ sobre o app inteiro com `middlewares:`.
 ## defineMiddleware
 
 `defineContext` retorna `defineMiddleware`. Importe-o do seu módulo de contexto,
-não de `kata`:
+não de `katajs`:
 
 ```ts
 import { defineMiddleware } from '../context'
@@ -126,7 +126,7 @@ regra de lint `kata/scoped-slot-not-provided`. Singletons não precisam de
 provedor — eles vivem durante todo o tempo de vida do processo.
 :::
 
-Para autenticação real, `kata/jwt` traz `jwtAuth`, que verifica um bearer token e
+Para autenticação real, `katajs/jwt` traz `jwtAuth`, que verifica um bearer token e
 preenche um slot `currentUser` para você. O app de exemplo o encapsula para que o
 literal `provides` permaneça no call site:
 

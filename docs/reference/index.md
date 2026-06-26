@@ -5,15 +5,15 @@ description: Every public export across kata, kata/jwt, and kata/node, plus the 
 
 # API reference
 
-Kata ships one package, `kata`, with three import paths and one binary. Nothing
+Kata ships one package, `katajs`, with three import paths and one binary. Nothing
 is re-exported from Hono — the public surface is exactly what the tables below
 list, derived from the package's own entry points.
 
 | Import | Purpose |
 |---|---|
-| `kata` | Core: the context factory, slot constructors, the error envelope, built-in middleware, and every public type. |
-| `kata/jwt` | Stateless JWT primitives plus the `jwtAuth` middleware and authorization guards. |
-| `kata/node` | Node-only `gracefulShutdown` for draining a server on `SIGTERM` / `SIGINT`. |
+| `katajs` | Core: the context factory, slot constructors, the error envelope, built-in middleware, and every public type. |
+| `katajs/jwt` | Stateless JWT primitives plus the `jwtAuth` middleware and authorization guards. |
+| `katajs/node` | Node-only `gracefulShutdown` for draining a server on `SIGTERM` / `SIGINT`. |
 | `kata` (bin) | The `kata init` CLI that scaffolds the harness and an optional example app. |
 
 ```ts
@@ -22,14 +22,14 @@ import { jwtAuth, requireRole, signJwt } from 'katajs/jwt'
 import { gracefulShutdown } from 'katajs/node'
 ```
 
-The split is deliberate: `kata` is runtime-neutral and runs wherever Hono runs
-(Node, Bun, Deno, edge), `kata/jwt` is the only module that touches `hono/jwt`,
-and `kata/node` is the only module that touches `node:process` — so an edge build
-that imports `kata` never pulls in Node internals.
+The split is deliberate: `katajs` is runtime-neutral and runs wherever Hono runs
+(Node, Bun, Deno, edge), `katajs/jwt` is the only module that touches `hono/jwt`,
+and `katajs/node` is the only module that touches `node:process` — so an edge build
+that imports `katajs` never pulls in Node internals.
 
 ## Peer dependencies
 
-Kata declares two peer dependencies. Install them alongside `kata`; it bundles
+Kata declares two peer dependencies. Install them alongside `katajs`; it bundles
 neither.
 
 ```json
@@ -44,9 +44,9 @@ neither.
 | Peer | Range | Used for |
 |---|---|---|
 | `hono` | `^4` | The router, context, runtime adapters, and the typed RPC client (`hc`). |
-| `zod` | `^3` | Every `input` / `output` schema and the claims schemas in `kata/jwt`. |
+| `zod` | `^3` | Every `input` / `output` schema and the claims schemas in `katajs/jwt`. |
 
-## `kata` — core
+## `katajs` — core
 
 Values:
 
@@ -103,7 +103,7 @@ Built-in middleware option types — `CorsOptions`, `SecureHeadersOptions`, and
 `BodyLimitOptions` — are also exported. See [Middleware](/reference/middleware)
 for their fields.
 
-## `kata/jwt` — auth
+## `katajs/jwt` — auth
 
 Values:
 
@@ -130,12 +130,12 @@ Types:
 | `GuardOptions` | Options for `guard`: `slot?`, `authorize`, `code?`, `message?`. |
 
 ::: tip You own the login flow
-`kata/jwt` gives you signing, verification, the auth middleware, and guards.
+`katajs/jwt` gives you signing, verification, the auth middleware, and guards.
 Password hashing, the user store, the login route, and refresh tokens stay yours.
 See the [Authentication cookbook](/cookbook/auth) for the full pattern.
 :::
 
-## `kata/node` — Node runtime
+## `katajs/node` — Node runtime
 
 Values:
 

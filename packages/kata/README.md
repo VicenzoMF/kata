@@ -8,7 +8,7 @@ Static DI, mandatory input/output schemas, and a locked folder layout — see th
 
 ## Install
 
-`hono` and `zod` are peer dependencies — install them alongside `kata`:
+`hono` and `zod` are peer dependencies — install them alongside `katajs`:
 
 ```sh
 pnpm add katajs hono zod

@@ -63,7 +63,7 @@ a single `defineContext({...})` call ([ADR-0004](../adr/0004-di-via-scoped-slots
 the analogue of your root `AppModule`'s `providers` array, but flat and global
 rather than per-module. `defineContext` returns the `defineRoute`,
 `defineMiddleware`, and `createApp` helpers bound to that registry; re-export
-them so the rest of the app imports from `./context`, never from `kata`
+them so the rest of the app imports from `./context`, never from `katajs`
 directly. This mirrors [`examples/hello/src/context.ts`](https://github.com/VicenzoMF/kata/blob/main/examples/hello/src/context.ts):
 
 ```ts
@@ -575,7 +575,7 @@ Being explicit, so you stop looking for these:
 | Runtime IoC container & `reflect-metadata` | Cold-start cost; the verifier loses its "one grep answers the question" property ([ADR-0004](../adr/0004-di-via-scoped-slots.md)) | One static `defineContext`; `c.get('key')` is a typed lookup |
 | Per-module providers / `imports` / `exports` | Modules are folders, not DI scopes | One flat, global registry — everything is in `defineContext` |
 | Injection scopes beyond singleton & request (`Scope.TRANSIENT`) | Two predictable lifetimes keep `c.get` monomorphic | `singleton` (process) or `scoped` (request, set by a middleware) |
-| Async providers & lifecycle hooks (`OnModuleInit`, `OnApplicationShutdown`) | No container to drive a lifecycle | Eager `singleton` factories at startup; teardown via `gracefulShutdown` (`kata/node`) in `main.ts` ([ADR-0014](../adr/0014-lifecycle-shutdown.md), [database.md](./database.md#closing-the-pool-on-shutdown)) |
+| Async providers & lifecycle hooks (`OnModuleInit`, `OnApplicationShutdown`) | No container to drive a lifecycle | Eager `singleton` factories at startup; teardown via `gracefulShutdown` (`katajs/node`) in `main.ts` ([ADR-0014](../adr/0014-lifecycle-shutdown.md), [database.md](./database.md#closing-the-pool-on-shutdown)) |
 | Interceptors that transform the response body / RxJS | The handler's return value isn't exposed to middleware | Shape the response in the handler + `output`; use middleware for before/after work and headers |
 | Exception filters & the `HttpException` hierarchy | No exception-type→response mapping layer | `c.error(code, message, { status })`; uncaught throws → generic 500 ([ADR-0008](../adr/0008-unified-error-response-envelope.md)) |
 | Pipes as a separate layer (`ValidationPipe`, custom pipes) | Validation is mandatory per route, not opt-in | The route's `input` Zod schemas; `z.coerce` / `.transform()` for coercion |

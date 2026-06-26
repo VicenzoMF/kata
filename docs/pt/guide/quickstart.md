@@ -24,6 +24,13 @@ npm install katajs hono zod @hono/node-server
 # ou: pnpm add katajs hono zod @hono/node-server
 ```
 
+::: info Nome do pacote vs. comando
+O framework é o **Kata**, mas seu pacote no npm é **`katajs`** — o nome `kata`
+puro no npm pertence a um pacote sem relação e parado. Então você **instala e
+importa `katajs`** (`import … from 'katajs'`), enquanto a CLI mantém o comando
+curto **`kata`** (`kata init`, `kata verify`). `npx katajs …` também funciona, como alias.
+:::
+
 ::: warning Pré-lançamento
 Kata ainda não foi publicado no npm. Hoje o caminho mais rápido é clonar o repositório
 e rodar o exemplo completo, que é o que o restante desta página percorre.
@@ -153,7 +160,7 @@ Mais sobre a fronteira em [services](/pt/guide/services).
 Um middleware declara quais scoped slots ele `provides`; seu handler os preenche.
 Retornar uma `Response` curto-circuita o request antes do handler rodar.
 
-Kata vem com auth JWT sob `kata/jwt`. `jwtAuth` lê um token `Authorization: Bearer`,
+Kata vem com auth JWT sob `katajs/jwt`. `jwtAuth` lê um token `Authorization: Bearer`,
 verifica a assinatura e as claims de tempo, faz o parse do payload com seu schema
 Zod e preenche o slot. O hook `resolve()` mapeia as claims validadas para o
 `User` da aplicação. Mantenha o wrapper `defineMiddleware` para que o literal `provides`

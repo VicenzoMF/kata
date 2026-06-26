@@ -155,7 +155,7 @@ A middleware declares which scoped slots it `provides`; its handler fills them â
 directly with `c.set(...)`, or via a built-in. Returning a `Response`
 short-circuits the request before the handler runs.
 
-Kata ships JWT auth under [`kata/jwt`](docs/adr/0013-jwt-delivery.md): `jwtAuth`
+Kata ships JWT auth under [`katajs/jwt`](docs/adr/0013-jwt-delivery.md): `jwtAuth`
 reads a `Bearer` token, verifies it, parses the claims with your Zod schema, and
 fills the slot. The `resolve()` hook maps the validated claims onto the app's
 `User`. You keep the `defineMiddleware` wrapper, so the `provides` literal stays

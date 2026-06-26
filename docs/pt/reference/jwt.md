@@ -5,7 +5,7 @@ description: Referência de assinaturas para kata/jwt — signJwt, verifyJwt, jw
 
 # kata/jwt
 
-`kata/jwt` é o subcaminho de auth do pacote `kata`. Ele entrega as primitivas
+`katajs/jwt` é o subcaminho de auth do pacote `katajs`. Ele entrega as primitivas
 JWT stateless — `signJwt` / `verifyJwt` — mais o middleware `jwtAuth` ciente do
 Kata e os guards de autorização. É o único módulo que importa `hono/jwt`, então
 não adiciona nenhuma dependência além do peer `hono` ([ADR-0013](/adr/0013-jwt-delivery)).
@@ -149,7 +149,7 @@ if (result.ok) {
 }
 ```
 
-`FieldIssue` é o export central de `kata` reutilizado aqui (`{ path, message, code,
+`FieldIssue` é o export central de `katajs` reutilizado aqui (`{ path, message, code,
 expected?, received? }`); veja [Erros](/pt/guide/errors).
 
 ## `jwtAuth`
@@ -351,10 +351,10 @@ handler: requireClaim('plan', (v) => v === 'pro' || v === 'team')
 | `GuardOptions<R, C>` | Opções para `guard`. |
 
 `Registry`, `Middleware`, `MiddlewareContext` e `FieldIssue` são tipos centrais
-reutilizados nestas assinaturas; eles são exportados de `kata`, não de `kata/jwt`.
+reutilizados nestas assinaturas; eles são exportados de `katajs`, não de `katajs/jwt`.
 
 ::: info Você é dono do fluxo de login
-`kata/jwt` te dá assinatura, verificação, o middleware de auth e os guards. Hash
+`katajs/jwt` te dá assinatura, verificação, o middleware de auth e os guards. Hash
 de senha, o store de usuários, a rota de login, refresh tokens e JWKS / OIDC
 remoto ficam além desta costura — eles são seus. Veja o
 [Cookbook de autenticação](/pt/cookbook/auth) e o [ADR-0013](/adr/0013-jwt-delivery).
@@ -366,5 +366,5 @@ remoto ficam além desta costura — eles são seus. Veja o
 - [Cookbook de autenticação](/pt/cookbook/auth) — o passo a passo de login ponta a ponta.
 - [defineMiddleware](/pt/reference/define-middleware) — `provides`, o handler, curto-circuito.
 - [Erros](/pt/guide/errors) — o envelope de erro unificado que os guards e o `jwtAuth` renderizam.
-- [Referência da API](/pt/reference/) — todos os exports públicos em `kata`, `kata/jwt` e `kata/node`.
+- [Referência da API](/pt/reference/) — todos os exports públicos em `katajs`, `katajs/jwt` e `katajs/node`.
 - [ADR-0013](/adr/0013-jwt-delivery) — por que `hono/jwt`, por que um subcaminho, a fronteira BYO.

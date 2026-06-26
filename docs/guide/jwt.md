@@ -10,9 +10,9 @@ A **JWT** (JSON Web Token) is a compact, signed string that carries a set of
 signed with a secret only your server knows, the server can trust those claims after
 a cheap signature check — no session store, no database round-trip.
 
-`kata/jwt` ships the building blocks for that flow so you do not hand-roll a verifier:
+`katajs/jwt` ships the building blocks for that flow so you do not hand-roll a verifier:
 **sign** a token, **verify** it, **authenticate** a request into a scoped slot, and
-**authorize** that slot with guards. It adds **no new dependency** — `kata/jwt` is a
+**authorize** that slot with guards. It adds **no new dependency** — `katajs/jwt` is a
 tree-shakeable subpath built on `hono/jwt`, and `hono` is already a peer dependency
 ([ADR-0013](/adr/0013-jwt-delivery)).
 
@@ -34,7 +34,7 @@ throwing.
 
 ::: info What Kata does NOT ship
 Login, password hashing, the user store, refresh-token rotation, sessions, and
-remote JWKS / OIDC providers (Auth0, Cognito, Clerk) are **yours**. `kata/jwt`
+remote JWKS / OIDC providers (Auth0, Cognito, Clerk) are **yours**. `katajs/jwt`
 is the verify-and-authorize seam; the credential and identity model is BYO. See
 [What you own](#what-you-own) below.
 :::
@@ -441,7 +441,7 @@ const requireOwner = defineMiddleware({
 
 ## What you own
 
-`kata/jwt` deliberately stops at the verify-and-authorize boundary. The
+`katajs/jwt` deliberately stops at the verify-and-authorize boundary. The
 credential and identity model is BYO:
 
 - **Login.** Verify credentials (or an OAuth code) in your own route, then call
@@ -472,7 +472,7 @@ credential and identity model is BYO:
 ## See also
 
 - [Auth recipe](/cookbook/auth) — the end-to-end walkthrough this page condenses.
-- [`kata/jwt` reference](/reference/jwt) — full signatures.
+- [`katajs/jwt` reference](/reference/jwt) — full signatures.
 - [Middleware & scoped slots](/guide/middleware) — how `provides` and `use:` compose.
 - [Errors](/guide/errors) — the unified error envelope guards and `jwtAuth` render.
 - [ADR-0013](/adr/0013-jwt-delivery) — why `hono/jwt`, why a subpath, the BYO boundary.

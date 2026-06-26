@@ -175,7 +175,7 @@ import { ErrorBodySchema } from 'katajs'
 output: { 200: UserSchema, 404: ErrorBodySchema }
 ```
 
-`ErrorBodySchema` is exported from `kata`. It is the Zod mirror of the unified error
+`ErrorBodySchema` is exported from `katajs`. It is the Zod mirror of the unified error
 envelope that `c.error(...)` produces (see [Errors](/guide/errors)), which makes it
 the canonical schema to put behind any `4xx`/`5xx` status. When you want a tighter
 contract, substitute a stricter refinement — for example pinning `error` to a

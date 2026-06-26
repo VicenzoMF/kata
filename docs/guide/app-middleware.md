@@ -75,7 +75,7 @@ responsibility. If a concern is genuinely route-specific, keep it in that route'
 
 ## Built-ins
 
-Three first-party hardening middlewares ship from the `kata` core entry. Each is a
+Three first-party hardening middlewares ship from the `katajs` core entry. Each is a
 `Middleware<R>` factory, declares `provides: []`, and sets response headers (or rejects
 a request) without touching the response body.
 
@@ -152,7 +152,7 @@ type BodyLimitOptions = {
 ```
 
 `maxSize` defaults to `DEFAULT_MAX_BODY_SIZE` — `1024 * 1024` (1 MiB), exported from
-`kata`. When the limit is exceeded the default `onError` returns HTTP `413` with the
+`katajs`. When the limit is exceeded the default `onError` returns HTTP `413` with the
 unified kata error envelope ([ADR-0008](/adr/0008-unified-error-response-envelope)):
 
 ```json

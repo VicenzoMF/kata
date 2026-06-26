@@ -193,7 +193,7 @@ A singleton is opened once at startup and lives for the whole process, so closin
 it is a *process* concern, not a per-request one — there is no per-request
 teardown hook to hang it on. An app that ignores `SIGTERM` (a `docker stop`, a
 Kubernetes pod rotation) is killed mid-flight: in-flight requests are dropped and
-the pool never closes. Wire `gracefulShutdown` from the Node-only **`kata/node`**
+the pool never closes. Wire `gracefulShutdown` from the Node-only **`katajs/node`**
 subpath in `main.ts` — it stops accepting connections, drains the in-flight
 requests, then runs your `onClose` ([ADR-0014](../adr/0014-lifecycle-shutdown.md)):
 

@@ -171,7 +171,7 @@ export const checkoutRoute = defineRoute({
 })
 ```
 
-`ErrorBodySchema` is exported from `kata`. It is the Zod mirror of the unified
+`ErrorBodySchema` is exported from `katajs`. It is the Zod mirror of the unified
 error envelope `c.error(...)` produces ([Errors](/guide/errors)), so it is the
 canonical schema to put behind a `4xx`/`5xx` status. An app may substitute a
 stricter refinement (for example a literal `error` code) for a tighter contract.

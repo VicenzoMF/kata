@@ -8,7 +8,7 @@ description: API reference for defineMiddleware — the config shape, the provid
 `defineMiddleware` produces a `Middleware<R>`: a value that prepares a request
 before the handler runs and fills the **scoped slots** declared in
 `defineContext`. It is returned by `defineContext`, bound to your registry `R`,
-so import it from your context module — not from `kata`.
+so import it from your context module — not from `katajs`.
 
 ```ts
 import { defineMiddleware } from '../context'

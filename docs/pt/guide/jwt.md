@@ -10,9 +10,9 @@ Um **JWT** (JSON Web Token) é uma string compacta e assinada que carrega um con
 assinado com um secret que apenas o seu servidor conhece, o servidor pode confiar nesses claims após
 uma verificação de assinatura barata — sem sessão no banco, sem round-trip no banco de dados.
 
-`kata/jwt` entrega os blocos de construção para esse fluxo, para que você não tenha que escrever um verificador na mão:
+`katajs/jwt` entrega os blocos de construção para esse fluxo, para que você não tenha que escrever um verificador na mão:
 **assinar** um token, **verificá-lo**, **autenticar** uma requisição em um scoped slot e
-**autorizar** esse slot com guards. Não adiciona **nenhuma dependência nova** — `kata/jwt` é um
+**autorizar** esse slot com guards. Não adiciona **nenhuma dependência nova** — `katajs/jwt` é um
 subpath tree-shakeable construído sobre `hono/jwt`, e `hono` já é uma peer dependency
 ([ADR-0013](/adr/0013-jwt-delivery)).
 
@@ -35,7 +35,7 @@ unificado em vez de lançar.
 ::: info O que o Kata NÃO entrega
 Login, hashing de senha, o armazenamento de usuários, rotação de refresh-token,
 sessões e provedores remotos de JWKS / OIDC (Auth0, Cognito, Clerk) são **seus**.
-`kata/jwt` é a costura de verificar-e-autorizar; o modelo de credencial e
+`katajs/jwt` é a costura de verificar-e-autorizar; o modelo de credencial e
 identidade é BYO. Veja [O que é seu](#o-que-e-seu) abaixo.
 :::
 
@@ -443,7 +443,7 @@ const requireOwner = defineMiddleware({
 
 ## O que é seu
 
-`kata/jwt` para deliberadamente na fronteira de verificar-e-autorizar. O modelo
+`katajs/jwt` para deliberadamente na fronteira de verificar-e-autorizar. O modelo
 de credencial e identidade é BYO:
 
 - **Login.** Verifique as credenciais (ou um código OAuth) na sua própria route,
@@ -475,7 +475,7 @@ de credencial e identidade é BYO:
 ## Veja também
 
 - [Receita de auth](/pt/cookbook/auth) — o passo a passo de ponta a ponta que esta página condensa.
-- [Referência de `kata/jwt`](/pt/reference/jwt) — assinaturas completas.
+- [Referência de `katajs/jwt`](/pt/reference/jwt) — assinaturas completas.
 - [Middleware & scoped slots](/pt/guide/middleware) — como `provides` e `use:` se compõem.
 - [Erros](/pt/guide/errors) — o envelope de erro unificado que os guards e o `jwtAuth` renderizam.
 - [ADR-0013](/adr/0013-jwt-delivery) — por que `hono/jwt`, por que um subpath, a fronteira BYO.

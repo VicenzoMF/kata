@@ -75,7 +75,7 @@ sua responsabilidade. Se uma preocupação for genuinamente específica de uma r
 
 ## Built-ins
 
-Três middlewares de hardening de primeira parte vêm da entrada core do `kata`. Cada um é
+Três middlewares de hardening de primeira parte vêm da entrada core do `katajs`. Cada um é
 uma factory de `Middleware<R>`, declara `provides: []` e define headers de resposta (ou
 rejeita uma requisição) sem tocar no corpo da resposta.
 
@@ -152,7 +152,7 @@ type BodyLimitOptions = {
 ```
 
 `maxSize` tem como padrão `DEFAULT_MAX_BODY_SIZE` — `1024 * 1024` (1 MiB), exportado
-de `kata`. Quando o limite é excedido, o `onError` padrão retorna HTTP `413`
+de `katajs`. Quando o limite é excedido, o `onError` padrão retorna HTTP `413`
 com o envelope de erro unificado do kata ([ADR-0008](/adr/0008-unified-error-response-envelope)):
 
 ```json

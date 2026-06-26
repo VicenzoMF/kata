@@ -5,7 +5,7 @@ description: Assinaturas exatas, opções e padrões dos middlewares first-party
 
 # Middlewares nativos
 
-Três middlewares first-party vêm do core entry do `kata`: `cors`,
+Três middlewares first-party vêm do core entry do `katajs`: `cors`,
 `secureHeaders` e `bodyLimit`. Cada um é uma factory `Middleware<R>` que você
 encaixa na cadeia `use:` de uma route ou na cadeia `middlewares` do app. Cada um
 declara `provides: []` — não preenche nenhum scoped slot — e apenas define
@@ -134,7 +134,7 @@ type BodyLimitOptions = {
 
 ### Padrões
 
-`maxSize` usa por padrão `DEFAULT_MAX_BODY_SIZE`, exportado de `kata`:
+`maxSize` usa por padrão `DEFAULT_MAX_BODY_SIZE`, exportado de `katajs`:
 
 ```ts
 import { DEFAULT_MAX_BODY_SIZE } from 'katajs'
@@ -263,7 +263,7 @@ Qualquer outra coisa é substituída por um UUID gerado.
 
 ## Exports
 
-Tudo nesta página vem do core entry do `kata`:
+Tudo nesta página vem do core entry do `katajs`:
 
 | Export | Tipo | Notas |
 | --- | --- | --- |
@@ -283,4 +283,4 @@ Tudo nesta página vem do core entry do `kata`:
 - [Middleware](/pt/guide/middleware) — o contrato `Middleware<R>` e o
   preenchimento de scoped slot para middleware que você escreve.
 - [`defineMiddleware`](/pt/reference/define-middleware) — defina seu próprio middleware.
-- [JWT auth](/pt/reference/jwt) — o middleware `jwtAuth` de `kata/jwt`.
+- [JWT auth](/pt/reference/jwt) — o middleware `jwtAuth` de `katajs/jwt`.

@@ -132,7 +132,7 @@ const { registry, defineMiddleware, defineRoute, createApp } = defineContext({ /
 - `registry` — the registry object itself, for deriving `AppRegistry`.
 
 The phrase "bound to your registry" is worth unpacking, because it is the whole
-mechanism. The generic `defineRoute` you could import from `kata` knows nothing
+mechanism. The generic `defineRoute` you could import from `katajs` knows nothing
 about *your* slots — it can't, it shipped long before your app existed. The
 `defineRoute` that comes *out of your `defineContext` call* is a specialized copy
 whose types are parameterized by your registry. Same runtime function, but now
@@ -141,7 +141,7 @@ its `c.get` accepts only your keys and returns only your value types.
 That is why there are two places to import from — and confusing them is the most
 common context mistake:
 
-| Import from `kata` (generic)           | Import from your `context.ts` (bound)          |
+| Import from `katajs` (generic)           | Import from your `context.ts` (bound)          |
 |----------------------------------------|------------------------------------------------|
 | `defineContext`, `singleton`, `scoped` | `defineRoute`, `defineMiddleware`, `createApp` |
 
@@ -162,7 +162,7 @@ import { defineRoute } from '../../context'
 
 This is what makes `c.get('key')` resolve against your registry everywhere.
 
-**The mistake to avoid:** importing `defineRoute` straight from `kata`, or calling
+**The mistake to avoid:** importing `defineRoute` straight from `katajs`, or calling
 `defineContext` again inside a route file. Either one hands you back the *generic,
 unbound* factory — the one that doesn't know your slots — so `c.get` quietly loses
 its key checking and the type chain goes slack without any error to warn you.

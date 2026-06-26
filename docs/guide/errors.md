@@ -90,7 +90,7 @@ Rules to keep straight:
 ::: tip Reuse the formatter
 If you validate something yourself — a webhook payload, a re-parsed query, a
 cross-field rule — and want the response to match this exact shape,
-`formatZodIssues(error: ZodError): FieldIssue[]` is exported from `kata`. Build the
+`formatZodIssues(error: ZodError): FieldIssue[]` is exported from `katajs`. Build the
 envelope with `c.error('validation_failed', 'Request input validation failed', { status: 422, issues: { body: formatZodIssues(parsed.error) } })`.
 :::
 

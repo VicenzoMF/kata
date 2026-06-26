@@ -174,10 +174,10 @@ serve({ fetch: app.fetch, port }, (info) => {
 the request handler; `serve` owns the socket. Opting into graceful shutdown is a
 separate, explicit step ([ADR-0014](/adr/0014-lifecycle-shutdown)).
 
-### Graceful shutdown — `kata/node`
+### Graceful shutdown — `katajs/node`
 
 `@hono/node-server`'s `serve()` returns a server handle. Pass it to
-`gracefulShutdown` from `kata/node` to drain in-flight requests on `SIGTERM` /
+`gracefulShutdown` from `katajs/node` to drain in-flight requests on `SIGTERM` /
 `SIGINT` before the process exits:
 
 ```ts
@@ -217,8 +217,8 @@ type GracefulShutdownOptions = {
 ```
 
 ::: tip
-`kata/node` is the only entry that touches `node:process`. Importing the
-runtime-neutral root (`kata`) from an edge or Workers build never pulls it in
+`katajs/node` is the only entry that touches `node:process`. Importing the
+runtime-neutral root (`katajs`) from an edge or Workers build never pulls it in
 ([ADR-0014](/adr/0014-lifecycle-shutdown)).
 :::
 
@@ -229,7 +229,7 @@ force-exit timer, and the `main.ts` boundary.
 
 `app.fetch` is the universal handler. On Bun, Deno, or an edge/Workers runtime,
 hand it to that platform's server instead of `@hono/node-server`. Kata's core
-(`kata`) is runtime-neutral; only `kata/node` is Node-specific.
+(`katajs`) is runtime-neutral; only `katajs/node` is Node-specific.
 
 ```ts
 // Bun

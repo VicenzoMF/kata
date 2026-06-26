@@ -27,7 +27,7 @@ onto the whole app with `middlewares:`.
 ## defineMiddleware
 
 `defineContext` returns `defineMiddleware` already bound to your slots. Import it from
-your context module, not from `kata`:
+your context module, not from `katajs`:
 
 ```ts
 import { defineMiddleware } from '../context'
@@ -150,7 +150,7 @@ runtime (`scoped slot 'currentUser' read before being set`) and is flagged by th
 for the process lifetime.
 :::
 
-For real authentication, `kata/jwt` ships `jwtAuth`, which verifies a bearer token
+For real authentication, `katajs/jwt` ships `jwtAuth`, which verifies a bearer token
 and fills a `currentUser` slot for you. The example app wraps it so the `provides`
 literal stays at the call site:
 

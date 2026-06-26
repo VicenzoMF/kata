@@ -11,7 +11,7 @@ slots are declared up front in `defineContext`, and a middleware populates them
 per request. A handler reads the user with `c.get('currentUser')` — the same
 monomorphic accessor used for singletons.
 
-Kata ships the JWT building blocks under [`kata/jwt`](../adr/0013-jwt-delivery.md),
+Kata ships the JWT building blocks under [`katajs/jwt`](../adr/0013-jwt-delivery.md),
 so you no longer hand-roll a verifier:
 
 | Function | Role |
@@ -232,7 +232,7 @@ in the `use:` chain provided it — and rejects with a **403** when its predicat
 says no. Its `provides` list is empty. The **order in the `use:` array is the
 contract**: the guard must come _after_ the auth middleware that fills the slot.
 
-Kata ships three guard handlers under `kata/jwt`:
+Kata ships three guard handlers under `katajs/jwt`:
 
 - `requireRole(role | roles[])` — allow only when the slot value's `role` is (one of) `role`.
 - `requireClaim(key, expected | predicate)` — allow only when a claim matches.

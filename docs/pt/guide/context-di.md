@@ -93,7 +93,7 @@ const { registry, defineMiddleware, defineRoute, createApp } = defineContext({ /
 - `registry` — o próprio objeto registry, para derivar `AppRegistry`.
 
 Estas são funções, não helpers genéricos que você reparametriza a cada chamada.
-Importe o `defineContext` / `singleton` / `scoped` genéricos de `kata`; importe
+Importe o `defineContext` / `singleton` / `scoped` genéricos de `katajs`; importe
 `defineRoute` / `defineMiddleware` / `createApp` do seu próprio `context.ts`.
 
 ### Reexporte a factory já vinculada

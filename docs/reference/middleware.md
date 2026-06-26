@@ -5,7 +5,7 @@ description: Exact signatures, options, and defaults for kata's first-party midd
 
 # Built-in middleware
 
-Three first-party middlewares ship from the `kata` core entry: `cors`,
+Three first-party middlewares ship from the `katajs` core entry: `cors`,
 `secureHeaders`, and `bodyLimit`. Each is a `Middleware<R>` factory you drop into
 a route's `use:` chain or the app-level `middlewares` chain. Each declares
 `provides: []` — it fills no scoped slot — and only sets response headers or
@@ -130,7 +130,7 @@ type BodyLimitOptions = {
 
 ### Defaults
 
-`maxSize` defaults to `DEFAULT_MAX_BODY_SIZE`, exported from `kata`:
+`maxSize` defaults to `DEFAULT_MAX_BODY_SIZE`, exported from `katajs`:
 
 ```ts
 import { DEFAULT_MAX_BODY_SIZE } from 'katajs'
@@ -257,7 +257,7 @@ replaced with a generated UUID.
 
 ## Exports
 
-Everything on this page comes from the `kata` core entry:
+Everything on this page comes from the `katajs` core entry:
 
 | Export | Kind | Notes |
 | --- | --- | --- |
@@ -277,4 +277,4 @@ Everything on this page comes from the `kata` core entry:
 - [Middleware](/guide/middleware) — the `Middleware<R>` contract and scoped-slot
   filling for middleware you write.
 - [`defineMiddleware`](/reference/define-middleware) — define your own middleware.
-- [JWT auth](/reference/jwt) — the `kata/jwt` `jwtAuth` middleware.
+- [JWT auth](/reference/jwt) — the `katajs/jwt` `jwtAuth` middleware.
