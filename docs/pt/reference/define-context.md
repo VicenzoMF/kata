@@ -27,6 +27,7 @@ function defineContext<const R extends Registry>(
   defineMiddleware: /* bound to R */
   defineRoute: /* bound to R */
   createApp: /* bound to R */
+  resolve: <K extends SingletonKeys<R>>(key: K) => ResolvedValue<R[K]>
 }
 ```
 
@@ -102,7 +103,7 @@ cadeia `use:`, ou registrá-lo como middleware de nível de app em
 
 ## A factory retornada
 
-`defineContext` retorna quatro membros, todos vinculados ao seu registry `R`:
+`defineContext` retorna cinco membros, todos vinculados ao seu registry `R`:
 
 | Membro | Tipo | Propósito |
 | --- | --- | --- |
@@ -110,6 +111,18 @@ cadeia `use:`, ou registrá-lo como middleware de nível de app em
 | `defineRoute` | bound | [`defineRoute`](/pt/reference/define-route) — seu `c.get` e `use:` conhecem `R`. |
 | `defineMiddleware` | bound | [`defineMiddleware`](/pt/reference/define-middleware) — `provides:` é chaveado aos seus slots scoped. |
 | `createApp` | bound | [`createApp`](/pt/reference/create-app) — constrói o app Hono. |
+| `resolve` | `<K extends SingletonKeys<R>>(key: K) => ResolvedValue<R[K]>` | Lê o valor de um singleton **fora de um request** — logs de boot, teardown de graceful shutdown. Exclusivo para singletons; lança erro em uma chave não registrada ou scoped. |
+
+`resolve` é a forma sancionada de alcançar um singleton quando não há `c` — no
+boot para logar a porta de escuta, ou durante o shutdown para fechar um pool. Seu
+bound `SingletonKeys<R>` rejeita chaves scoped em tempo de compilação, e uma chave
+scoped ou não registrada também lança erro em runtime, porque um scoped slot não
+guarda valor de duração de processo para retornar:
+
+```ts
+k.resolve('logger').info(`listening on :${info.port}`)
+k.resolve('currentUser') // ✗ erro de compilação — scoped slots não são resolvíveis
+```
 
 Defina o context uma vez, em `src/context.ts`, e então re-exporte as factory
 functions vinculadas. O resto do app as importa de lá e herda os tipos

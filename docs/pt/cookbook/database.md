@@ -211,7 +211,7 @@ const server = serve({ fetch: app.fetch, port: Number(process.env['PORT'] ?? 300
 
 gracefulShutdown(server, {
   onClose: async () => {
-    await k.registry.db.__value.close() // fecha o pool *depois* do drain
+    await k.resolve('db').close() // fecha o pool *depois* do drain
   },
 })
 ```
