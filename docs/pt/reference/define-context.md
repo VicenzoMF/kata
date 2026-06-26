@@ -11,7 +11,7 @@ objeto simples, e as chaves que você passa se tornam as únicas chaves que `c.g
 Ele é importado a partir do entry point do core, junto com os dois construtores de slot.
 
 ```ts
-import { defineContext, scoped, singleton } from 'kata'
+import { defineContext, scoped, singleton } from 'katajs'
 ```
 
 ## Assinatura
@@ -130,7 +130,7 @@ automaticamente — nada mais jamais chama `defineContext`.
 
 ```ts
 // src/context.ts
-import { defineContext, scoped, singleton } from 'kata'
+import { defineContext, scoped, singleton } from 'katajs'
 
 import type { User } from './modules/users/users.schema'
 
@@ -196,7 +196,7 @@ que lê cada um:
 
 ```ts
 // src/context.ts
-import { defineContext, scoped, singleton } from 'kata'
+import { defineContext, scoped, singleton } from 'katajs'
 
 import type { Store } from './store'
 import { createStore } from './store'

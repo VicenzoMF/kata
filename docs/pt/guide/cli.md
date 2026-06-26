@@ -147,7 +147,7 @@ repositório — veja [Início rápido](/pt/guide/quickstart).
 slots `singleton(...)` / `scoped<T>()` aqui conforme o app cresce.
 
 ```ts
-import { defineContext } from 'kata'
+import { defineContext } from 'katajs'
 
 export const k = defineContext({})
 

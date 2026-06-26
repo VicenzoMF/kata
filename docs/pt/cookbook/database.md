@@ -50,7 +50,7 @@ estabelecida uma única vez na inicialização.
 
 ```ts
 // src/context.ts
-import { defineContext, scoped, singleton } from 'kata'
+import { defineContext, scoped, singleton } from 'katajs'
 
 import { makeDb } from './db'
 import type { User } from './modules/users/users.schema'
@@ -194,14 +194,14 @@ então fechá-lo é uma preocupação de *processo*, não de cada requisição �
 hook de teardown por requisição em que pendurá-lo. Um app que ignora `SIGTERM`
 (um `docker stop`, uma rotação de pod do Kubernetes) é morto no meio do voo:
 requisições em andamento são descartadas e o pool nunca fecha. Conecte
-`gracefulShutdown` do subpath somente-Node **`kata/node`** no `main.ts` — ele para
+`gracefulShutdown` do subpath somente-Node **`katajs/node`** no `main.ts` — ele para
 de aceitar conexões, drena as requisições em andamento e então executa seu
 `onClose` ([ADR-0014](/adr/0014-lifecycle-shutdown)):
 
 ```ts
 // src/main.ts
 import { serve } from '@hono/node-server'
-import { gracefulShutdown } from 'kata/node'
+import { gracefulShutdown } from 'katajs/node'
 
 import { createApp, k } from './context'
 import * as users from './modules/users/users.route'

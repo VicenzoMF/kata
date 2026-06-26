@@ -10,7 +10,7 @@
   },
   "scripts": {
     "build": "pnpm -r --filter=./packages/* build",
-    "pretypecheck": "pnpm --filter=kata build",
+    "pretypecheck": "pnpm --filter=katajs build",
     "typecheck": "pnpm -r typecheck",
     "prepare": "lefthook install",
     "format": "biome check --write .",
@@ -30,7 +30,7 @@
   "devDependencies": {
     "@biomejs/biome": "^2.4.15",
     "@vitest/coverage-v8": "^4.1.7",
-    "kata": "workspace:*",
+    "katajs": "workspace:*",
     "lefthook": "^2.1.8",
     "oxlint": "^1.66.0",
     "vitepress": "^1.6.4",

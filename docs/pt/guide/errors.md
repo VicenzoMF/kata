@@ -92,7 +92,7 @@ Regras para deixar claras:
 Se você validar algo por conta própria — um payload de webhook, uma query
 re-parseada, uma regra entre campos — e quiser que a resposta corresponda
 exatamente a este formato, `formatZodIssues(error: ZodError): FieldIssue[]` é
-exportado de `kata`. Construa o envelope com
+exportado de `katajs`. Construa o envelope com
 `c.error('validation_failed', 'Request input validation failed', { status: 422, issues: { body: formatZodIssues(parsed.error) } })`.
 :::
 
@@ -221,7 +221,7 @@ fornece `ErrorBodySchema` exatamente para isso — o espelho em Zod do envelope
 unificado:
 
 ```ts
-import { ErrorBodySchema } from 'kata'
+import { ErrorBodySchema } from 'katajs'
 
 export const getUserRoute = defineRoute({
   method: 'GET',

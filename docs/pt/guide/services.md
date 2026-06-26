@@ -7,7 +7,7 @@ description: A lógica de negócio vive em funções puras sem imports de framew
 
 Um service é onde a sua lógica de negócio vive. Ele fica em `<domain>.service.ts` e
 é feito de funções comuns — e, crucialmente, ele não importa *nada* do
-framework: sem `kata`, sem Hono, sem `defineContext`, sem `defineRoute`, sem `c`. Um handler de
+framework: sem `katajs`, sem Hono, sem `defineContext`, sem `defineRoute`, sem `c`. Um handler de
 route valida o input, chama um service e retorna o resultado. O service em si
 não faz ideia de que está sendo servido sobre HTTP.
 
@@ -29,7 +29,7 @@ protegê-la.
 ## Um service é só funções
 
 O exemplo `hello` mantém todo o seu store de usuários em um único arquivo. Note o que ele
-**não** importa: nada de `kata`, nenhum Hono, nenhum contexto de requisição.
+**não** importa: nada de `katajs`, nenhum Hono, nenhum contexto de requisição.
 
 ```ts
 // src/modules/users/users.service.ts
@@ -69,7 +69,7 @@ o service e retorna o valor (que o Kata então valida contra `output`):
 
 ```ts
 // src/modules/users/users.route.ts
-import { ErrorBodySchema } from 'kata'
+import { ErrorBodySchema } from 'katajs'
 
 import { defineRoute } from '../../context'
 
@@ -309,7 +309,7 @@ em [Banco de dados](/pt/cookbook/database).
 ## Regras
 
 - Um service importa tipos de `<domain>.schema.ts` e de outros services. Nada
-  de `kata`, Hono ou do contexto de requisição.
+  de `katajs`, Hono ou do contexto de requisição.
 - Um service nunca chama `c.get(...)`, `c.json(...)` ou `c.error(...)`. Ele recebe
   dependências como argumentos e retorna valores comuns ou uniões de resultado tipadas.
 - Services são funções com named exports — sem classes, sem `this`

@@ -15,7 +15,7 @@ them.
 every route's own `use:`.
 
 ```ts
-import { bodyLimit, cors, secureHeaders } from 'kata'
+import { bodyLimit, cors, secureHeaders } from 'katajs'
 
 import { createApp } from './context'
 import * as users from './modules/users/users.route'
@@ -75,7 +75,7 @@ responsibility. If a concern is genuinely route-specific, keep it in that route'
 
 ## Built-ins
 
-Three first-party hardening middlewares ship from the `kata` core entry. Each is a
+Three first-party hardening middlewares ship from the `katajs` core entry. Each is a
 `Middleware<R>` factory, declares `provides: []`, and sets response headers (or rejects
 a request) without touching the response body.
 
@@ -90,7 +90,7 @@ A thin wrapper over Hono's `cors`. `CorsOptions` mirrors Hono's options — `ori
 [Hono CORS docs](https://hono.dev/docs/middleware/builtin/cors).
 
 ```ts
-import { cors } from 'kata'
+import { cors } from 'katajs'
 
 createApp({
   modules: [users],
@@ -123,7 +123,7 @@ disable it. See the
 [Hono secure-headers docs](https://hono.dev/docs/middleware/builtin/secure-headers).
 
 ```ts
-import { secureHeaders } from 'kata'
+import { secureHeaders } from 'katajs'
 
 createApp({
   modules: [users],
@@ -152,7 +152,7 @@ type BodyLimitOptions = {
 ```
 
 `maxSize` defaults to `DEFAULT_MAX_BODY_SIZE` — `1024 * 1024` (1 MiB), exported from
-`kata`. When the limit is exceeded the default `onError` returns HTTP `413` with the
+`katajs`. When the limit is exceeded the default `onError` returns HTTP `413` with the
 unified kata error envelope ([ADR-0008](/adr/0008-unified-error-response-envelope)):
 
 ```json
@@ -160,7 +160,7 @@ unified kata error envelope ([ADR-0008](/adr/0008-unified-error-response-envelop
 ```
 
 ```ts
-import { bodyLimit } from 'kata'
+import { bodyLimit } from 'katajs'
 
 createApp({
   modules: [users],

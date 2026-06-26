@@ -11,7 +11,7 @@ plain object, and the keys you pass become the only keys `c.get` will accept.
 It is imported from the core entry point alongside the two slot constructors.
 
 ```ts
-import { defineContext, scoped, singleton } from 'kata'
+import { defineContext, scoped, singleton } from 'katajs'
 ```
 
 ## Signature
@@ -130,7 +130,7 @@ automatically — nothing else ever calls `defineContext`.
 
 ```ts
 // src/context.ts
-import { defineContext, scoped, singleton } from 'kata'
+import { defineContext, scoped, singleton } from 'katajs'
 
 import type { User } from './modules/users/users.schema'
 
@@ -196,7 +196,7 @@ that reads each:
 
 ```ts
 // src/context.ts
-import { defineContext, scoped, singleton } from 'kata'
+import { defineContext, scoped, singleton } from 'katajs'
 
 import type { Store } from './store'
 import { createStore } from './store'

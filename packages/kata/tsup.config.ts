@@ -23,7 +23,12 @@ export default defineConfig({
   entry: ['src/index.ts', 'src/jwt/index.ts', 'src/node/index.ts', 'src/cli/main.ts'],
   format: ['esm'],
   dts: true,
-  sourcemap: true,
+  // No sourcemaps in the published artifact. esbuild emits maps with
+  // `sourcesContent` inlined, which would embed the full TypeScript source into
+  // the npm tarball (the cli map alone is ~170 KB) — the package ships bundled
+  // `.js` + `.d.ts` only. Dev/test run from `src` via tsx/vitest, not from
+  // `dist`, so nothing in-repo relies on these maps.
+  sourcemap: false,
   clean: true,
   // `splitting: true` so shared error/type helpers (e.g. `formatZodIssues`, used
   // by both the root entry and `kata/jwt`) are hoisted into a shared chunk rather

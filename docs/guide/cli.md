@@ -146,7 +146,7 @@ Kata is not yet published to npm, so `pnpm install` cannot resolve the generated
 `singleton(...)` / `scoped<T>()` slots here as the app grows.
 
 ```ts
-import { defineContext } from 'kata'
+import { defineContext } from 'katajs'
 
 export const k = defineContext({})
 

@@ -10,9 +10,9 @@ Um **JWT** (JSON Web Token) é uma string compacta e assinada que carrega um con
 assinado com um secret que apenas o seu servidor conhece, o servidor pode confiar nesses claims após
 uma verificação de assinatura barata — sem sessão no banco, sem round-trip no banco de dados.
 
-`kata/jwt` entrega os blocos de construção para esse fluxo, para que você não tenha que escrever um verificador na mão:
+`katajs/jwt` entrega os blocos de construção para esse fluxo, para que você não tenha que escrever um verificador na mão:
 **assinar** um token, **verificá-lo**, **autenticar** uma requisição em um scoped slot e
-**autorizar** esse slot com guards. Não adiciona **nenhuma dependência nova** — `kata/jwt` é um
+**autorizar** esse slot com guards. Não adiciona **nenhuma dependência nova** — `katajs/jwt` é um
 subpath tree-shakeable construído sobre `hono/jwt`, e `hono` já é uma peer dependency
 ([ADR-0013](/adr/0013-jwt-delivery)).
 
@@ -24,7 +24,7 @@ import {
   guard,
   requireRole,
   requireClaim,
-} from 'kata/jwt'
+} from 'katajs/jwt'
 ```
 
 Tudo aqui é uma função. Sem classes, sem decorators, sem container de IoC. Um
@@ -35,7 +35,7 @@ unificado em vez de lançar.
 ::: info O que o Kata NÃO entrega
 Login, hashing de senha, o armazenamento de usuários, rotação de refresh-token,
 sessões e provedores remotos de JWKS / OIDC (Auth0, Cognito, Clerk) são **seus**.
-`kata/jwt` é a costura de verificar-e-autorizar; o modelo de credencial e
+`katajs/jwt` é a costura de verificar-e-autorizar; o modelo de credencial e
 identidade é BYO. Veja [O que é seu](#o-que-e-seu) abaixo.
 :::
 
@@ -105,7 +105,7 @@ signJwt(claims: Record<string, unknown>, options: SignOptions): Promise<string>
 
 ```ts
 // src/modules/auth/auth.route.ts
-import { signJwt } from 'kata/jwt'
+import { signJwt } from 'katajs/jwt'
 
 import { JWT_SECRET, TOKEN_TTL_SECONDS } from '../../config'
 import { defineRoute } from '../../context'
@@ -206,7 +206,7 @@ grepável e verificável pelo lint no ponto de chamada.
 
 ```ts
 // src/context.ts
-import { defineContext, scoped, singleton } from 'kata'
+import { defineContext, scoped, singleton } from 'katajs'
 
 import type { User } from './modules/users/users.schema'
 
@@ -223,7 +223,7 @@ export type AppRegistry = typeof k.registry
 
 ```ts
 // src/middlewares/auth.ts
-import { jwtAuth } from 'kata/jwt'
+import { jwtAuth } from 'katajs/jwt'
 
 import { JWT_SECRET } from '../config'
 import { defineMiddleware } from '../context'
@@ -345,7 +345,7 @@ seu predicado diz não. Sua lista `provides` é vazia, então conecte-o com
 
 ```ts
 // em uma route — requireUser PRECISA vir antes do guard
-import { requireRole } from 'kata/jwt'
+import { requireRole } from 'katajs/jwt'
 
 export const adminRoute = defineRoute({
   method: 'GET',
@@ -397,7 +397,7 @@ Permite apenas quando o claim do valor do slot em `key` casa com `expected` — 
 igualdade estrita, ou por predicado quando `expected` é uma função.
 
 ```ts
-import { requireClaim } from 'kata/jwt'
+import { requireClaim } from 'katajs/jwt'
 
 // exige um email verificado
 const requireVerified = defineMiddleware({
@@ -426,7 +426,7 @@ guard<R, C>(options: GuardOptions<R, C>)
 `'Insufficient permissions'`).
 
 ```ts
-import { guard } from 'kata/jwt'
+import { guard } from 'katajs/jwt'
 
 // Apenas o dono do recurso pode lê-lo.
 const requireOwner = defineMiddleware({
@@ -443,7 +443,7 @@ const requireOwner = defineMiddleware({
 
 ## O que é seu
 
-`kata/jwt` para deliberadamente na fronteira de verificar-e-autorizar. O modelo
+`katajs/jwt` para deliberadamente na fronteira de verificar-e-autorizar. O modelo
 de credencial e identidade é BYO:
 
 - **Login.** Verifique as credenciais (ou um código OAuth) na sua própria route,
@@ -475,7 +475,7 @@ de credencial e identidade é BYO:
 ## Veja também
 
 - [Receita de auth](/pt/cookbook/auth) — o passo a passo de ponta a ponta que esta página condensa.
-- [Referência de `kata/jwt`](/pt/reference/jwt) — assinaturas completas.
+- [Referência de `katajs/jwt`](/pt/reference/jwt) — assinaturas completas.
 - [Middleware & scoped slots](/pt/guide/middleware) — como `provides` e `use:` se compõem.
 - [Erros](/pt/guide/errors) — o envelope de erro unificado que os guards e o `jwtAuth` renderizam.
 - [ADR-0013](/adr/0013-jwt-delivery) — por que `hono/jwt`, por que um subpath, a fronteira BYO.

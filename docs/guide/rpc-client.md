@@ -53,10 +53,10 @@ them and the per-route detail would be lost. `AppType` is exactly
 `KataApp<typeof modules>` — the same type spelled two ways.
 
 ::: tip
-`KataApp` is exported from `kata` if you want to name the type explicitly:
+`KataApp` is exported from `katajs` if you want to name the type explicitly:
 
 ```ts
-import type { KataApp } from 'kata'
+import type { KataApp } from 'katajs'
 
 export type Modules = typeof modules
 export type AppType = KataApp<Modules> // ≡ typeof app
@@ -153,7 +153,7 @@ if (res.status === 404) {
 return res.json() // { id: string; name: string; email: string }
 ```
 
-`ErrorBodySchema` (exported from `kata`) is the canonical schema for Kata's error
+`ErrorBodySchema` (exported from `katajs`) is the canonical schema for Kata's error
 envelope, so the 404 branch is typed end to end. See [Errors](/guide/errors) for the
 envelope shape and `c.error(...)`.
 

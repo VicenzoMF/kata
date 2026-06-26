@@ -95,7 +95,7 @@ shape, the formatter is exported. `formatZodIssues(error)` turns a `ZodError`
 into `FieldIssue[]`:
 
 ```ts
-import { formatZodIssues } from 'kata'
+import { formatZodIssues } from 'katajs'
 
 handler: async (c) => {
   const parsed = WebhookSchema.safeParse(await c.raw.req.json())

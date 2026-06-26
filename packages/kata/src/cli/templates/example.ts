@@ -10,7 +10,7 @@
 // template literals whose content uses no backticks, so nothing here is escaped.
 
 /** `src/context.ts` — the typed DI surface (ADR-0004); re-exports createApp / defineRoute. */
-export const exampleContextSource = `import { defineContext } from 'kata'
+export const exampleContextSource = `import { defineContext } from 'katajs'
 
 // The typed dependency-injection surface for this app (ADR-0004). It starts
 // empty — register singleton(...) / scoped<T>() slots here as the app grows,
@@ -85,7 +85,7 @@ export const examplePackageJson = {
   dependencies: {
     '@hono/node-server': '^1.13',
     hono: '^4',
-    kata: '^0.1.0',
+    katajs: '^0.1.0',
     zod: '^3',
   },
   devDependencies: {

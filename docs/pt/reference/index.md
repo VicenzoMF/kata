@@ -5,31 +5,31 @@ description: Cada export público de kata, kata/jwt e kata/node, além do bin ka
 
 # Referência da API
 
-Kata distribui um único pacote, `kata`, com três caminhos de import e um binário.
+Kata distribui um único pacote, `katajs`, com três caminhos de import e um binário.
 Nada é re-exportado de Hono — a superfície pública é exatamente o que as tabelas
 abaixo listam, derivada dos próprios entry points do pacote.
 
 | Import | Propósito |
 |---|---|
-| `kata` | Núcleo: a factory de contexto, os construtores de slot, o error envelope, os middlewares embutidos e todos os tipos públicos. |
-| `kata/jwt` | Primitivas JWT stateless mais o middleware `jwtAuth` e os guards de autorização. |
-| `kata/node` | `gracefulShutdown` exclusivo de Node, para drenar um servidor em `SIGTERM` / `SIGINT`. |
+| `katajs` | Núcleo: a factory de contexto, os construtores de slot, o error envelope, os middlewares embutidos e todos os tipos públicos. |
+| `katajs/jwt` | Primitivas JWT stateless mais o middleware `jwtAuth` e os guards de autorização. |
+| `katajs/node` | `gracefulShutdown` exclusivo de Node, para drenar um servidor em `SIGTERM` / `SIGINT`. |
 | `kata` (bin) | A CLI `kata init` que faz o scaffold do harness e, opcionalmente, de um app de exemplo. |
 
 ```ts
-import { defineContext, scoped, singleton } from 'kata'
-import { jwtAuth, requireRole, signJwt } from 'kata/jwt'
-import { gracefulShutdown } from 'kata/node'
+import { defineContext, scoped, singleton } from 'katajs'
+import { jwtAuth, requireRole, signJwt } from 'katajs/jwt'
+import { gracefulShutdown } from 'katajs/node'
 ```
 
-A divisão é deliberada: `kata` é neutro em relação ao runtime e roda onde quer que
-Hono rode (Node, Bun, Deno, edge), `kata/jwt` é o único módulo que toca `hono/jwt`,
-e `kata/node` é o único módulo que toca `node:process` — assim, um build edge que
-importa `kata` nunca puxa internals do Node.
+A divisão é deliberada: `katajs` é neutro em relação ao runtime e roda onde quer que
+Hono rode (Node, Bun, Deno, edge), `katajs/jwt` é o único módulo que toca `hono/jwt`,
+e `katajs/node` é o único módulo que toca `node:process` — assim, um build edge que
+importa `katajs` nunca puxa internals do Node.
 
 ## Dependências peer
 
-Kata declara duas dependências peer. Instale-as junto com `kata`; ele não empacota
+Kata declara duas dependências peer. Instale-as junto com `katajs`; ele não empacota
 nenhuma das duas.
 
 ```json
@@ -44,9 +44,9 @@ nenhuma das duas.
 | Peer | Faixa | Usada para |
 |---|---|---|
 | `hono` | `^4` | O router, o contexto, os adaptadores de runtime e o cliente RPC tipado (`hc`). |
-| `zod` | `^3` | Cada schema de `input` / `output` e os schemas de claims em `kata/jwt`. |
+| `zod` | `^3` | Cada schema de `input` / `output` e os schemas de claims em `katajs/jwt`. |
 
-## `kata` — núcleo
+## `katajs` — núcleo
 
 Valores:
 
@@ -103,7 +103,7 @@ Tipos de opções dos middlewares embutidos — `CorsOptions`, `SecureHeadersOpt
 `BodyLimitOptions` — também são exportados. Veja [Middleware](/pt/reference/middleware)
 para os campos deles.
 
-## `kata/jwt` — auth
+## `katajs/jwt` — auth
 
 Valores:
 
@@ -130,12 +130,12 @@ Tipos:
 | `GuardOptions` | Opções para `guard`: `slot?`, `authorize`, `code?`, `message?`. |
 
 ::: tip Você é dono do fluxo de login
-`kata/jwt` te dá assinatura, verificação, o middleware de auth e os guards.
+`katajs/jwt` te dá assinatura, verificação, o middleware de auth e os guards.
 Hashing de senha, o store de usuários, a route de login e os refresh tokens continuam sendo seus.
 Veja o [cookbook de Autenticação](/pt/cookbook/auth) para o padrão completo.
 :::
 
-## `kata/node` — runtime Node
+## `katajs/node` — runtime Node
 
 Valores:
 
