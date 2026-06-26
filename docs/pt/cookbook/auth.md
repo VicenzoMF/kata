@@ -113,8 +113,10 @@ export const requireUser = defineMiddleware({
 
 `provides: ['currentUser'] as const` é estrutural: o `as const` mantém os
 tipos literais das chaves, de modo que o sistema de tipos e a regra de lint
-`kata/middleware-provides-mismatch` possam checar que um middleware de fato
-preenche tudo que ele afirma prover.
+`kata/jwt-auth-provides-slot` possam checar que um middleware `jwtAuth({ slot })`
+declara o slot que ele preenche. O `jwtAuth` faz seu `c.set` internamente, então
+a regra genérica `kata/middleware-provides-mismatch` não consegue ver essa
+atribuição — `kata/jwt-auth-provides-slot` (ADR-0013) é o que impõe esse contrato.
 
 Toda falha de autenticação curto-circuita a cadeia com o envelope unificado da
 ADR-0008 como um **401** — o handler nunca roda:
@@ -313,4 +315,4 @@ const requireOwner = defineMiddleware({
 - **Mantenha o secret fora do tipo do slot.** `resolve` decide o que cai no
   slot; retorne seu `User`, nunca o token bruto ou o secret.
 - **Não leia scoped slots no carregamento do módulo.** Eles só existem dentro de uma requisição
-  (regra planejada `kata/scoped-read-outside-request`).
+  (imposto pela regra `kata/scoped-read-outside-request`).

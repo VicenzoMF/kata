@@ -314,8 +314,11 @@ de campo.
 
 Cada issue de campo é `{ path, message, code }`, com `expected` /
 `received` opcionais para incompatibilidades de tipo. `path` usa notação de ponto/colchete para campos
-aninhados (`address.zip`, `tags[0]`). Um schema de `body` com um corpo ilegível ou
-não-JSON é parseado contra `undefined`, então o schema decide o desfecho.
+aninhados (`address.zip`, `tags[0]`). Um body *vazio ou ausente* é parseado contra
+`undefined`, então o schema `body` decide o desfecho (um body opcional passa; um
+obrigatório falha → `422`). Um body que é **não-vazio mas não é JSON válido** é
+diferente: o Kata o rejeita com `400` `validation_failed`
+(`message: "Malformed JSON body"`) antes do schema rodar.
 
 ### Output — depois do handler
 

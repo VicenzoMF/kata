@@ -227,12 +227,12 @@ And it only type-checks for keys you actually declared. A typo or an undeclared
 name is a compile error, and the `kata/context-key-not-registered` lint rule flags
 it too — so you find out as you type, not in production.
 
-::: warning Reading the registry at startup
-The four returned members are the public surface. Outside a request you have no
-`c`; to reach a singleton at boot — for example to log the listening port — read
-it off the registry directly: `k.registry.logger.__value.info(...)`. Scoped slots
-have no value at startup by definition, so reading one outside a request handler is
-a build-time error (`kata/scoped-read-outside-request`).
+::: warning Reading a singleton at startup
+The five returned members are the public surface. Outside a request you have no
+`c`; to reach a singleton at boot — for example to log the listening port — call
+`k.resolve('logger').info(...)`. `resolve` is singleton-only: a scoped slot has no
+value at startup by definition, so reaching for one outside a request handler is a
+build-time error (`kata/scoped-read-outside-request`).
 :::
 
 ## Filling scoped slots happens in middleware

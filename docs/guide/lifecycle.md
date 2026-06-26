@@ -33,7 +33,7 @@ const app = createApp({ modules: [users] })
 const port = Number(process.env['PORT'] ?? 3000)
 
 serve({ fetch: app.fetch, port }, (info) => {
-  k.registry.logger.__value.info(`listening on http://localhost:${info.port}`)
+  k.resolve('logger').info(`listening on http://localhost:${info.port}`)
 })
 ```
 
@@ -92,14 +92,14 @@ const app = createApp({ modules: [users] })
 const port = Number(process.env['PORT'] ?? 3000)
 
 const server = serve({ fetch: app.fetch, port }, (info) => {
-  k.registry.logger.__value.info(`listening on http://localhost:${info.port}`)
+  k.resolve('logger').info(`listening on http://localhost:${info.port}`)
 })
 
 gracefulShutdown(server, {
   onClose: async () => {
     // App-owned teardown, in the app's chosen order. Resources are reached
     // through the registry or closed-over references.
-    await k.registry.db.__value.close()
+    await k.resolve('db').close()
   },
   // signals: ['SIGTERM', 'SIGINT'], // default
   // timeoutMs: 10_000,              // default
@@ -143,7 +143,7 @@ gracefulShutdown(server, {
   onClose: async () => {
     await metrics.flush()   // flush buffered metrics first
     await queue.stop()      // then stop the queue consumer
-    await k.registry.db.__value.close() // then close the pool, last
+    await k.resolve('db').close() // then close the pool, last
   },
 })
 ```

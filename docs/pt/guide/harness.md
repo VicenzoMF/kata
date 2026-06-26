@@ -104,9 +104,16 @@ As regras que `kata verify` impõe, cada uma ancorada no ADR que a justifica:
 | `kata/no-route-without-output-schema` | todo `defineRoute` declara `output` | ADR-0003 |
 | `kata/no-route-without-input-schema` | todo `defineRoute` declara `input` | ADR-0003 |
 | `kata/inline-schema` | schemas Zod vivem em `*.schema.ts` | ADR-0005 |
-| `kata/scoped-slot-not-provided` | um `c.get` scoped tem um middleware que o fornece | ADR-0004 |
-| `kata/middleware-provides-mismatch` | `provides[]` casa com o `c.set` do handler | ADR-0004 |
 | `kata/context-key-not-registered` | `c.get('key')` é uma chave de contexto registrada | ADR-0004 |
+| `kata/scoped-slot-not-provided` | um `c.get` scoped tem um middleware que o fornece | ADR-0004 |
+| `kata/scoped-read-outside-request` | um `c.get` scoped só é lido dentro de um handler de request | ADR-0004 |
+| `kata/middleware-provides-mismatch` | `provides[]` casa com o `c.set` do handler (avisa quando um slot de `c.set` é omitido de `provides`) | ADR-0004 |
+| `kata/jwt-auth-provides-slot` | um middleware `jwtAuth({ slot })` declara `provides: [slot]` | ADR-0013 |
+| `kata/no-adhoc-error-shape` | erros usam `c.error(...)`, não `c.json({ error }, 4xx/5xx)` inline | ADR-0008 |
+| `kata/no-raw-boundary-cast` | um cast bruto `as unknown`/`as never` de fronteira carrega um marcador `// kata-allow: hono-boundary` | ADR-0016 |
+| `kata/schema-file-naming` | arquivos de um módulo são nomeados `<domain>.{route,service,schema}.ts` | ADR-0016 |
+| `kata/no-decorator` | nenhuma sintaxe `@decorator` sob `src/` | ADR-0002 |
+| `kata/no-class` | nenhuma declaração `class` sob `src/` | ADR-0002 |
 
 Veja [Bootstrap CLI](/pt/guide/cli) para a superfície completa de comandos, incluindo
 `kata verify --watch` para um loop de re-checagem no terminal.

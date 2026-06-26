@@ -314,8 +314,11 @@ issues.
 
 Each field issue is `{ path, message, code }`, with optional `expected` /
 `received` for type mismatches. `path` uses dot/bracket notation for nested
-fields (`address.zip`, `tags[0]`). A `body` schema with an unreadable or
-non-JSON body parses against `undefined`, so the schema decides the outcome.
+fields (`address.zip`, `tags[0]`). An *empty or absent* body parses against
+`undefined`, so the `body` schema decides the outcome (an optional body passes;
+a required one fails → `422`). A body that is **non-empty but not valid JSON** is
+different: Kata rejects it with `400` `validation_failed`
+(`message: "Malformed JSON body"`) before the schema runs.
 
 ### Output — after the handler
 

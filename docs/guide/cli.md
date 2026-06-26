@@ -228,8 +228,8 @@ The second command runs Kata's deterministic lint rules over a project:
 kata verify [path]      # default path: the current directory
 ```
 
-It reads the project, checks the rules anchored to ADR-0003 / 0004 / 0005, and prints
-a human-readable report. Two flags shape how it runs:
+It reads the project, checks the rules anchored to ADR-0002 / 0003 / 0004 / 0005 /
+0008 / 0013 / 0016, and prints a human-readable report. Two flags shape how it runs:
 
 - `kata verify --json` — emit Claude Code `PostToolUse` hook JSON instead of the
   terminal report. This is exactly what the generated hooks call on every file write.
