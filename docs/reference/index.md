@@ -17,9 +17,9 @@ list, derived from the package's own entry points.
 | `kata` (bin) | The `kata init` CLI that scaffolds the harness and an optional example app. |
 
 ```ts
-import { defineContext, scoped, singleton } from 'kata'
-import { jwtAuth, requireRole, signJwt } from 'kata/jwt'
-import { gracefulShutdown } from 'kata/node'
+import { defineContext, scoped, singleton } from 'katajs'
+import { jwtAuth, requireRole, signJwt } from 'katajs/jwt'
+import { gracefulShutdown } from 'katajs/node'
 ```
 
 The split is deliberate: `kata` is runtime-neutral and runs wherever Hono runs

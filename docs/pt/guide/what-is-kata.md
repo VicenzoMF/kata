@@ -29,7 +29,7 @@ um cliente construído separadamente ([ADR-0001](/adr/0001-use-hono-as-base)). T
 é um objeto comum que você passa para uma dessas quatro funções.
 
 ```ts
-import { defineContext, scoped, singleton } from 'kata'
+import { defineContext, scoped, singleton } from 'katajs'
 
 export const k = defineContext({
   logger: singleton(console),

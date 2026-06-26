@@ -68,7 +68,7 @@ directly. This mirrors [`examples/hello/src/context.ts`](https://github.com/Vice
 
 ```ts
 // src/context.ts
-import { defineContext, scoped, singleton } from 'kata'
+import { defineContext, scoped, singleton } from 'katajs'
 
 import { makeDb } from './db'
 import type { User } from './modules/users/users.schema'
@@ -439,7 +439,7 @@ Two honest limits versus a NestJS interceptor:
 
 ```ts
 // src/main.ts — hardening declared once, app-wide (ADR-0012)
-import { bodyLimit, cors, secureHeaders } from 'kata'
+import { bodyLimit, cors, secureHeaders } from 'katajs'
 
 import { createApp } from './context'
 import * as echo from './modules/echo/echo.route'

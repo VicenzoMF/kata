@@ -16,7 +16,7 @@
 import type { Hono, InferRequestType, InferResponseType } from 'hono'
 import { hc } from 'hono/client'
 import type { BlankEnv } from 'hono/types'
-import type { KataApp } from 'kata'
+import type { KataApp } from 'katajs'
 
 import type { AppType, Modules } from './server'
 

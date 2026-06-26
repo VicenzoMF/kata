@@ -1,4 +1,4 @@
-# kata
+# katajs
 
 > A web framework on Hono. Opinionated like NestJS, functional like a script,
 > verifiable like a type system.
@@ -11,13 +11,13 @@ Static DI, mandatory input/output schemas, and a locked folder layout — see th
 `hono` and `zod` are peer dependencies — install them alongside `kata`:
 
 ```sh
-pnpm add kata hono zod
+pnpm add katajs hono zod
 ```
 
 ## Usage
 
 ```ts
-import { defineContext, singleton } from 'kata'
+import { defineContext, singleton } from 'katajs'
 
 const { defineRoute, createApp } = defineContext({
   greeting: singleton('hello'),

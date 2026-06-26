@@ -20,8 +20,8 @@ Kata tem duas peer dependencies — Hono (a base HTTP) e Zod (schemas) — mais
 o adaptador Node do Hono para subir um servidor no Node.
 
 ```bash
-npm install kata hono zod @hono/node-server
-# ou: pnpm add kata hono zod @hono/node-server
+npm install katajs hono zod @hono/node-server
+# ou: pnpm add katajs hono zod @hono/node-server
 ```
 
 ::: warning Pré-lançamento
@@ -67,7 +67,7 @@ já vinculados ao seu registry. Reexporte-os para que o resto da aplicação her
 os tipos — `c.get('key')` só passa na checagem de tipos para chaves que você registrou aqui.
 
 ```ts
-import { defineContext, scoped, singleton } from 'kata'
+import { defineContext, scoped, singleton } from 'katajs'
 
 import type { User } from './modules/users/users.schema'
 
@@ -160,7 +160,7 @@ Zod e preenche o slot. O hook `resolve()` mapeia as claims validadas para o
 continue greppável e checável pelo lint.
 
 ```ts
-import { jwtAuth } from 'kata/jwt'
+import { jwtAuth } from 'katajs/jwt'
 
 import { JWT_SECRET } from '../config'
 import { defineMiddleware } from '../context'
@@ -209,7 +209,7 @@ para colocar atrás de um status 4xx/5xx. Routes que leem um scoped slot listam 
 middleware provedor em `use:`.
 
 ```ts
-import { ErrorBodySchema } from 'kata'
+import { ErrorBodySchema } from 'katajs'
 
 import { defineRoute } from '../../context'
 import { requireUser } from '../../middlewares/auth'
@@ -264,7 +264,7 @@ uma vez e toda route fica coberta.
 
 ```ts
 import { serve } from '@hono/node-server'
-import { bodyLimit, cors, secureHeaders } from 'kata'
+import { bodyLimit, cors, secureHeaders } from 'katajs'
 
 import { createApp, k } from './context'
 import * as auth from './modules/auth/auth.route'
@@ -293,7 +293,7 @@ JWT com `signJwt` para que você possa exercitar `/me` sem ferramentas externas.
 em quem a chama e **não** é como você autentica usuários reais:
 
 ```ts
-import { signJwt } from 'kata/jwt'
+import { signJwt } from 'katajs/jwt'
 
 import { JWT_SECRET, TOKEN_TTL_SECONDS } from '../../config'
 import { defineRoute } from '../../context'

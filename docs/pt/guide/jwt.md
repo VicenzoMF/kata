@@ -24,7 +24,7 @@ import {
   guard,
   requireRole,
   requireClaim,
-} from 'kata/jwt'
+} from 'katajs/jwt'
 ```
 
 Tudo aqui é uma função. Sem classes, sem decorators, sem container de IoC. Um
@@ -105,7 +105,7 @@ signJwt(claims: Record<string, unknown>, options: SignOptions): Promise<string>
 
 ```ts
 // src/modules/auth/auth.route.ts
-import { signJwt } from 'kata/jwt'
+import { signJwt } from 'katajs/jwt'
 
 import { JWT_SECRET, TOKEN_TTL_SECONDS } from '../../config'
 import { defineRoute } from '../../context'
@@ -206,7 +206,7 @@ grepável e verificável pelo lint no ponto de chamada.
 
 ```ts
 // src/context.ts
-import { defineContext, scoped, singleton } from 'kata'
+import { defineContext, scoped, singleton } from 'katajs'
 
 import type { User } from './modules/users/users.schema'
 
@@ -223,7 +223,7 @@ export type AppRegistry = typeof k.registry
 
 ```ts
 // src/middlewares/auth.ts
-import { jwtAuth } from 'kata/jwt'
+import { jwtAuth } from 'katajs/jwt'
 
 import { JWT_SECRET } from '../config'
 import { defineMiddleware } from '../context'
@@ -345,7 +345,7 @@ seu predicado diz não. Sua lista `provides` é vazia, então conecte-o com
 
 ```ts
 // em uma route — requireUser PRECISA vir antes do guard
-import { requireRole } from 'kata/jwt'
+import { requireRole } from 'katajs/jwt'
 
 export const adminRoute = defineRoute({
   method: 'GET',
@@ -397,7 +397,7 @@ Permite apenas quando o claim do valor do slot em `key` casa com `expected` — 
 igualdade estrita, ou por predicado quando `expected` é uma função.
 
 ```ts
-import { requireClaim } from 'kata/jwt'
+import { requireClaim } from 'katajs/jwt'
 
 // exige um email verificado
 const requireVerified = defineMiddleware({
@@ -426,7 +426,7 @@ guard<R, C>(options: GuardOptions<R, C>)
 `'Insufficient permissions'`).
 
 ```ts
-import { guard } from 'kata/jwt'
+import { guard } from 'katajs/jwt'
 
 // Apenas o dono do recurso pode lê-lo.
 const requireOwner = defineMiddleware({

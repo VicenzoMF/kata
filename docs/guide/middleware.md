@@ -107,7 +107,7 @@ the end — see [Context & DI](/guide/context-di).)
 Given a context with a `currentUser` scoped slot:
 
 ```ts
-import { defineContext, scoped, singleton } from 'kata'
+import { defineContext, scoped, singleton } from 'katajs'
 
 export type CurrentUser = { id: string }
 
@@ -155,7 +155,7 @@ and fills a `currentUser` slot for you. The example app wraps it so the `provide
 literal stays at the call site:
 
 ```ts
-import { jwtAuth } from 'kata/jwt'
+import { jwtAuth } from 'katajs/jwt'
 
 import { JWT_SECRET } from '../config'
 import { defineMiddleware } from '../context'
@@ -213,7 +213,7 @@ A route lists its middleware in `use:`, and they run left to right, all before t
 handler:
 
 ```ts
-import { ErrorBodySchema } from 'kata'
+import { ErrorBodySchema } from 'katajs'
 
 import { defineRoute } from '../../context'
 import { requireAuth } from '../../middlewares/auth'
@@ -253,7 +253,7 @@ repeating them in each route's `use:` would be noise. Declare them once on the a
 with `createApp({ middlewares })`:
 
 ```ts
-import { bodyLimit, cors, secureHeaders } from 'kata'
+import { bodyLimit, cors, secureHeaders } from 'katajs'
 
 import { createApp } from './context'
 import * as orders from './modules/orders/orders.route'

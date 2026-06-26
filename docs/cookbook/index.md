@@ -48,7 +48,7 @@ The idiomatic setup re-exports them so the rest of the app imports from
 
 ```ts
 // src/context.ts
-import { defineContext, scoped, singleton } from 'kata'
+import { defineContext, scoped, singleton } from 'katajs'
 
 import { makeDb } from './db'
 import type { User } from './modules/users/users.schema'

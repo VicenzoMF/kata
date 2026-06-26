@@ -50,8 +50,8 @@ Kata has two peer dependencies — Hono (the HTTP base) and Zod (schemas) — pl
 Hono's Node adapter to boot a server on Node:
 
 ```bash
-npm install kata hono zod @hono/node-server
-# or: pnpm add kata hono zod @hono/node-server
+npm install katajs hono zod @hono/node-server
+# or: pnpm add katajs hono zod @hono/node-server
 ```
 
 > **Pre-release:** Kata is not yet published to npm. Today the fastest path is to
@@ -83,7 +83,7 @@ already bound to your registry. Re-export them so the rest of your app inherits
 the types — `c.get('key')` only compiles for keys you registered here.
 
 ```ts
-import { defineContext, scoped, singleton } from 'kata'
+import { defineContext, scoped, singleton } from 'katajs'
 
 import type { User } from './modules/users/users.schema'
 
@@ -162,7 +162,7 @@ fills the slot. The `resolve()` hook maps the validated claims onto the app's
 greppable and lint-checkable.
 
 ```ts
-import { jwtAuth } from 'kata/jwt'
+import { jwtAuth } from 'katajs/jwt'
 
 import { JWT_SECRET } from '../config'
 import { defineMiddleware } from '../context'
@@ -262,7 +262,7 @@ canonical case: declare them once and every route is covered, instead of
 copy-pasting them onto each `defineRoute`.
 
 ```ts
-import { bodyLimit, cors, secureHeaders } from 'kata'
+import { bodyLimit, cors, secureHeaders } from 'katajs'
 
 const app = createApp({
   modules: [users],

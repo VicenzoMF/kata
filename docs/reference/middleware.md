@@ -20,7 +20,7 @@ caveat, see [App-level middleware](/guide/app-middleware). This page is the
 signature reference.
 
 ```ts
-import { bodyLimit, cors, secureHeaders } from 'kata'
+import { bodyLimit, cors, secureHeaders } from 'katajs'
 ```
 
 ::: info All three are opt-in
@@ -45,7 +45,7 @@ defaults beyond Hono's. See the
 option semantics.
 
 ```ts
-import { cors } from 'kata'
+import { cors } from 'katajs'
 
 import { createApp } from './context'
 import * as users from './modules/users/users.route'
@@ -89,7 +89,7 @@ With no options, `secureHeaders()` applies Hono's hardened baseline —
 `Strict-Transport-Security`, and more — and removes `X-Powered-By`.
 
 ```ts
-import { secureHeaders } from 'kata'
+import { secureHeaders } from 'katajs'
 
 import { createApp } from './context'
 import * as users from './modules/users/users.route'
@@ -133,7 +133,7 @@ type BodyLimitOptions = {
 `maxSize` defaults to `DEFAULT_MAX_BODY_SIZE`, exported from `kata`:
 
 ```ts
-import { DEFAULT_MAX_BODY_SIZE } from 'kata'
+import { DEFAULT_MAX_BODY_SIZE } from 'katajs'
 
 DEFAULT_MAX_BODY_SIZE // 1024 * 1024 — 1 MiB
 ```
@@ -150,7 +150,7 @@ When the limit is exceeded and you supply no `onError`, the default returns HTTP
 ```
 
 ```ts
-import { bodyLimit } from 'kata'
+import { bodyLimit } from 'katajs'
 
 import { createApp } from './context'
 import * as users from './modules/users/users.route'
@@ -165,7 +165,7 @@ Provide `onError` to customize the rejection. It receives the raw Hono `Context`
 and must return a `Response`:
 
 ```ts
-import { bodyLimit } from 'kata'
+import { bodyLimit } from 'katajs'
 
 bodyLimit({
   maxSize: 8 * 1024,
@@ -180,7 +180,7 @@ The same factory works in a route's `use:` chain and in the app-level
 it. The `examples/hello` app applies all three at the app level:
 
 ```ts
-import { bodyLimit, cors, secureHeaders } from 'kata'
+import { bodyLimit, cors, secureHeaders } from 'katajs'
 
 import { createApp } from './context'
 import * as users from './modules/users/users.route'
@@ -243,7 +243,7 @@ every outcome — including short-circuits and `5xx` errors — and is available
 Only the header name constant is exported:
 
 ```ts
-import { REQUEST_ID_HEADER } from 'kata'
+import { REQUEST_ID_HEADER } from 'katajs'
 
 REQUEST_ID_HEADER // 'x-request-id'
 ```

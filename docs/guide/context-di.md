@@ -25,7 +25,7 @@ type system *and* the lint harness read to answer "what dependencies exist?" If
 something isn't declared there, `c.get` for it simply does not compile.
 
 ```ts
-import { defineContext, scoped, singleton } from 'kata'
+import { defineContext, scoped, singleton } from 'katajs'
 
 import type { User } from './modules/users/users.schema'
 
@@ -79,7 +79,7 @@ implies:
    starts over from an empty slot.
 
 ```ts
-import { defineContext, scoped, singleton } from 'kata'
+import { defineContext, scoped, singleton } from 'katajs'
 import type { Store, Transaction } from './store'
 import { createStore } from './store'
 

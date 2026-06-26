@@ -15,7 +15,7 @@ sem elas.
 **antes** do `use:` de cada rota.
 
 ```ts
-import { bodyLimit, cors, secureHeaders } from 'kata'
+import { bodyLimit, cors, secureHeaders } from 'katajs'
 
 import { createApp } from './context'
 import * as users from './modules/users/users.route'
@@ -90,7 +90,7 @@ Um wrapper fino sobre o `cors` do Hono. `CorsOptions` espelha as opções do Hon
 `credentials` — veja a [documentação de CORS do Hono](https://hono.dev/docs/middleware/builtin/cors).
 
 ```ts
-import { cors } from 'kata'
+import { cors } from 'katajs'
 
 createApp({
   modules: [users],
@@ -123,7 +123,7 @@ endurecida do Hono — `X-Content-Type-Options: nosniff`,
 [documentação de secure-headers do Hono](https://hono.dev/docs/middleware/builtin/secure-headers).
 
 ```ts
-import { secureHeaders } from 'kata'
+import { secureHeaders } from 'katajs'
 
 createApp({
   modules: [users],
@@ -160,7 +160,7 @@ com o envelope de erro unificado do kata ([ADR-0008](/adr/0008-unified-error-res
 ```
 
 ```ts
-import { bodyLimit } from 'kata'
+import { bodyLimit } from 'katajs'
 
 createApp({
   modules: [users],

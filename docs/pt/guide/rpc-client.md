@@ -43,7 +43,7 @@ e os detalhes por rota seriam perdidos. `AppType` é exatamente
 `KataApp` é exportado de `kata` se você quiser nomear o tipo explicitamente:
 
 ```ts
-import type { KataApp } from 'kata'
+import type { KataApp } from 'katajs'
 
 export type Modules = typeof modules
 export type AppType = KataApp<Modules> // ≡ typeof app

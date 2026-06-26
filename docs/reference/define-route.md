@@ -155,7 +155,7 @@ more than one status with a contract you want typed and validated — a success
 body plus an error envelope, or a non-`200` success such as `201`:
 
 ```ts
-import { ErrorBodySchema } from 'kata'
+import { ErrorBodySchema } from 'katajs'
 
 export const checkoutRoute = defineRoute({
   method: 'POST',

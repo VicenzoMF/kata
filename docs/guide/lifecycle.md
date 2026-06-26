@@ -62,8 +62,8 @@ touches `node:process` — so importing the runtime-neutral core (`kata`) from a
 edge or Workers build never pulls Node in.
 
 ```ts
-import { gracefulShutdown } from 'kata/node'
-import type { ServerType, GracefulShutdownOptions } from 'kata/node'
+import { gracefulShutdown } from 'katajs/node'
+import type { ServerType, GracefulShutdownOptions } from 'katajs/node'
 
 function gracefulShutdown(server: ServerType, options: GracefulShutdownOptions): void
 
@@ -83,7 +83,7 @@ adapter.
 ```ts
 // src/main.ts
 import { serve } from '@hono/node-server'
-import { gracefulShutdown } from 'kata/node'
+import { gracefulShutdown } from 'katajs/node'
 
 import { createApp, k } from './context'
 import * as users from './modules/users/users.route'

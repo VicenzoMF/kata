@@ -155,7 +155,7 @@ mais de um status com um contrato que você quer tipado e validado — um corpo 
 sucesso mais um envelope de erro, ou um sucesso não-`200` como `201`:
 
 ```ts
-import { ErrorBodySchema } from 'kata'
+import { ErrorBodySchema } from 'katajs'
 
 export const checkoutRoute = defineRoute({
   method: 'POST',

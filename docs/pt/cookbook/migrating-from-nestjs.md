@@ -67,7 +67,7 @@ diretamente. Isso espelha [`examples/hello/src/context.ts`](https://github.com/V
 
 ```ts
 // src/context.ts
-import { defineContext, scoped, singleton } from 'kata'
+import { defineContext, scoped, singleton } from 'katajs'
 
 import { makeDb } from './db'
 import type { User } from './modules/users/users.schema'
@@ -438,7 +438,7 @@ Dois limites honestos versus um interceptor do NestJS:
 
 ```ts
 // src/main.ts — endurecimento declarado uma vez, para o app inteiro (ADR-0012)
-import { bodyLimit, cors, secureHeaders } from 'kata'
+import { bodyLimit, cors, secureHeaders } from 'katajs'
 
 import { createApp } from './context'
 import * as echo from './modules/echo/echo.route'

@@ -226,7 +226,7 @@ describe('renderLefthookYml() — issue #130', () => {
 describe('renderExample* — `kata init --with-example` source files (ADR-0015 / #101)', () => {
   it('context.ts calls defineContext and re-exports createApp / defineRoute (ADR-0004)', () => {
     const src = renderExampleContext()
-    expect(src).toContain("import { defineContext } from 'kata'")
+    expect(src).toContain("import { defineContext } from 'katajs'")
     expect(src).toContain('export const k = defineContext({})')
     expect(src).toContain('export const { defineRoute, createApp } = k')
   })
@@ -279,7 +279,7 @@ describe('renderExample* — `kata init --with-example` source files (ADR-0015 /
     expect(text.endsWith('\n')).toBe(true)
     expect(JSON.parse(text)).toEqual(examplePackageJson)
     expect(examplePackageJson.type).toBe('module')
-    expect(examplePackageJson.dependencies.kata).toBe('^0.1.0')
+    expect(examplePackageJson.dependencies.katajs).toBe('^0.1.0')
     expect(examplePackageJson.dependencies['@hono/node-server']).toBeDefined()
     expect(examplePackageJson.dependencies.zod).toBeDefined()
     expect(examplePackageJson.scripts.start).toBe('tsx src/main.ts')

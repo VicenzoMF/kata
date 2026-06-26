@@ -14,7 +14,7 @@ e retorna um app Hono paramétrico que você serve e do qual exporta um tipo.
 vinculada, não um import livre — ela já está tipada para o seu registry.
 
 ```ts
-import { defineContext, singleton } from 'kata'
+import { defineContext, singleton } from 'katajs'
 
 export const k = defineContext({ logger: singleton(console) })
 export const { defineRoute, defineMiddleware, createApp } = k
@@ -69,7 +69,7 @@ Declare preocupações transversais uma vez aqui, em vez de repeti-las em cada r
 Os built-ins de hardening de primeira parte são o caso canônico:
 
 ```ts
-import { bodyLimit, cors, secureHeaders } from 'kata'
+import { bodyLimit, cors, secureHeaders } from 'katajs'
 
 const app = createApp({
   modules: [users, orders],
@@ -182,7 +182,7 @@ O `serve()` do `@hono/node-server` retorna um handle de servidor. Passe-o para
 
 ```ts
 import { serve } from '@hono/node-server'
-import { gracefulShutdown } from 'kata/node'
+import { gracefulShutdown } from 'katajs/node'
 
 import { createApp, k } from './context'
 import * as products from './modules/products/products.route'

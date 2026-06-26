@@ -11,7 +11,7 @@ ficam em um único lugar: uma chamada a `defineContext`. Essa chamada é o regis
 declarada ali, `c.get` não compila.
 
 ```ts
-import { defineContext, scoped, singleton } from 'kata'
+import { defineContext, scoped, singleton } from 'katajs'
 
 import type { User } from './modules/users/users.schema'
 
@@ -45,7 +45,7 @@ constructors. Não existe um terceiro tipo.
   request por um middleware, nunca na inicialização.
 
 ```ts
-import { defineContext, scoped, singleton } from 'kata'
+import { defineContext, scoped, singleton } from 'katajs'
 import type { Store, Transaction } from './store'
 import { createStore } from './store'
 

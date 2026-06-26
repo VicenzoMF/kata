@@ -24,7 +24,7 @@ import {
   guard,
   requireRole,
   requireClaim,
-} from 'kata/jwt'
+} from 'katajs/jwt'
 ```
 
 Everything here is a function. No classes, no decorators, no IoC container. An
@@ -104,7 +104,7 @@ signJwt(claims: Record<string, unknown>, options: SignOptions): Promise<string>
 
 ```ts
 // src/modules/auth/auth.route.ts
-import { signJwt } from 'kata/jwt'
+import { signJwt } from 'katajs/jwt'
 
 import { JWT_SECRET, TOKEN_TTL_SECONDS } from '../../config'
 import { defineRoute } from '../../context'
@@ -205,7 +205,7 @@ greppable and lint-checkable at the call site.
 
 ```ts
 // src/context.ts
-import { defineContext, scoped, singleton } from 'kata'
+import { defineContext, scoped, singleton } from 'katajs'
 
 import type { User } from './modules/users/users.schema'
 
@@ -222,7 +222,7 @@ export type AppRegistry = typeof k.registry
 
 ```ts
 // src/middlewares/auth.ts
-import { jwtAuth } from 'kata/jwt'
+import { jwtAuth } from 'katajs/jwt'
 
 import { JWT_SECRET } from '../config'
 import { defineMiddleware } from '../context'
@@ -343,7 +343,7 @@ must come **after** the middleware that fills the slot.
 
 ```ts
 // in a route — requireUser MUST come before the guard
-import { requireRole } from 'kata/jwt'
+import { requireRole } from 'katajs/jwt'
 
 export const adminRoute = defineRoute({
   method: 'GET',
@@ -395,7 +395,7 @@ Allows only when the slot value's claim at `key` matches `expected` — by stric
 equality, or by predicate when `expected` is a function.
 
 ```ts
-import { requireClaim } from 'kata/jwt'
+import { requireClaim } from 'katajs/jwt'
 
 // require a verified email
 const requireVerified = defineMiddleware({
@@ -424,7 +424,7 @@ guard<R, C>(options: GuardOptions<R, C>)
 `'Insufficient permissions'`).
 
 ```ts
-import { guard } from 'kata/jwt'
+import { guard } from 'katajs/jwt'
 
 // Only the owner of the resource may read it.
 const requireOwner = defineMiddleware({

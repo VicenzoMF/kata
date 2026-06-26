@@ -14,7 +14,7 @@ importers:
       '@vitest/coverage-v8':
         specifier: ^4.1.7
         version: 4.1.7(vitest@4.1.7)
-      kata:
+      katajs:
         specifier: workspace:*
         version: link:packages/kata
       lefthook:
@@ -38,7 +38,7 @@ importers:
       hono:
         specifier: ^4
         version: 4.12.21
-      kata:
+      katajs:
         specifier: workspace:*
         version: link:../../packages/kata
       zod:
@@ -63,7 +63,7 @@ importers:
       hono:
         specifier: ^4
         version: 4.12.21
-      kata:
+      katajs:
         specifier: workspace:*
         version: link:../../packages/kata
       zod:
@@ -88,7 +88,7 @@ importers:
       hono:
         specifier: ^4
         version: 4.12.21
-      kata:
+      katajs:
         specifier: workspace:*
         version: link:../../packages/kata
       zod:

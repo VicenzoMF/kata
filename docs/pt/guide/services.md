@@ -69,7 +69,7 @@ o service e retorna o valor (que o Kata então valida contra `output`):
 
 ```ts
 // src/modules/users/users.route.ts
-import { ErrorBodySchema } from 'kata'
+import { ErrorBodySchema } from 'katajs'
 
 import { defineRoute } from '../../context'
 

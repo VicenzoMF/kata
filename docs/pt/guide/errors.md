@@ -217,7 +217,7 @@ fornece `ErrorBodySchema` exatamente para isso — o espelho em Zod do envelope
 unificado:
 
 ```ts
-import { ErrorBodySchema } from 'kata'
+import { ErrorBodySchema } from 'katajs'
 
 export const getUserRoute = defineRoute({
   method: 'GET',

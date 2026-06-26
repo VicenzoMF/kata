@@ -56,7 +56,7 @@ them and the per-route detail would be lost. `AppType` is exactly
 `KataApp` is exported from `kata` if you want to name the type explicitly:
 
 ```ts
-import type { KataApp } from 'kata'
+import type { KataApp } from 'katajs'
 
 export type Modules = typeof modules
 export type AppType = KataApp<Modules> // ≡ typeof app

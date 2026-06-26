@@ -34,7 +34,7 @@ from `./context`, never from `kata` directly:
 
 ```ts
 // src/context.ts
-import { defineContext, scoped, singleton } from 'kata'
+import { defineContext, scoped, singleton } from 'katajs'
 
 import { makeDb } from './db'
 import type { User } from './modules/users/users.schema'

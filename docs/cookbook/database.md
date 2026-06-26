@@ -50,7 +50,7 @@ established once at startup.
 
 ```ts
 // src/context.ts
-import { defineContext, scoped, singleton } from 'kata'
+import { defineContext, scoped, singleton } from 'katajs'
 
 import { makeDb } from './db'
 import type { User } from './modules/users/users.schema'
@@ -200,7 +200,7 @@ requests, then runs your `onClose` ([ADR-0014](../adr/0014-lifecycle-shutdown.md
 ```ts
 // src/main.ts
 import { serve } from '@hono/node-server'
-import { gracefulShutdown } from 'kata/node'
+import { gracefulShutdown } from 'katajs/node'
 
 import { createApp, k } from './context'
 import * as users from './modules/users/users.route'

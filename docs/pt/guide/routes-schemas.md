@@ -173,7 +173,7 @@ que *cada* um deles seja tipado e validado — digamos um corpo de sucesso `200`
 `404` ([ADR-0011](/adr/0011-multi-status-output-schemas)):
 
 ```ts
-import { ErrorBodySchema } from 'kata'
+import { ErrorBodySchema } from 'katajs'
 
 output: { 200: UserSchema, 404: ErrorBodySchema }
 ```
@@ -323,7 +323,7 @@ export type CreateUserBody = z.infer<typeof CreateUserBodySchema>
 
 ```ts
 // src/modules/users/users.route.ts
-import { ErrorBodySchema } from 'kata'
+import { ErrorBodySchema } from 'katajs'
 
 import { defineRoute } from '../../context'
 

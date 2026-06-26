@@ -50,7 +50,7 @@ estabelecida uma única vez na inicialização.
 
 ```ts
 // src/context.ts
-import { defineContext, scoped, singleton } from 'kata'
+import { defineContext, scoped, singleton } from 'katajs'
 
 import { makeDb } from './db'
 import type { User } from './modules/users/users.schema'
@@ -201,7 +201,7 @@ de aceitar conexões, drena as requisições em andamento e então executa seu
 ```ts
 // src/main.ts
 import { serve } from '@hono/node-server'
-import { gracefulShutdown } from 'kata/node'
+import { gracefulShutdown } from 'katajs/node'
 
 import { createApp, k } from './context'
 import * as users from './modules/users/users.route'

@@ -1,5 +1,5 @@
 {
-  "name": "kata",
+  "name": "katajs",
   "version": "0.1.0",
   "description": "An opinionated, type-safe web framework on Hono — static DI, mandatory Zod input/output schemas, no-codegen RPC, and a verifiable folder layout.",
   "keywords": [
@@ -47,7 +47,8 @@
     "./package.json": "./package.json"
   },
   "bin": {
-    "kata": "./dist/cli/main.js"
+    "kata": "./dist/cli/main.js",
+    "katajs": "./dist/cli/main.js"
   },
   "files": [
     "dist",

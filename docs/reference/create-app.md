@@ -14,7 +14,7 @@ chain, and returns a parametric Hono app you serve and export a type from.
 one, not a free import — it is already typed to your registry.
 
 ```ts
-import { defineContext, singleton } from 'kata'
+import { defineContext, singleton } from 'katajs'
 
 export const k = defineContext({ logger: singleton(console) })
 export const { defineRoute, defineMiddleware, createApp } = k
@@ -69,7 +69,7 @@ Declare cross-cutting concerns once here instead of repeating them on each route
 The first-party hardening built-ins are the canonical case:
 
 ```ts
-import { bodyLimit, cors, secureHeaders } from 'kata'
+import { bodyLimit, cors, secureHeaders } from 'katajs'
 
 const app = createApp({
   modules: [users, orders],
@@ -182,7 +182,7 @@ separate, explicit step ([ADR-0014](/adr/0014-lifecycle-shutdown)).
 
 ```ts
 import { serve } from '@hono/node-server'
-import { gracefulShutdown } from 'kata/node'
+import { gracefulShutdown } from 'katajs/node'
 
 import { createApp, k } from './context'
 import * as products from './modules/products/products.route'

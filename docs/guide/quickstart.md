@@ -21,8 +21,8 @@ Kata has two peer dependencies — Hono (the HTTP base) and Zod (schemas) — pl
 Hono's Node adapter to boot a server on Node.
 
 ```bash
-npm install kata hono zod @hono/node-server
-# or: pnpm add kata hono zod @hono/node-server
+npm install katajs hono zod @hono/node-server
+# or: pnpm add katajs hono zod @hono/node-server
 ```
 
 ::: warning Pre-release
@@ -68,7 +68,7 @@ already bound to your registry. Re-export them so the rest of the app inherits
 the types — `c.get('key')` only type-checks for keys you registered here.
 
 ```ts
-import { defineContext, scoped, singleton } from 'kata'
+import { defineContext, scoped, singleton } from 'katajs'
 
 import type { User } from './modules/users/users.schema'
 
@@ -161,7 +161,7 @@ the app's `User`. Keep the `defineMiddleware` wrapper so the `provides` literal
 stays greppable and lint-checkable.
 
 ```ts
-import { jwtAuth } from 'kata/jwt'
+import { jwtAuth } from 'katajs/jwt'
 
 import { JWT_SECRET } from '../config'
 import { defineMiddleware } from '../context'
@@ -210,7 +210,7 @@ to put behind a 4xx/5xx status. Routes that read a scoped slot list the
 providing middleware in `use:`.
 
 ```ts
-import { ErrorBodySchema } from 'kata'
+import { ErrorBodySchema } from 'katajs'
 
 import { defineRoute } from '../../context'
 import { requireUser } from '../../middlewares/auth'
@@ -265,7 +265,7 @@ them once and every route is covered.
 
 ```ts
 import { serve } from '@hono/node-server'
-import { bodyLimit, cors, secureHeaders } from 'kata'
+import { bodyLimit, cors, secureHeaders } from 'katajs'
 
 import { createApp, k } from './context'
 import * as auth from './modules/auth/auth.route'
@@ -294,7 +294,7 @@ JWT with `signJwt` so you can exercise `/me` without external tooling. It trusts
 its caller and is **not** how you authenticate real users:
 
 ```ts
-import { signJwt } from 'kata/jwt'
+import { signJwt } from 'katajs/jwt'
 
 import { JWT_SECRET, TOKEN_TTL_SECONDS } from '../../config'
 import { defineRoute } from '../../context'

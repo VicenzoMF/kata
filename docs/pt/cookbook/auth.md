@@ -35,7 +35,7 @@ recebe valor — ele apenas declara o tipo que um middleware vai `set` mais tard
 
 ```ts
 // src/context.ts
-import { defineContext, scoped, singleton } from 'kata'
+import { defineContext, scoped, singleton } from 'katajs'
 
 import type { User } from './modules/users/users.schema'
 
@@ -94,7 +94,7 @@ subject desconhecido produz um 401):
 
 ```ts
 // src/middlewares/auth.ts
-import { jwtAuth } from 'kata/jwt'
+import { jwtAuth } from 'katajs/jwt'
 
 import { JWT_SECRET } from '../config'
 import { defineMiddleware } from '../context'
@@ -139,7 +139,7 @@ você, com `curl`) possa obter um token real sem ferramentas externas:
 
 ```ts
 // src/modules/auth/auth.route.ts
-import { signJwt } from 'kata/jwt'
+import { signJwt } from 'katajs/jwt'
 
 import { JWT_SECRET, TOKEN_TTL_SECONDS } from '../../config'
 import { defineRoute } from '../../context'
@@ -253,7 +253,7 @@ export const UserClaimsSchema = z.object({
 
 ```ts
 // em uma rota — requireUser PRECISA vir antes do guard
-import { requireRole } from 'kata/jwt'
+import { requireRole } from 'katajs/jwt'
 
 export const adminRoute = defineRoute({
   method: 'GET',
@@ -275,7 +275,7 @@ Para qualquer coisa que o baseado em role não consiga expressar, desça para `g
 (ele pode ser `async` e recebe o contexto do middleware como segundo argumento):
 
 ```ts
-import { guard } from 'kata/jwt'
+import { guard } from 'katajs/jwt'
 
 // Apenas o dono do recurso pode lê-lo.
 const requireOwner = defineMiddleware({

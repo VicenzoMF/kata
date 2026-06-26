@@ -18,7 +18,7 @@ import {
   guard,
   requireRole,
   requireClaim,
-} from 'kata/jwt'
+} from 'katajs/jwt'
 ```
 
 Tudo é uma função. Um token inválido ou expirado é um desfecho esperado, não uma
@@ -176,7 +176,7 @@ ali, não por esta assinatura (ADR-0013 §4).
 
 ```ts
 // src/middlewares/auth.ts
-import { jwtAuth } from 'kata/jwt'
+import { jwtAuth } from 'katajs/jwt'
 
 import { JWT_SECRET } from '../config'
 import { defineMiddleware } from '../context'
@@ -284,7 +284,7 @@ type GuardOptions<R extends Registry, C = unknown> = {
 | `message?` | `string` | Mensagem do envelope 403. Padrão `'Insufficient permissions'`. |
 
 ```ts
-import { guard } from 'kata/jwt'
+import { guard } from 'katajs/jwt'
 
 const requireOwner = defineMiddleware({
   provides: [] as const,

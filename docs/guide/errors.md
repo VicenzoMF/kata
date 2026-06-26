@@ -218,7 +218,7 @@ To type **and** validate error bodies too, declare `output` as a status→schema
 exactly this — the Zod mirror of the unified envelope:
 
 ```ts
-import { ErrorBodySchema } from 'kata'
+import { ErrorBodySchema } from 'katajs'
 
 export const getUserRoute = defineRoute({
   method: 'GET',

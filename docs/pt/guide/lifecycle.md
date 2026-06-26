@@ -63,8 +63,8 @@ toca em `node:process` — para que importar o core neutro em relação ao runti
 (`kata`) de um build edge ou Workers nunca puxe o Node junto.
 
 ```ts
-import { gracefulShutdown } from 'kata/node'
-import type { ServerType, GracefulShutdownOptions } from 'kata/node'
+import { gracefulShutdown } from 'katajs/node'
+import type { ServerType, GracefulShutdownOptions } from 'katajs/node'
 
 function gracefulShutdown(server: ServerType, options: GracefulShutdownOptions): void
 
@@ -83,7 +83,7 @@ para que `kata/node` precise apenas de `@types/node` e nunca empacote o adaptado
 ```ts
 // src/main.ts
 import { serve } from '@hono/node-server'
-import { gracefulShutdown } from 'kata/node'
+import { gracefulShutdown } from 'katajs/node'
 
 import { createApp, k } from './context'
 import * as users from './modules/users/users.route'

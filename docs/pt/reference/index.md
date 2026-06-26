@@ -17,9 +17,9 @@ abaixo listam, derivada dos próprios entry points do pacote.
 | `kata` (bin) | A CLI `kata init` que faz o scaffold do harness e, opcionalmente, de um app de exemplo. |
 
 ```ts
-import { defineContext, scoped, singleton } from 'kata'
-import { jwtAuth, requireRole, signJwt } from 'kata/jwt'
-import { gracefulShutdown } from 'kata/node'
+import { defineContext, scoped, singleton } from 'katajs'
+import { jwtAuth, requireRole, signJwt } from 'katajs/jwt'
+import { gracefulShutdown } from 'katajs/node'
 ```
 
 A divisão é deliberada: `kata` é neutro em relação ao runtime e roda onde quer que
