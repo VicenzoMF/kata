@@ -214,7 +214,7 @@ describe('renderLefthookYml() — issue #130', () => {
 describe('renderExample* — `kata init` app skeleton (issue #200)', () => {
   it('context.ts calls defineContext and re-exports the bound factory (ADR-0004)', () => {
     const src = renderExampleContext()
-    expect(src).toContain("import { defineContext } from 'kata'")
+    expect(src).toContain("import { defineContext } from 'katajs'")
     expect(src).toContain('export const k = defineContext({})')
     expect(src).toContain('export const { defineRoute, defineMiddleware, createApp } = k')
     expect(src).toContain('export type AppRegistry = typeof k.registry')
@@ -330,7 +330,7 @@ describe('renderExample* — `kata init` app skeleton (issue #200)', () => {
     expect(pkg.scripts.test).toBe('vitest run')
     expect(pkg.scripts.typecheck).toBe('tsc --noEmit')
     expect(pkg.scripts.verify).toBe('kata verify')
-    expect(pkg.dependencies.kata).toBeDefined()
+    expect(pkg.dependencies.katajs).toBeDefined() // published as `katajs` (#199); bin stays `kata`
     expect(pkg.dependencies.hono).toBeDefined()
     expect(pkg.dependencies.zod).toBeDefined()
     expect(pkg.dependencies['@hono/node-server']).toBeDefined()

@@ -30,7 +30,7 @@
 // escaping — the same convention the original example templates used.
 
 /** `src/context.ts` — the typed DI surface (ADR-0004); re-exports the bound factory. */
-export const exampleContextSource = `import { defineContext } from 'kata'
+export const exampleContextSource = `import { defineContext } from 'katajs'
 
 // The typed dependency-injection surface for this app (ADR-0004). It starts
 // empty — register singleton(...) / scoped<T>() slots here as the app grows,
@@ -370,7 +370,9 @@ export function examplePackageJson(name: string): Record<string, unknown> {
     dependencies: {
       '@hono/node-server': '^1.13',
       hono: '^4',
-      kata: '^0.1.0',
+      // The framework is published to npm as `katajs` (the `kata` name was taken);
+      // the CLI/bin is still `kata`, so scripts and hooks call `kata verify`.
+      katajs: '^0.1.0',
       zod: '^3',
     },
     devDependencies: {
