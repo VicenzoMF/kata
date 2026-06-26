@@ -242,10 +242,10 @@ export const requireUser = defineMiddleware({
 
 `provides: ['currentUser'] as const` é estrutural. O `as const` preserva a chave
 literal para que o sistema de tipos e a regra de lint
-`kata/middleware-provides-mismatch` possam verificar que o middleware preenche
-tudo o que declara. A assinatura de `jwtAuth` não consegue inferir o registry a
-partir de suas opções, então é aqui que a ligação do slot é checada — exatamente
-a postura que o ADR-0004 documenta para leituras scoped.
+`kata/jwt-auth-provides-slot` possam verificar que um middleware `jwtAuth({ slot })`
+declara o slot que ele preenche. Como o `jwtAuth` faz seu `c.set` internamente, a
+regra genérica `kata/middleware-provides-mismatch` não consegue ver essa atribuição —
+então `kata/jwt-auth-provides-slot` (ADR-0013) é a regra que checa a ligação do slot aqui.
 
 `JwtAuthOptions`:
 

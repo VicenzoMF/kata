@@ -240,10 +240,11 @@ export const requireUser = defineMiddleware({
 ```
 
 `provides: ['currentUser'] as const` is load-bearing. The `as const` preserves
-the literal key so the type system and the `kata/middleware-provides-mismatch`
-lint rule can verify the middleware fills everything it claims. `jwtAuth`'s
-signature cannot infer the registry from its options, so this is where the slot
-wiring is checked — exactly the posture ADR-0004 documents for scoped reads.
+the literal key so the type system and the `kata/jwt-auth-provides-slot` lint
+rule can verify a `jwtAuth({ slot })` middleware declares the slot it fills.
+Because `jwtAuth` does its `c.set` internally, the generic
+`kata/middleware-provides-mismatch` rule can't see the assignment — so
+`kata/jwt-auth-provides-slot` (ADR-0013) is the rule that checks the slot wiring here.
 
 `JwtAuthOptions`:
 
