@@ -10,6 +10,11 @@ Kata validates both ends of every route ([ADR-0003](../adr/0003-mandatory-input-
 | **Input** | before the handler runs | `422` `validation_failed` envelope (below) |
 | **Output** | after the handler returns a value | `500` `internal_output_shape_mismatch` |
 
+A non-empty body that is not valid JSON is rejected even earlier, with `400`
+`validation_failed` (`message: "Malformed JSON body"`) — before the input stage,
+so it never reaches your `body` schema. (An empty or absent body still reads as
+`undefined` and lets the schema decide.)
+
 Everything else — your own 4xx — you return explicitly from the handler.
 
 ## The 422 validation envelope
@@ -117,7 +122,8 @@ validation). It defaults to `strict` outside production and `log` in production,
 and is overridable via `createApp({ outputValidation })` or the
 `KATA_OUTPUT_VALIDATION` env var.
 
-In `strict` mode the Zod issues are logged to `console.error` and the response is:
+In `strict` mode the Zod issues are logged server-side (through your injected
+`logger` if one is registered, else `console.error`) and the response is:
 
 ```json
 { "error": "internal_output_shape_mismatch", "message": "Response did not match the declared output schema" }
@@ -173,5 +179,8 @@ declare a status→schema map (see _Gotchas_) to type and validate error bodies 
   is validated against `output[201]`, and a `c.error(...)` whose status is declared
   is validated against that status's schema. Undeclared statuses still pass through.
   `hc<typeof app>` narrows responses by status: `InferResponseType<call, 404>`.
-- **A malformed JSON body reads as `undefined`**, then fails its `body` schema —
-  so it surfaces as a normal `422`, not a parse crash.
+- **A malformed JSON body returns `400`** `validation_failed` (`message:
+  "Malformed JSON body"`) **before** schema validation runs — the unparseable
+  bytes never reach your `body` schema. An *empty or absent* body is different:
+  it reads as `undefined`, so the `body` schema decides the outcome (an optional
+  body passes; a required one fails its schema → `422`).
