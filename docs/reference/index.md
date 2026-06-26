@@ -14,7 +14,7 @@ list, derived from the package's own entry points.
 | `katajs` | Core: the context factory, slot constructors, the error envelope, built-in middleware, and every public type. |
 | `katajs/jwt` | Stateless JWT primitives plus the `jwtAuth` middleware and authorization guards. |
 | `katajs/node` | Node-only `gracefulShutdown` for draining a server on `SIGTERM` / `SIGINT`. |
-| `kata` (bin) | The `kata init` CLI that scaffolds the harness and an optional example app. |
+| `kata` (bin) | The CLI: `kata init` scaffolds a full app, `kata new` adds a module, `kata verify` runs the lint rules. |
 
 ```ts
 import { defineContext, scoped, singleton } from 'katajs'
@@ -156,25 +156,25 @@ handler, the server owns the socket that must be `close()`d to drain. Opt in fro
 
 ## `kata` — the bin
 
-The package installs a `kata` binary with a single command, `kata init`, which
-scaffolds the agent harness (and, optionally, a runnable example app) into a
-project.
+The package installs a `kata` binary with three commands: `kata init` scaffolds a
+project, `kata new <domain>` adds a module, and `kata verify` runs the lint rules.
 
 ```bash
-kata init [options]
+kata init [dir] [options]
 ```
 
 | Option | Purpose |
 |---|---|
-| `-C, --cwd <dir>` | Project root to scaffold into. Defaults to the current directory. |
-| `-f, --force` | Overwrite existing files instead of skipping them. |
-| `--with-example` | Also scaffold a runnable example app (`GET /health`). |
+| `-C, --cwd <dir>` | Base directory to resolve `[dir]` against. Defaults to the current directory. |
+| `--minimal` | Write only the harness configs — no app (for existing projects). |
+| `-f, --force` | Overwrite existing source files (never the manifests/configs). |
 | `-h, --help` | Print usage and exit. |
 
-`kata init` writes `.claude/settings.json`, `.codex/hooks.json`, `AGENTS.md`, and
-`CLAUDE.md`. With `--with-example` it additionally writes `src/context.ts`,
-`src/main.ts`, a `health` module, and — only if absent — `package.json` and
-`tsconfig.json`. See [The CLI](/guide/cli) for the full walkthrough.
+By default `kata init` writes a complete, runnable app: the harness
+(`.claude` / `.codex` / `.agents` + `AGENTS.md` / `CLAUDE.md` / `lefthook.yml`),
+the canonical `src/` layout with two example modules, and — only if absent —
+`package.json`, `tsconfig.json`, and the lint configs. See [The CLI](/guide/cli)
+for the full walkthrough.
 
 ## Reference pages
 

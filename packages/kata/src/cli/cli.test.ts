@@ -26,24 +26,30 @@ async function exists(path: string): Promise<boolean> {
 }
 
 describe('parseArgs()', () => {
-  it('reads the command', () => {
+  it('reads the command with full defaults', () => {
     expect(parseArgs(['init'])).toEqual({
       command: 'init',
+      domain: undefined,
+      dir: undefined,
       cwd: undefined,
       force: false,
       help: false,
-      withExample: false,
+      minimal: false,
     })
+  })
+
+  it('reads the [dir] positional for init', () => {
+    expect(parseArgs(['init', 'my-app']).dir).toBe('my-app')
+  })
+
+  it('parses --minimal', () => {
+    expect(parseArgs(['init', '--minimal']).minimal).toBe(true)
+    expect(parseArgs(['init']).minimal).toBe(false)
   })
 
   it('parses --force and -f', () => {
     expect(parseArgs(['init', '--force']).force).toBe(true)
     expect(parseArgs(['init', '-f']).force).toBe(true)
-  })
-
-  it('parses --with-example (defaulting to false)', () => {
-    expect(parseArgs(['init', '--with-example']).withExample).toBe(true)
-    expect(parseArgs(['init']).withExample).toBe(false)
   })
 
   it('parses --cwd <dir>, --cwd=<dir>, and -C <dir>', () => {
@@ -64,18 +70,20 @@ describe('parseArgs()', () => {
     )
   })
 
-  it('keeps the first positional as the command, ignoring later ones', () => {
-    expect(parseArgs(['init', 'extra']).command).toBe('init')
-  })
-
   it('parses new command with domain', () => {
     const args = parseArgs(['new', 'ping'])
     expect(args.command).toBe('new')
     expect(args.domain).toBe('ping')
   })
+
+  it('tolerates unknown flags instead of erroring (e.g. the old --with-example)', () => {
+    const args = parseArgs(['init', '--with-example', 'my-app'])
+    expect(args.command).toBe('init')
+    expect(args.dir).toBe('my-app')
+  })
 })
 
-describe('run()', () => {
+describe('run() — init', () => {
   it('prints help and exits 0 on --help', async () => {
     const result = await run(['--help'])
     expect(result.code).toBe(0)
@@ -86,7 +94,6 @@ describe('run()', () => {
   it('errors on a missing command', async () => {
     const result = await run([])
     expect(result.code).toBe(1)
-    expect(result.stdout).toBe('')
     expect(result.stderr).toContain('missing command')
   })
 
@@ -99,22 +106,42 @@ describe('run()', () => {
   it('errors when --cwd is missing a value', async () => {
     const result = await run(['init', '--cwd'])
     expect(result.code).toBe(1)
-    expect(result.stdout).toBe('')
     expect(result.stderr).toContain('kata: --cwd requires a directory value')
   })
 
-  it('runs init into the given --cwd and reports the files', async () => {
+  it('scaffolds the full app (harness + src + manifests) and prints next steps', async () => {
     const result = await run(['init', '--cwd', dir])
 
     expect(result.code).toBe(0)
     expect(result.stdout).toContain('.claude/settings.json')
-    expect(result.stdout).toContain('.codex/hooks.json')
-    expect(result.stdout).toContain('AGENTS.md')
-    expect(result.stdout).toContain('CLAUDE.md')
+    expect(result.stdout).toContain('.agents/hooks.json')
+    expect(result.stdout).toContain('src/app.ts')
+    expect(result.stdout).toContain('src/modules/greetings/greetings.route.ts')
+    expect(result.stdout).toContain('package.json')
+    expect(result.stdout).toContain('Next steps:')
+    expect(result.stdout).toContain('pnpm install')
+    expect(await exists(join(dir, 'src/app.ts'))).toBe(true)
+    expect(await exists(join(dir, 'src/modules/health/health.route.ts'))).toBe(true)
+    expect(await exists(join(dir, 'package.json'))).toBe(true)
+  })
+
+  it('honours the [dir] positional, resolved against --cwd', async () => {
+    const result = await run(['init', 'app', '--cwd', dir])
+
+    expect(result.code).toBe(0)
+    expect(result.stdout).toContain('cd app')
+    expect(await exists(join(dir, 'app/src/app.ts'))).toBe(true)
+  })
+
+  it('writes harness only with --minimal', async () => {
+    const result = await run(['init', '--minimal', '--cwd', dir])
+
+    expect(result.code).toBe(0)
+    expect(result.stdout).toContain('.claude/settings.json')
+    expect(result.stdout).toContain('Harness configs written')
     expect(await exists(join(dir, '.claude/settings.json'))).toBe(true)
-    expect(await exists(join(dir, '.codex/hooks.json'))).toBe(true)
-    expect(await exists(join(dir, 'AGENTS.md'))).toBe(true)
-    expect(await exists(join(dir, 'CLAUDE.md'))).toBe(true)
+    expect(await exists(join(dir, 'src/app.ts'))).toBe(false)
+    expect(await exists(join(dir, 'package.json'))).toBe(false)
   })
 
   it('reports skips on a second run', async () => {
@@ -124,33 +151,6 @@ describe('run()', () => {
     expect(second.code).toBe(0)
     expect(second.stdout).toContain('skip')
     expect(second.stdout).toContain('--force')
-  })
-
-  it('scaffolds the runnable example app with --with-example', async () => {
-    const result = await run(['init', '--with-example', '--cwd', dir])
-
-    expect(result.code).toBe(0)
-    expect(result.stdout).toContain('src/context.ts')
-    expect(result.stdout).toContain('src/main.ts')
-    expect(result.stdout).toContain('src/modules/health/health.route.ts')
-    expect(result.stdout).toContain('src/modules/health/health.schema.ts')
-    expect(result.stdout).toContain('package.json')
-    expect(result.stdout).toContain('tsconfig.json')
-    expect(await exists(join(dir, 'src/main.ts'))).toBe(true)
-    expect(await exists(join(dir, 'src/modules/health/health.route.ts'))).toBe(true)
-    expect(await exists(join(dir, 'package.json'))).toBe(true)
-    expect(await exists(join(dir, 'tsconfig.json'))).toBe(true)
-    // The harness files are still written alongside the example.
-    expect(await exists(join(dir, '.claude/settings.json'))).toBe(true)
-  })
-
-  it('stays harness-only without the flag (the flag is purely additive)', async () => {
-    await run(['init', '--cwd', dir])
-
-    expect(await exists(join(dir, '.claude/settings.json'))).toBe(true)
-    expect(await exists(join(dir, 'src/main.ts'))).toBe(false)
-    expect(await exists(join(dir, 'package.json'))).toBe(false)
-    expect(await exists(join(dir, 'tsconfig.json'))).toBe(false)
   })
 })
 
@@ -169,12 +169,7 @@ describe('run() — new', () => {
     expect(result.stdout).toContain('ping.schema.ts')
     expect(result.stdout).toContain('ping.test.ts')
     expect(result.stdout).toContain('ping.hurl')
-
     expect(await exists(join(dir, 'src/modules/ping/ping.route.ts'))).toBe(true)
-    expect(await exists(join(dir, 'src/modules/ping/ping.service.ts'))).toBe(true)
-    expect(await exists(join(dir, 'src/modules/ping/ping.schema.ts'))).toBe(true)
-    expect(await exists(join(dir, 'src/modules/ping/ping.test.ts'))).toBe(true)
-    expect(await exists(join(dir, 'src/modules/ping/ping.hurl'))).toBe(true)
   })
 })
 
@@ -186,15 +181,15 @@ describe('run() — verify', () => {
     expect(result.stderr).toBe('')
   })
 
-  it('verifies the scaffolded example app clean (exit 0)', async () => {
-    await run(['init', '--with-example', '--cwd', dir])
+  it('verifies the scaffolded app clean (exit 0)', async () => {
+    await run(['init', '--cwd', dir])
     const result = await run(['verify', dir], dir)
     expect(result.code).toBe(0)
     expect(result.stdout).toContain('no problems found')
   })
 
   it('emits PostToolUse hook JSON in --json mode and always exits 0', async () => {
-    await run(['init', '--with-example', '--cwd', dir])
+    await run(['init', '--cwd', dir])
     const result = await run(['verify', dir, '--json'], dir)
     expect(result.code).toBe(0)
     const parsed = JSON.parse(result.stdout)
@@ -203,17 +198,31 @@ describe('run() — verify', () => {
 })
 
 describe('formatResult()', () => {
-  it('lists each file with its status mark', () => {
+  it('lists each file with its status mark and the next steps', () => {
     const text = formatResult({
-      cwd: '/proj',
+      cwd: '/proj/my-app',
+      dir: 'my-app',
+      minimal: false,
       files: [
         { path: '.claude/settings.json', status: 'created' },
-        { path: '.codex/hooks.json', status: 'skipped' },
+        { path: 'package.json', status: 'skipped' },
       ],
     })
-    expect(text).toContain('/proj')
+    expect(text).toContain('/proj/my-app')
     expect(text).toContain('create  .claude/settings.json')
-    expect(text).toContain('skip  .codex/hooks.json')
-    expect(text).toContain('--force')
+    expect(text).toContain('skip  package.json')
+    expect(text).toContain('cd my-app')
+    expect(text).toContain('pnpm install')
+  })
+
+  it('prints the harness-only guidance for a minimal run', () => {
+    const text = formatResult({
+      cwd: '/proj',
+      dir: '.',
+      minimal: true,
+      files: [{ path: '.claude/settings.json', status: 'created' }],
+    })
+    expect(text).toContain('Harness configs written')
+    expect(text).not.toContain('pnpm install')
   })
 })

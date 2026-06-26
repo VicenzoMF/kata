@@ -11,10 +11,13 @@ import { createModule, type NewResult } from './new'
 export type ParsedArgs = {
   command: string | undefined
   domain: string | undefined
+  /** Target directory for `init` (the `[dir]` positional). */
+  dir: string | undefined
   cwd: string | undefined
   force: boolean
   help: boolean
-  withExample: boolean
+  /** `--minimal`: write only the harness configs, no runnable app. */
+  minimal: boolean
 }
 
 export type RunResult = {
@@ -26,41 +29,39 @@ export type RunResult = {
 export const HELP_TEXT = `kata — agent-driven web framework with the harness shipped natively
 
 Usage:
-  kata init [options]    Scaffold harness config files into a project
-  kata new <domain>      Generate a new module skeleton under src/modules/<domain>/
+  kata init [dir]        Scaffold a new Kata app (runnable project + harness)
+  kata new <domain>      Generate a new module under src/modules/<domain>/
   kata verify [path]     Run Kata's lint rules over a project (default path: cwd)
 
 Options:
-  -C, --cwd <dir>     Project root to scaffold into (default: current directory)
-  -f, --force         Overwrite existing files instead of skipping them
-      --with-example  Also scaffold a runnable example app (GET /health)
+  -C, --cwd <dir>     Base directory to resolve [dir] against (default: cwd)
+      --minimal       Write only the harness configs — no app (for existing projects)
+  -f, --force         Overwrite existing source files (never the manifests/configs)
   -h, --help          Show this help
 
-\`kata verify\` enforces ADR-0003/0004/0005; \`kata verify --json\` emits Claude
-Code PostToolUse hook JSON. Run \`kata verify --help\` for its flags.
+\`kata init [dir]\` scaffolds a complete, runnable app following the AGENTS.md
+layout — src/app.ts, src/context.ts, middlewares/, and two example modules
+(GET /health, POST + GET /greetings) — on top of the agent harness
+(.claude / .codex / .agents + AGENTS.md / CLAUDE.md) and a lefthook pre-commit:
 
-\`kata init\` writes:
-  .claude/settings.json    Claude Code hooks + config-tampering bans (#27, #29)
-  .codex/hooks.json        Codex hooks → \`kata verify --json\` (#28)
-  AGENTS.md                Canonical agent instructions, Codex + Claude (#31)
-  CLAUDE.md                Claude entrypoint → imports AGENTS.md (#31)
+  kata init my-app
+  cd my-app && pnpm install
+  pnpm dev          # → http://localhost:3000/health
+  kata verify
 
-\`--with-example\` additionally writes a runnable app — run \`pnpm install\`, then
-\`pnpm start\`, to boot \`GET /health\`:
-  src/context.ts                        defineContext + re-export createApp/defineRoute
-  src/main.ts                           createApp({ modules: [health] }) + serve
-  src/modules/health/health.route.ts    GET /health → 200 {"status":"ok"}
-  src/modules/health/health.schema.ts   HealthSchema (Zod DTO)
-  package.json, tsconfig.json           created only if absent
+\`--minimal\` writes only the harness configs, for adding Kata to an existing
+project. \`kata verify\` enforces ADR-0003/0004/0005; \`kata verify --json\` emits
+Claude Code PostToolUse hook JSON. Run \`kata verify --help\` for its flags.
 `
 
 export function parseArgs(argv: readonly string[]): ParsedArgs {
   let command: string | undefined
   let domain: string | undefined
+  let dir: string | undefined
   let cwd: string | undefined
   let force = false
   let help = false
-  let withExample = false
+  let minimal = false
 
   for (let i = 0; i < argv.length; i += 1) {
     const arg = argv[i]
@@ -70,8 +71,8 @@ export function parseArgs(argv: readonly string[]): ParsedArgs {
       help = true
     } else if (arg === '-f' || arg === '--force') {
       force = true
-    } else if (arg === '--with-example') {
-      withExample = true
+    } else if (arg === '--minimal') {
+      minimal = true
     } else if (arg === '-C' || arg === '--cwd') {
       i += 1
       const next = argv[i]
@@ -81,49 +82,67 @@ export function parseArgs(argv: readonly string[]): ParsedArgs {
       cwd = next
     } else if (arg.startsWith('--cwd=')) {
       cwd = arg.slice('--cwd='.length)
-    } else if (command === undefined && !arg.startsWith('-')) {
+    } else if (arg.startsWith('-')) {
+      // Unknown flag — ignored (back-compat: never hard-fail on an extra flag).
+    } else if (command === undefined) {
       command = arg
-    } else if (command === 'new' && domain === undefined && !arg.startsWith('-')) {
+    } else if (command === 'new' && domain === undefined) {
       domain = arg
+    } else if (command === 'init' && dir === undefined) {
+      dir = arg
     }
   }
 
-  return { command, domain, cwd, force, help, withExample }
+  return { command, domain, dir, cwd, force, help, minimal }
 }
 
-/** Human-readable summary of what `init` did. */
-export function formatResult(result: InitResult): string {
-  const mark: Record<InitResult['files'][number]['status'], string> = {
-    created: 'create',
-    overwritten: 'update',
-    skipped: '  skip',
-  }
+const STATUS_MARK: Record<InitResult['files'][number]['status'], string> = {
+  created: 'create',
+  overwritten: 'update',
+  skipped: '  skip',
+}
 
+/** The `cd … && pnpm install && …` block printed after a successful `init`. */
+function nextSteps(result: InitResult): string[] {
+  if (result.minimal) {
+    return [
+      'Harness configs written. Commit them, then start coding —',
+      'the PreToolUse/Stop hooks run `kata verify` and `pnpm test` for you.',
+    ]
+  }
+  const steps = ['Next steps:']
+  if (result.dir !== '.') steps.push(`  cd ${result.dir}`)
+  steps.push('  pnpm install')
+  steps.push('  pnpm dev          # → http://localhost:3000/health')
+  steps.push('  kata verify       # fast deterministic checks')
+  steps.push('  pnpm test         # unit tests')
+  return steps
+}
+
+/** Human-readable summary of what `init` did, plus the next steps. */
+export function formatResult(result: InitResult): string {
   const lines = [`kata init → ${result.cwd}`]
   for (const file of result.files) {
-    lines.push(`  ${mark[file.status]}  ${file.path}`)
+    lines.push(`  ${STATUS_MARK[file.status]}  ${file.path}`)
   }
 
   if (result.files.some((file) => file.status === 'skipped')) {
     lines.push('')
     lines.push('Some files already existed and were left untouched.')
-    lines.push('Re-run with --force to overwrite them.')
+    lines.push('Re-run with --force to overwrite source files (manifests are never touched).')
   }
+
+  lines.push('')
+  lines.push(...nextSteps(result))
 
   return `${lines.join('\n')}\n`
 }
 
 /** Human-readable summary of what `new` did. */
 export function formatNewResult(result: NewResult): string {
-  const mark: Record<NewResult['files'][number]['status'], string> = {
-    created: 'create',
-    overwritten: 'update',
-    skipped: '  skip',
-  }
-
   const lines = [`kata new ${result.domain} → ${result.cwd}`]
   for (const file of result.files) {
-    lines.push(`  ${mark[file.status]}  ${file.path}`)
+    lines.push(`  ${STATUS_MARK[file.status]}  ${file.path}`)
   }
 
   if (result.files.some((file) => file.status === 'skipped')) {
@@ -204,6 +223,11 @@ export async function run(
     return { code: 0, stdout: formatNewResult(result), stderr: '' }
   }
 
-  const result = await init({ cwd: args.cwd, force: args.force, withExample: args.withExample })
+  const result = await init({
+    cwd: args.cwd,
+    dir: args.dir,
+    force: args.force,
+    minimal: args.minimal,
+  })
   return { code: 0, stdout: formatResult(result), stderr: '' }
 }

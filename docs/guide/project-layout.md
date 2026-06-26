@@ -179,7 +179,8 @@ root, as in `examples/shop`.
 
 ## Scaffolding
 
-`kata init --with-example` writes the locked layout for you — `src/context.ts`,
-`src/main.ts`, and a `src/modules/health/` domain with its `health.route.ts` and
-`health.schema.ts` — so a new project starts in the shape the harness expects. See
-[Bootstrap CLI](/guide/cli).
+`kata init` writes this locked layout for you — `src/app.ts`, `src/context.ts`,
+`src/main.ts`, a `middlewares/` folder, and two worked modules (`health` and
+`greetings`), each with the full route / service / schema / test / hurl set — so a
+new project starts in the shape the harness expects. Add more with
+`kata new <domain>`. See [Bootstrap CLI](/guide/cli).
