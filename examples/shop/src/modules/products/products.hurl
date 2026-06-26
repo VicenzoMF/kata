@@ -1,6 +1,6 @@
 # API E2E for the products module — public catalog reads + authenticated create.
 #
-# Run with the server already listening on :3000:
+# Run against a server on {{host}} (default http://localhost:3000):
 #   pnpm --filter=shop start    # in another terminal
 #   pnpm --filter=shop hurl
 
