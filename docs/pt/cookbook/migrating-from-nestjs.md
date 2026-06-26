@@ -62,12 +62,12 @@ uma única chamada `defineContext({...})` ([ADR-0004](/adr/0004-di-via-scoped-sl
 o análogo do array `providers` do seu `AppModule` raiz, mas plano e global
 em vez de por módulo. `defineContext` retorna os helpers `defineRoute`,
 `defineMiddleware` e `createApp` vinculados àquela registry; re-exporte
-eles para que o resto do app importe de `./context`, nunca de `kata`
+eles para que o resto do app importe de `./context`, nunca de `katajs`
 diretamente. Isso espelha [`examples/hello/src/context.ts`](https://github.com/VicenzoMF/kata/blob/main/examples/hello/src/context.ts):
 
 ```ts
 // src/context.ts
-import { defineContext, scoped, singleton } from 'kata'
+import { defineContext, scoped, singleton } from 'katajs'
 
 import { makeDb } from './db'
 import type { User } from './modules/users/users.schema'
@@ -438,7 +438,7 @@ Dois limites honestos versus um interceptor do NestJS:
 
 ```ts
 // src/main.ts — endurecimento declarado uma vez, para o app inteiro (ADR-0012)
-import { bodyLimit, cors, secureHeaders } from 'kata'
+import { bodyLimit, cors, secureHeaders } from 'katajs'
 
 import { createApp } from './context'
 import * as echo from './modules/echo/echo.route'
@@ -545,7 +545,7 @@ const app = createApp({ modules: [users, echo] })
 const port = Number(process.env['PORT'] ?? 3000)
 
 serve({ fetch: app.fetch, port }, (info) => {
-  k.registry.logger.__value.info(`listening on http://localhost:${info.port}`)
+  k.resolve('logger').info(`listening on http://localhost:${info.port}`)
 })
 ```
 
@@ -574,7 +574,7 @@ Sendo explícito, para que você pare de procurar por estes:
 | Container IoC em runtime & `reflect-metadata` | Custo de cold-start; o verificador perde sua propriedade de "um grep responde a pergunta" ([ADR-0004](/adr/0004-di-via-scoped-slots)) | Um único `defineContext` estático; `c.get('key')` é uma busca tipada |
 | Providers por módulo / `imports` / `exports` | Módulos são pastas, não escopos de DI | Uma única registry plana e global — tudo está em `defineContext` |
 | Escopos de injeção além de singleton & request (`Scope.TRANSIENT`) | Dois tempos de vida previsíveis mantêm `c.get` monomórfico | `singleton` (processo) ou `scoped` (requisição, definido por um middleware) |
-| Providers assíncronos & lifecycle hooks (`OnModuleInit`, `OnApplicationShutdown`) | Não há container para conduzir um lifecycle | Factories `singleton` eager na inicialização; teardown via `gracefulShutdown` (`kata/node`) em `main.ts` ([ADR-0014](/adr/0014-lifecycle-shutdown), [database.md](/pt/cookbook/database#closing-the-pool-on-shutdown)) |
+| Providers assíncronos & lifecycle hooks (`OnModuleInit`, `OnApplicationShutdown`) | Não há container para conduzir um lifecycle | Factories `singleton` eager na inicialização; teardown via `gracefulShutdown` (`katajs/node`) em `main.ts` ([ADR-0014](/adr/0014-lifecycle-shutdown), [database.md](/pt/cookbook/database#closing-the-pool-on-shutdown)) |
 | Interceptors que transformam o corpo da resposta / RxJS | O valor de retorno do handler não é exposto ao middleware | Molde a resposta no handler + `output`; use middleware para trabalho antes/depois e headers |
 | Exception filters & a hierarquia de `HttpException` | Não há camada de mapeamento tipo-de-exceção→resposta | `c.error(code, message, { status })`; throws não capturados → 500 genérico ([ADR-0008](/adr/0008-unified-error-response-envelope)) |
 | Pipes como uma camada separada (`ValidationPipe`, pipes custom) | A validação é obrigatória por rota, não opcional | Os schemas Zod `input` da rota; `z.coerce` / `.transform()` para coerção |

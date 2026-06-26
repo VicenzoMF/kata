@@ -62,10 +62,21 @@ jobs:
           sudo dpkg -i /tmp/hurl.deb
           hurl --version
 
-      - name: Run hurl E2E
+      - name: Run hurl E2E (hello + shop)
+        # Boot every example that ships a Hurl suite, each on its own port, so the
+        # suites run against live servers in parallel without colliding (#178):
+        # hello keeps :3000; shop runs on :3001 (PORT) and its suite — whose URLs
+        # are templated as {{host}} — is pointed there with a trailing --variable
+        # (the last definition wins, overriding the script's localhost:3000
+        # default). A failing request in either suite fails this step, which fails
+        # the required `ci` job and blocks the merge. The trap tears both servers
+        # down on any exit so a failure never leaks a process.
         run: |
           pnpm --filter=hello start &
-          SERVER_PID=$!
-          npx --yes wait-on tcp:3000 --timeout 30000
+          HELLO_PID=$!
+          PORT=3001 pnpm --filter=shop start &
+          SHOP_PID=$!
+          trap 'kill "$HELLO_PID" "$SHOP_PID" 2>/dev/null || true' EXIT
+          npx --yes wait-on tcp:3000 tcp:3001 --timeout 30000
           pnpm --filter=hello hurl
-          kill "$SERVER_PID" 2>/dev/null || true
+          pnpm --filter=shop run hurl --variable host=http://localhost:3001

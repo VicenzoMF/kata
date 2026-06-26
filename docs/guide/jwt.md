@@ -10,9 +10,9 @@ A **JWT** (JSON Web Token) is a compact, signed string that carries a set of
 signed with a secret only your server knows, the server can trust those claims after
 a cheap signature check — no session store, no database round-trip.
 
-`kata/jwt` ships the building blocks for that flow so you do not hand-roll a verifier:
+`katajs/jwt` ships the building blocks for that flow so you do not hand-roll a verifier:
 **sign** a token, **verify** it, **authenticate** a request into a scoped slot, and
-**authorize** that slot with guards. It adds **no new dependency** — `kata/jwt` is a
+**authorize** that slot with guards. It adds **no new dependency** — `katajs/jwt` is a
 tree-shakeable subpath built on `hono/jwt`, and `hono` is already a peer dependency
 ([ADR-0013](/adr/0013-jwt-delivery)).
 
@@ -24,7 +24,7 @@ import {
   guard,
   requireRole,
   requireClaim,
-} from 'kata/jwt'
+} from 'katajs/jwt'
 ```
 
 Everything here is a function. No classes, no decorators, no IoC container. An
@@ -34,7 +34,7 @@ throwing.
 
 ::: info What Kata does NOT ship
 Login, password hashing, the user store, refresh-token rotation, sessions, and
-remote JWKS / OIDC providers (Auth0, Cognito, Clerk) are **yours**. `kata/jwt`
+remote JWKS / OIDC providers (Auth0, Cognito, Clerk) are **yours**. `katajs/jwt`
 is the verify-and-authorize seam; the credential and identity model is BYO. See
 [What you own](#what-you-own) below.
 :::
@@ -104,7 +104,7 @@ signJwt(claims: Record<string, unknown>, options: SignOptions): Promise<string>
 
 ```ts
 // src/modules/auth/auth.route.ts
-import { signJwt } from 'kata/jwt'
+import { signJwt } from 'katajs/jwt'
 
 import { JWT_SECRET, TOKEN_TTL_SECONDS } from '../../config'
 import { defineRoute } from '../../context'
@@ -205,7 +205,7 @@ greppable and lint-checkable at the call site.
 
 ```ts
 // src/context.ts
-import { defineContext, scoped, singleton } from 'kata'
+import { defineContext, scoped, singleton } from 'katajs'
 
 import type { User } from './modules/users/users.schema'
 
@@ -222,7 +222,7 @@ export type AppRegistry = typeof k.registry
 
 ```ts
 // src/middlewares/auth.ts
-import { jwtAuth } from 'kata/jwt'
+import { jwtAuth } from 'katajs/jwt'
 
 import { JWT_SECRET } from '../config'
 import { defineMiddleware } from '../context'
@@ -240,10 +240,11 @@ export const requireUser = defineMiddleware({
 ```
 
 `provides: ['currentUser'] as const` is load-bearing. The `as const` preserves
-the literal key so the type system and the `kata/middleware-provides-mismatch`
-lint rule can verify the middleware fills everything it claims. `jwtAuth`'s
-signature cannot infer the registry from its options, so this is where the slot
-wiring is checked — exactly the posture ADR-0004 documents for scoped reads.
+the literal key so the type system and the `kata/jwt-auth-provides-slot` lint
+rule can verify a `jwtAuth({ slot })` middleware declares the slot it fills.
+Because `jwtAuth` does its `c.set` internally, the generic
+`kata/middleware-provides-mismatch` rule can't see the assignment — so
+`kata/jwt-auth-provides-slot` (ADR-0013) is the rule that checks the slot wiring here.
 
 `JwtAuthOptions`:
 
@@ -343,7 +344,7 @@ must come **after** the middleware that fills the slot.
 
 ```ts
 // in a route — requireUser MUST come before the guard
-import { requireRole } from 'kata/jwt'
+import { requireRole } from 'katajs/jwt'
 
 export const adminRoute = defineRoute({
   method: 'GET',
@@ -395,7 +396,7 @@ Allows only when the slot value's claim at `key` matches `expected` — by stric
 equality, or by predicate when `expected` is a function.
 
 ```ts
-import { requireClaim } from 'kata/jwt'
+import { requireClaim } from 'katajs/jwt'
 
 // require a verified email
 const requireVerified = defineMiddleware({
@@ -424,7 +425,7 @@ guard<R, C>(options: GuardOptions<R, C>)
 `'Insufficient permissions'`).
 
 ```ts
-import { guard } from 'kata/jwt'
+import { guard } from 'katajs/jwt'
 
 // Only the owner of the resource may read it.
 const requireOwner = defineMiddleware({
@@ -441,7 +442,7 @@ const requireOwner = defineMiddleware({
 
 ## What you own
 
-`kata/jwt` deliberately stops at the verify-and-authorize boundary. The
+`katajs/jwt` deliberately stops at the verify-and-authorize boundary. The
 credential and identity model is BYO:
 
 - **Login.** Verify credentials (or an OAuth code) in your own route, then call
@@ -472,7 +473,7 @@ credential and identity model is BYO:
 ## See also
 
 - [Auth recipe](/cookbook/auth) — the end-to-end walkthrough this page condenses.
-- [`kata/jwt` reference](/reference/jwt) — full signatures.
+- [`katajs/jwt` reference](/reference/jwt) — full signatures.
 - [Middleware & scoped slots](/guide/middleware) — how `provides` and `use:` compose.
 - [Errors](/guide/errors) — the unified error envelope guards and `jwtAuth` render.
 - [ADR-0013](/adr/0013-jwt-delivery) — why `hono/jwt`, why a subpath, the BYO boundary.

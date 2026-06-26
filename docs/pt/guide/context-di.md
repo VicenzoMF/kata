@@ -11,7 +11,7 @@ ficam em um único lugar: uma chamada a `defineContext`. Essa chamada é o regis
 declarada ali, `c.get` não compila.
 
 ```ts
-import { defineContext, scoped, singleton } from 'kata'
+import { defineContext, scoped, singleton } from 'katajs'
 
 import type { User } from './modules/users/users.schema'
 
@@ -45,7 +45,7 @@ constructors. Não existe um terceiro tipo.
   request por um middleware, nunca na inicialização.
 
 ```ts
-import { defineContext, scoped, singleton } from 'kata'
+import { defineContext, scoped, singleton } from 'katajs'
 import type { Store, Transaction } from './store'
 import { createStore } from './store'
 
@@ -93,7 +93,7 @@ const { registry, defineMiddleware, defineRoute, createApp } = defineContext({ /
 - `registry` — o próprio objeto registry, para derivar `AppRegistry`.
 
 Estas são funções, não helpers genéricos que você reparametriza a cada chamada.
-Importe o `defineContext` / `singleton` / `scoped` genéricos de `kata`; importe
+Importe o `defineContext` / `singleton` / `scoped` genéricos de `katajs`; importe
 `defineRoute` / `defineMiddleware` / `createApp` do seu próprio `context.ts`.
 
 ### Reexporte a factory já vinculada
@@ -155,12 +155,13 @@ E ele só passa no type-check para chaves que você realmente declarou. Um typo 
 não declarado é um erro de compilação, e a regra de lint `kata/context-key-not-registered` também o
 sinaliza — então você descobre enquanto digita, não em produção.
 
-::: warning Lendo o registry na inicialização
-Os quatro membros retornados são a superfície pública. Fora de um request você não
+::: warning Lendo um singleton na inicialização
+Os cinco membros retornados são a superfície pública. Fora de um request você não
 tem `c`; para alcançar um singleton no boot — por exemplo para logar a porta de
-escuta — leia-o direto do registry: `k.registry.logger.__value.info(...)`. Scoped
-slots não têm valor na inicialização por definição, então ler um deles fora de um
-handler de request é um erro em tempo de build (`kata/scoped-read-outside-request`).
+escuta — chame `k.resolve('logger').info(...)`. `resolve` é exclusivo para singletons:
+um scoped slot não tem valor na inicialização por definição, então tentar alcançar um
+deles fora de um handler de request é um erro em tempo de build
+(`kata/scoped-read-outside-request`).
 :::
 
 ## Preencher scoped slots acontece no middleware

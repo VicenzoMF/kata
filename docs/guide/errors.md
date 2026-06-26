@@ -37,6 +37,10 @@ The two automatic ones come first; the ones you write come after.
 | **Output** | after the handler returns a value | `500` `internal_output_shape_mismatch` (mode-dependent) |
 | **Your 4xx** | you `return c.error(...)` / `c.json(...)` | your status |
 
+A request whose body is non-empty but not valid JSON is rejected before the input
+stage with `400` `validation_failed` (`message: "Malformed JSON body"`); an empty or
+absent body instead reads as `undefined` and lets the schema decide.
+
 ## The 422 validation envelope
 
 `input` is validated **before** your handler — a `422` is Kata's way of saying "you
@@ -90,7 +94,7 @@ Rules to keep straight:
 ::: tip Reuse the formatter
 If you validate something yourself — a webhook payload, a re-parsed query, a
 cross-field rule — and want the response to match this exact shape,
-`formatZodIssues(error: ZodError): FieldIssue[]` is exported from `kata`. Build the
+`formatZodIssues(error: ZodError): FieldIssue[]` is exported from `katajs`. Build the
 envelope with `c.error('validation_failed', 'Request input validation failed', { status: 422, issues: { body: formatZodIssues(parsed.error) } })`.
 :::
 
@@ -123,8 +127,8 @@ The mode is resolved once at `createApp`, first match wins:
 const app = createApp({ modules: [users], outputValidation: 'strict' })
 ```
 
-In `strict` mode the Zod issues are logged to `console.error` and the response is
-exactly:
+In `strict` mode the Zod issues are logged server-side (through your injected
+`logger` if one is registered, else `console.error`) and the response is exactly:
 
 ```json
 { "error": "internal_output_shape_mismatch", "message": "Response did not match the declared output schema" }
@@ -218,7 +222,7 @@ To type **and** validate error bodies too, declare `output` as a status→schema
 exactly this — the Zod mirror of the unified envelope:
 
 ```ts
-import { ErrorBodySchema } from 'kata'
+import { ErrorBodySchema } from 'katajs'
 
 export const getUserRoute = defineRoute({
   method: 'GET',
@@ -253,8 +257,10 @@ client narrows by status: `InferResponseType<call, 404>`. See
 
 ## Gotchas
 
-- **A malformed JSON body reads as `undefined`**, then fails its `body` schema — so it
-  surfaces as a normal `422`, not a parse crash.
+- **A malformed JSON body returns `400`** `validation_failed` (`message: "Malformed
+  JSON body"`) **before** schema validation — the unparseable bytes never reach your
+  `body` schema. An *empty or absent* body is different: it reads as `undefined`, so
+  the `body` schema decides (an optional body passes; a required one → `422`).
 - **Every response carries a correlation id.** Success or error, Kata echoes an
   `X-Request-Id` header (reusing a well-formed inbound one, otherwise a fresh UUID).
   See [Lifecycle](/guide/lifecycle).

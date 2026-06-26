@@ -155,7 +155,7 @@ mais de um status com um contrato que você quer tipado e validado — um corpo 
 sucesso mais um envelope de erro, ou um sucesso não-`200` como `201`:
 
 ```ts
-import { ErrorBodySchema } from 'kata'
+import { ErrorBodySchema } from 'katajs'
 
 export const checkoutRoute = defineRoute({
   method: 'POST',
@@ -171,7 +171,7 @@ export const checkoutRoute = defineRoute({
 })
 ```
 
-`ErrorBodySchema` é exportado de `kata`. É o espelho em Zod do envelope de erro
+`ErrorBodySchema` é exportado de `katajs`. É o espelho em Zod do envelope de erro
 unificado que `c.error(...)` produz ([Errors](/pt/guide/errors)), então é o
 schema canônico para colocar atrás de um status `4xx`/`5xx`. Um app pode substituí-lo
 por um refinamento mais estrito (por exemplo, um código `error` literal) para um contrato mais rígido.
@@ -314,8 +314,11 @@ de campo.
 
 Cada issue de campo é `{ path, message, code }`, com `expected` /
 `received` opcionais para incompatibilidades de tipo. `path` usa notação de ponto/colchete para campos
-aninhados (`address.zip`, `tags[0]`). Um schema de `body` com um corpo ilegível ou
-não-JSON é parseado contra `undefined`, então o schema decide o desfecho.
+aninhados (`address.zip`, `tags[0]`). Um body *vazio ou ausente* é parseado contra
+`undefined`, então o schema `body` decide o desfecho (um body opcional passa; um
+obrigatório falha → `422`). Um body que é **não-vazio mas não é JSON válido** é
+diferente: o Kata o rejeita com `400` `validation_failed`
+(`message: "Malformed JSON body"`) antes do schema rodar.
 
 ### Output — depois do handler
 

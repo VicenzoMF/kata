@@ -11,7 +11,7 @@ slots are declared up front in `defineContext`, and a middleware populates them
 per request. A handler reads the user with `c.get('currentUser')` — the same
 monomorphic accessor used for singletons.
 
-Kata ships the JWT building blocks under [`kata/jwt`](../adr/0013-jwt-delivery.md),
+Kata ships the JWT building blocks under [`katajs/jwt`](../adr/0013-jwt-delivery.md),
 so you no longer hand-roll a verifier:
 
 | Function | Role |
@@ -35,7 +35,7 @@ value — it only declares the type that a middleware will later `set`.
 
 ```ts
 // src/context.ts
-import { defineContext, scoped, singleton } from 'kata'
+import { defineContext, scoped, singleton } from 'katajs'
 
 import type { User } from './modules/users/users.schema'
 
@@ -94,7 +94,7 @@ unknown subject renders a 401):
 
 ```ts
 // src/middlewares/auth.ts
-import { jwtAuth } from 'kata/jwt'
+import { jwtAuth } from 'katajs/jwt'
 
 import { JWT_SECRET } from '../config'
 import { defineMiddleware } from '../context'
@@ -112,9 +112,11 @@ export const requireUser = defineMiddleware({
 ```
 
 `provides: ['currentUser'] as const` is load-bearing: the `as const` keeps the
-literal key types so the type system and the `kata/middleware-provides-mismatch`
-lint rule can check that a middleware actually fills everything it claims to
-provide.
+literal key types so the type system and the `kata/jwt-auth-provides-slot` lint
+rule can check that a `jwtAuth({ slot })` middleware declares the slot it fills.
+`jwtAuth` does its `c.set` internally, so the generic
+`kata/middleware-provides-mismatch` rule can't see the assignment —
+`kata/jwt-auth-provides-slot` (ADR-0013) is what enforces this contract.
 
 Every authentication failure short-circuits the chain with the unified ADR-0008
 envelope as a **401** — the handler never runs:
@@ -139,7 +141,7 @@ you, with `curl`) can obtain a real token without external tooling:
 
 ```ts
 // src/modules/auth/auth.route.ts
-import { signJwt } from 'kata/jwt'
+import { signJwt } from 'katajs/jwt'
 
 import { JWT_SECRET, TOKEN_TTL_SECONDS } from '../../config'
 import { defineRoute } from '../../context'
@@ -232,7 +234,7 @@ in the `use:` chain provided it — and rejects with a **403** when its predicat
 says no. Its `provides` list is empty. The **order in the `use:` array is the
 contract**: the guard must come _after_ the auth middleware that fills the slot.
 
-Kata ships three guard handlers under `kata/jwt`:
+Kata ships three guard handlers under `katajs/jwt`:
 
 - `requireRole(role | roles[])` — allow only when the slot value's `role` is (one of) `role`.
 - `requireClaim(key, expected | predicate)` — allow only when a claim matches.
@@ -253,7 +255,7 @@ export const UserClaimsSchema = z.object({
 
 ```ts
 // in a route — requireUser MUST come before the guard
-import { requireRole } from 'kata/jwt'
+import { requireRole } from 'katajs/jwt'
 
 export const adminRoute = defineRoute({
   method: 'GET',
@@ -275,7 +277,7 @@ For anything role-based won't express, drop to `guard` with a custom predicate
 (it may be `async`, and receives the middleware context as a second argument):
 
 ```ts
-import { guard } from 'kata/jwt'
+import { guard } from 'katajs/jwt'
 
 // Only the owner of the resource may read it.
 const requireOwner = defineMiddleware({
@@ -313,5 +315,5 @@ const requireOwner = defineMiddleware({
 - **Keep the secret out of the slot type.** `resolve` decides what lands in the
   slot; return your `User`, never the raw token or secret.
 - **Don't read scoped slots at module load.** They only exist inside a request
-  (planned `kata/scoped-read-outside-request` rule).
+  (enforced by the `kata/scoped-read-outside-request` rule).
 ```

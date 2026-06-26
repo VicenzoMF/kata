@@ -1,11 +1,11 @@
 # API E2E for the orders module — the transactional checkout centerpiece.
 #
-# Run with the server already listening on :3000:
+# Run against a server on {{host}} (default http://localhost:3000):
 #   pnpm --filter=shop start    # in another terminal
 #   pnpm --filter=shop hurl
 
 # 1. POST /products — seed a dedicated product (stock 3) for this suite.
-POST http://localhost:3000/products
+POST {{host}}/products
 Content-Type: application/json
 X-User-Id: admin
 {
@@ -18,20 +18,20 @@ HTTP 200
 widget_id: jsonpath "$.id"
 
 # 2. POST /orders — no auth header, 401.
-POST http://localhost:3000/orders
+POST {{host}}/orders
 HTTP 401
 [Asserts]
 jsonpath "$.error" == "unauthorized"
 
 # 3. POST /orders — authenticated but empty cart, 422 cart_empty.
-POST http://localhost:3000/orders
+POST {{host}}/orders
 X-User-Id: u-order
 HTTP 422
 [Asserts]
 jsonpath "$.error" == "cart_empty"
 
 # 4. Add 2 widgets to the cart.
-POST http://localhost:3000/cart/items
+POST {{host}}/cart/items
 Content-Type: application/json
 X-User-Id: u-order
 {
@@ -45,7 +45,7 @@ jsonpath "$.totalCents" == 2000
 # 5. POST /orders — checkout succeeds: 201 Created, paid order. The route declares
 #    output { 201: OrderSchema, 409: ErrorBodySchema, 422: ErrorBodySchema } (ADR-0011),
 #    so this 201 body is now validated against OrderSchema (previously unvalidated).
-POST http://localhost:3000/orders
+POST {{host}}/orders
 X-User-Id: u-order
 HTTP 201
 [Captures]
@@ -58,20 +58,20 @@ jsonpath "$.lines" count == 1
 jsonpath "$.lines[0].qty" == 2
 
 # 6. GET /products/{widget} — stock decremented 3 -> 1 by checkout.
-GET http://localhost:3000/products/{{widget_id}}
+GET {{host}}/products/{{widget_id}}
 HTTP 200
 [Asserts]
 jsonpath "$.stock" == 1
 
 # 7. GET /cart — checkout cleared the cart.
-GET http://localhost:3000/cart
+GET {{host}}/cart
 X-User-Id: u-order
 HTTP 200
 [Asserts]
 jsonpath "$.lines" count == 0
 
 # 8. GET /orders — the order is listed for its owner.
-GET http://localhost:3000/orders
+GET {{host}}/orders
 X-User-Id: u-order
 HTTP 200
 [Asserts]
@@ -79,7 +79,7 @@ jsonpath "$" count == 1
 jsonpath "$[0].id" == "{{order_id}}"
 
 # 9. GET /orders/{id} — fetch the order by id.
-GET http://localhost:3000/orders/{{order_id}}
+GET {{host}}/orders/{{order_id}}
 X-User-Id: u-order
 HTTP 200
 [Asserts]
@@ -87,14 +87,14 @@ jsonpath "$.id" == "{{order_id}}"
 jsonpath "$.totalCents" == 2000
 
 # 10. GET /orders/{id} — a different user cannot see it (ownership, 404).
-GET http://localhost:3000/orders/{{order_id}}
+GET {{host}}/orders/{{order_id}}
 X-User-Id: someone-else
 HTTP 404
 [Asserts]
 jsonpath "$.error" == "not_found"
 
 # 11. Atomic rollback setup: add 5 widgets, but only 1 remains in stock.
-POST http://localhost:3000/cart/items
+POST {{host}}/cart/items
 Content-Type: application/json
 X-User-Id: u-order
 {
@@ -104,20 +104,20 @@ X-User-Id: u-order
 HTTP 200
 
 # 12. POST /orders — 409 insufficient_stock; the transaction rolls back.
-POST http://localhost:3000/orders
+POST {{host}}/orders
 X-User-Id: u-order
 HTTP 409
 [Asserts]
 jsonpath "$.error" == "insufficient_stock"
 
 # 13. GET /products/{widget} — stock UNCHANGED at 1 (rollback proven).
-GET http://localhost:3000/products/{{widget_id}}
+GET {{host}}/products/{{widget_id}}
 HTTP 200
 [Asserts]
 jsonpath "$.stock" == 1
 
 # 14. GET /orders — still exactly one order; the failed checkout persisted nothing.
-GET http://localhost:3000/orders
+GET {{host}}/orders
 X-User-Id: u-order
 HTTP 200
 [Asserts]

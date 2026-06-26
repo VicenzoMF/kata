@@ -50,8 +50,8 @@ Kata has two peer dependencies — Hono (the HTTP base) and Zod (schemas) — pl
 Hono's Node adapter to boot a server on Node:
 
 ```bash
-npm install kata hono zod @hono/node-server
-# or: pnpm add kata hono zod @hono/node-server
+npm install katajs hono zod @hono/node-server
+# or: pnpm add katajs hono zod @hono/node-server
 ```
 
 > **Pre-release:** Kata is not yet published to npm. Today the fastest path is to
@@ -104,7 +104,7 @@ already bound to your registry. Re-export them so the rest of your app inherits
 the types — `c.get('key')` only compiles for keys you registered here.
 
 ```ts
-import { defineContext, scoped, singleton } from 'kata'
+import { defineContext, scoped, singleton } from 'katajs'
 
 import type { User } from './modules/users/users.schema'
 
@@ -176,14 +176,14 @@ A middleware declares which scoped slots it `provides`; its handler fills them �
 directly with `c.set(...)`, or via a built-in. Returning a `Response`
 short-circuits the request before the handler runs.
 
-Kata ships JWT auth under [`kata/jwt`](docs/adr/0013-jwt-delivery.md): `jwtAuth`
+Kata ships JWT auth under [`katajs/jwt`](docs/adr/0013-jwt-delivery.md): `jwtAuth`
 reads a `Bearer` token, verifies it, parses the claims with your Zod schema, and
 fills the slot. The `resolve()` hook maps the validated claims onto the app's
 `User`. You keep the `defineMiddleware` wrapper, so the `provides` literal stays
 greppable and lint-checkable.
 
 ```ts
-import { jwtAuth } from 'kata/jwt'
+import { jwtAuth } from 'katajs/jwt'
 
 import { JWT_SECRET } from '../config'
 import { defineMiddleware } from '../context'
@@ -271,7 +271,7 @@ const app = createApp({ modules: [users] })
 const port = Number(process.env['PORT'] ?? 3000)
 
 serve({ fetch: app.fetch, port }, (info) => {
-  k.registry.logger.__value.info(`listening on http://localhost:${info.port}`)
+  k.resolve('logger').info(`listening on http://localhost:${info.port}`)
 })
 ```
 
@@ -283,7 +283,7 @@ canonical case: declare them once and every route is covered, instead of
 copy-pasting them onto each `defineRoute`.
 
 ```ts
-import { bodyLimit, cors, secureHeaders } from 'kata'
+import { bodyLimit, cors, secureHeaders } from 'katajs'
 
 const app = createApp({
   modules: [users],

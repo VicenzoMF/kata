@@ -5,7 +5,7 @@ description: Assinaturas exatas, opções e padrões dos middlewares first-party
 
 # Middlewares nativos
 
-Três middlewares first-party vêm do core entry do `kata`: `cors`,
+Três middlewares first-party vêm do core entry do `katajs`: `cors`,
 `secureHeaders` e `bodyLimit`. Cada um é uma factory `Middleware<R>` que você
 encaixa na cadeia `use:` de uma route ou na cadeia `middlewares` do app. Cada um
 declara `provides: []` — não preenche nenhum scoped slot — e apenas define
@@ -20,7 +20,7 @@ preflight de CORS, veja [Middleware no nível do app](/pt/guide/app-middleware).
 Esta página é a referência de assinaturas.
 
 ```ts
-import { bodyLimit, cors, secureHeaders } from 'kata'
+import { bodyLimit, cors, secureHeaders } from 'katajs'
 ```
 
 ::: info Os três são opt-in
@@ -46,7 +46,7 @@ não aplica padrões além dos do Hono. Veja a
 para a semântica completa das opções.
 
 ```ts
-import { cors } from 'kata'
+import { cors } from 'katajs'
 
 import { createApp } from './context'
 import * as users from './modules/users/users.route'
@@ -92,7 +92,7 @@ Sem opções, `secureHeaders()` aplica a baseline endurecida do Hono —
 `Strict-Transport-Security` e mais — e remove `X-Powered-By`.
 
 ```ts
-import { secureHeaders } from 'kata'
+import { secureHeaders } from 'katajs'
 
 import { createApp } from './context'
 import * as users from './modules/users/users.route'
@@ -134,10 +134,10 @@ type BodyLimitOptions = {
 
 ### Padrões
 
-`maxSize` usa por padrão `DEFAULT_MAX_BODY_SIZE`, exportado de `kata`:
+`maxSize` usa por padrão `DEFAULT_MAX_BODY_SIZE`, exportado de `katajs`:
 
 ```ts
-import { DEFAULT_MAX_BODY_SIZE } from 'kata'
+import { DEFAULT_MAX_BODY_SIZE } from 'katajs'
 
 DEFAULT_MAX_BODY_SIZE // 1024 * 1024 — 1 MiB
 ```
@@ -154,7 +154,7 @@ Quando o limite é excedido e você não fornece `onError`, o padrão retorna HT
 ```
 
 ```ts
-import { bodyLimit } from 'kata'
+import { bodyLimit } from 'katajs'
 
 import { createApp } from './context'
 import * as users from './modules/users/users.route'
@@ -169,7 +169,7 @@ Forneça `onError` para customizar a rejeição. Ele recebe o `Context` cru do H
 e deve retornar um `Response`:
 
 ```ts
-import { bodyLimit } from 'kata'
+import { bodyLimit } from 'katajs'
 
 bodyLimit({
   maxSize: 8 * 1024,
@@ -184,7 +184,7 @@ do app. Como cada uma declara `provides: []`, nenhuma route precisa listá-la. O
 app `examples/hello` aplica os três no nível do app:
 
 ```ts
-import { bodyLimit, cors, secureHeaders } from 'kata'
+import { bodyLimit, cors, secureHeaders } from 'katajs'
 
 import { createApp } from './context'
 import * as users from './modules/users/users.route'
@@ -249,7 +249,7 @@ response header `x-request-id` de todo desfecho — incluindo short-circuits e e
 Apenas a constante do nome do header é exportada:
 
 ```ts
-import { REQUEST_ID_HEADER } from 'kata'
+import { REQUEST_ID_HEADER } from 'katajs'
 
 REQUEST_ID_HEADER // 'x-request-id'
 ```
@@ -263,7 +263,7 @@ Qualquer outra coisa é substituída por um UUID gerado.
 
 ## Exports
 
-Tudo nesta página vem do core entry do `kata`:
+Tudo nesta página vem do core entry do `katajs`:
 
 | Export | Tipo | Notas |
 | --- | --- | --- |
@@ -283,4 +283,4 @@ Tudo nesta página vem do core entry do `kata`:
 - [Middleware](/pt/guide/middleware) — o contrato `Middleware<R>` e o
   preenchimento de scoped slot para middleware que você escreve.
 - [`defineMiddleware`](/pt/reference/define-middleware) — defina seu próprio middleware.
-- [JWT auth](/pt/reference/jwt) — o middleware `jwtAuth` de `kata/jwt`.
+- [JWT auth](/pt/reference/jwt) — o middleware `jwtAuth` de `katajs/jwt`.

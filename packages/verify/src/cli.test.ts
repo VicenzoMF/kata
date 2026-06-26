@@ -46,7 +46,7 @@ describe('runCli() — a project with violations', () => {
 
     writeFileSync(
       join(fixture, 'src', 'context.ts'),
-      `import { defineContext, scoped, singleton } from 'kata'
+      `import { defineContext, scoped, singleton } from 'katajs'
 export const k = defineContext({
   logger: singleton({ info() {} }),
   currentUser: scoped(),

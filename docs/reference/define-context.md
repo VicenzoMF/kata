@@ -11,7 +11,7 @@ plain object, and the keys you pass become the only keys `c.get` will accept.
 It is imported from the core entry point alongside the two slot constructors.
 
 ```ts
-import { defineContext, scoped, singleton } from 'kata'
+import { defineContext, scoped, singleton } from 'katajs'
 ```
 
 ## Signature
@@ -27,6 +27,7 @@ function defineContext<const R extends Registry>(
   defineMiddleware: /* bound to R */
   defineRoute: /* bound to R */
   createApp: /* bound to R */
+  resolve: <K extends SingletonKeys<R>>(key: K) => ResolvedValue<R[K]>
 }
 ```
 
@@ -102,7 +103,7 @@ A route that reads a scoped slot must list the providing middleware in its
 
 ## The returned factory
 
-`defineContext` returns four members, all bound to your registry `R`:
+`defineContext` returns five members, all bound to your registry `R`:
 
 | Member | Type | Purpose |
 | --- | --- | --- |
@@ -110,6 +111,18 @@ A route that reads a scoped slot must list the providing middleware in its
 | `defineRoute` | bound | [`defineRoute`](/reference/define-route) — its `c.get` and `use:` know `R`. |
 | `defineMiddleware` | bound | [`defineMiddleware`](/reference/define-middleware) — `provides:` is keyed to your scoped slots. |
 | `createApp` | bound | [`createApp`](/reference/create-app) — builds the Hono app. |
+| `resolve` | `<K extends SingletonKeys<R>>(key: K) => ResolvedValue<R[K]>` | Read a singleton's value **outside a request** — boot logs, graceful-shutdown teardown. Singleton-only; throws on an unregistered or scoped key. |
+
+`resolve` is the sanctioned way to reach a singleton when there is no `c` — at
+boot to log the listening port, or during shutdown to close a pool. Its
+`SingletonKeys<R>` bound rejects scoped keys at compile time, and a scoped or
+unregistered key also throws at runtime, because a scoped slot holds no
+process-lifetime value to return:
+
+```ts
+k.resolve('logger').info(`listening on :${info.port}`)
+k.resolve('currentUser') // ✗ compile error — scoped slots aren't resolvable
+```
 
 Define the context once, in `src/context.ts`, then re-export the bound factory
 functions. The rest of the app imports them from there and inherits the types
@@ -117,7 +130,7 @@ automatically — nothing else ever calls `defineContext`.
 
 ```ts
 // src/context.ts
-import { defineContext, scoped, singleton } from 'kata'
+import { defineContext, scoped, singleton } from 'katajs'
 
 import type { User } from './modules/users/users.schema'
 
@@ -183,7 +196,7 @@ that reads each:
 
 ```ts
 // src/context.ts
-import { defineContext, scoped, singleton } from 'kata'
+import { defineContext, scoped, singleton } from 'katajs'
 
 import type { Store } from './store'
 import { createStore } from './store'

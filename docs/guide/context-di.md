@@ -25,7 +25,7 @@ type system *and* the lint harness read to answer "what dependencies exist?" If
 something isn't declared there, `c.get` for it simply does not compile.
 
 ```ts
-import { defineContext, scoped, singleton } from 'kata'
+import { defineContext, scoped, singleton } from 'katajs'
 
 import type { User } from './modules/users/users.schema'
 
@@ -79,7 +79,7 @@ implies:
    starts over from an empty slot.
 
 ```ts
-import { defineContext, scoped, singleton } from 'kata'
+import { defineContext, scoped, singleton } from 'katajs'
 import type { Store, Transaction } from './store'
 import { createStore } from './store'
 
@@ -132,7 +132,7 @@ const { registry, defineMiddleware, defineRoute, createApp } = defineContext({ /
 - `registry` — the registry object itself, for deriving `AppRegistry`.
 
 The phrase "bound to your registry" is worth unpacking, because it is the whole
-mechanism. The generic `defineRoute` you could import from `kata` knows nothing
+mechanism. The generic `defineRoute` you could import from `katajs` knows nothing
 about *your* slots — it can't, it shipped long before your app existed. The
 `defineRoute` that comes *out of your `defineContext` call* is a specialized copy
 whose types are parameterized by your registry. Same runtime function, but now
@@ -141,7 +141,7 @@ its `c.get` accepts only your keys and returns only your value types.
 That is why there are two places to import from — and confusing them is the most
 common context mistake:
 
-| Import from `kata` (generic)           | Import from your `context.ts` (bound)          |
+| Import from `katajs` (generic)           | Import from your `context.ts` (bound)          |
 |----------------------------------------|------------------------------------------------|
 | `defineContext`, `singleton`, `scoped` | `defineRoute`, `defineMiddleware`, `createApp` |
 
@@ -162,7 +162,7 @@ import { defineRoute } from '../../context'
 
 This is what makes `c.get('key')` resolve against your registry everywhere.
 
-**The mistake to avoid:** importing `defineRoute` straight from `kata`, or calling
+**The mistake to avoid:** importing `defineRoute` straight from `katajs`, or calling
 `defineContext` again inside a route file. Either one hands you back the *generic,
 unbound* factory — the one that doesn't know your slots — so `c.get` quietly loses
 its key checking and the type chain goes slack without any error to warn you.
@@ -227,12 +227,12 @@ And it only type-checks for keys you actually declared. A typo or an undeclared
 name is a compile error, and the `kata/context-key-not-registered` lint rule flags
 it too — so you find out as you type, not in production.
 
-::: warning Reading the registry at startup
-The four returned members are the public surface. Outside a request you have no
-`c`; to reach a singleton at boot — for example to log the listening port — read
-it off the registry directly: `k.registry.logger.__value.info(...)`. Scoped slots
-have no value at startup by definition, so reading one outside a request handler is
-a build-time error (`kata/scoped-read-outside-request`).
+::: warning Reading a singleton at startup
+The five returned members are the public surface. Outside a request you have no
+`c`; to reach a singleton at boot — for example to log the listening port — call
+`k.resolve('logger').info(...)`. `resolve` is singleton-only: a scoped slot has no
+value at startup by definition, so reaching for one outside a request handler is a
+build-time error (`kata/scoped-read-outside-request`).
 :::
 
 ## Filling scoped slots happens in middleware

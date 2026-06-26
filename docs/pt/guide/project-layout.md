@@ -101,7 +101,7 @@ import { k } from './context'
 const port = Number(process.env['PORT'] ?? 3000)
 
 serve({ fetch: app.fetch, port }, (info) => {
-  k.registry.logger.__value.info(`listening on http://localhost:${info.port}`)
+  k.resolve('logger').info(`listening on http://localhost:${info.port}`)
 })
 ```
 
@@ -115,7 +115,7 @@ e servi-lo em um único arquivo. Ambos os exemplos prontos fazem exatamente isso
 ```ts
 // src/main.ts — examples/hello
 import { serve } from '@hono/node-server'
-import { bodyLimit, cors, secureHeaders } from 'kata'
+import { bodyLimit, cors, secureHeaders } from 'katajs'
 
 import { createApp, k } from './context'
 import * as auth from './modules/auth/auth.route'
@@ -131,7 +131,7 @@ const app = createApp({
 const port = Number(process.env['PORT'] ?? 3000)
 
 serve({ fetch: app.fetch, port }, (info) => {
-  k.registry.logger.__value.info(`listening on http://localhost:${info.port}`)
+  k.resolve('logger').info(`listening on http://localhost:${info.port}`)
 })
 ```
 

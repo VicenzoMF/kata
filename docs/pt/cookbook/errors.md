@@ -10,6 +10,11 @@ O Kata valida as duas pontas de toda route ([ADR-0003](/adr/0003-mandatory-input
 | **Input** | antes do handler rodar | envelope `422` `validation_failed` (abaixo) |
 | **Output** | depois do handler retornar um valor | `500` `internal_output_shape_mismatch` |
 
+Um body não-vazio que não é JSON válido é rejeitado ainda mais cedo, com `400`
+`validation_failed` (`message: "Malformed JSON body"`) — antes da etapa de input,
+então ele nunca chega ao seu schema `body`. (Um body vazio ou ausente ainda é lido
+como `undefined` e deixa o schema decidir.)
+
 Todo o resto — seus próprios 4xx — você retorna explicitamente do handler.
 
 ## O envelope de validação 422
@@ -90,7 +95,7 @@ do Kata, o formatador é exportado. `formatZodIssues(error)` transforma um `ZodE
 em `FieldIssue[]`:
 
 ```ts
-import { formatZodIssues } from 'kata'
+import { formatZodIssues } from 'katajs'
 
 handler: async (c) => {
   const parsed = WebhookSchema.safeParse(await c.raw.req.json())
@@ -117,7 +122,8 @@ validação). O padrão é `strict` fora de produção e `log` em produção,
 e é sobrescrevível via `createApp({ outputValidation })` ou a variável de ambiente
 `KATA_OUTPUT_VALIDATION`.
 
-No modo `strict`, as issues do Zod são logadas em `console.error` e a resposta é:
+No modo `strict`, as issues do Zod são logadas no servidor (através do seu
+`logger` injetado, se houver um registrado, senão `console.error`) e a resposta é:
 
 ```json
 { "error": "internal_output_shape_mismatch", "message": "Response did not match the declared output schema" }
@@ -173,5 +179,8 @@ declare um map status→schema (veja _Pegadinhas_) para tipar e validar bodies d
   é validado contra `output[201]`, e um `c.error(...)` cujo status é declarado
   é validado contra o schema daquele status. Status não declarados ainda passam direto.
   `hc<typeof app>` estreita as respostas por status: `InferResponseType<call, 404>`.
-- **Um body JSON malformado é lido como `undefined`**, e então falha em seu schema `body` —
-  então ele aparece como um `422` normal, não como um crash de parse.
+- **Um body JSON malformado retorna `400`** `validation_failed` (`message:
+  "Malformed JSON body"`) **antes** da validação de schema rodar — os bytes
+  inválidos nunca chegam ao seu schema `body`. Um body *vazio ou ausente* é
+  diferente: ele é lido como `undefined`, então o schema `body` decide o desfecho
+  (um body opcional passa; um obrigatório falha em seu schema → `422`).

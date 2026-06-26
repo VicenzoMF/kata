@@ -27,7 +27,7 @@ onto the whole app with `middlewares:`.
 ## defineMiddleware
 
 `defineContext` returns `defineMiddleware` already bound to your slots. Import it from
-your context module, not from `kata`:
+your context module, not from `katajs`:
 
 ```ts
 import { defineMiddleware } from '../context'
@@ -107,7 +107,7 @@ the end — see [Context & DI](/guide/context-di).)
 Given a context with a `currentUser` scoped slot:
 
 ```ts
-import { defineContext, scoped, singleton } from 'kata'
+import { defineContext, scoped, singleton } from 'katajs'
 
 export type CurrentUser = { id: string }
 
@@ -150,12 +150,12 @@ runtime (`scoped slot 'currentUser' read before being set`) and is flagged by th
 for the process lifetime.
 :::
 
-For real authentication, `kata/jwt` ships `jwtAuth`, which verifies a bearer token
+For real authentication, `katajs/jwt` ships `jwtAuth`, which verifies a bearer token
 and fills a `currentUser` slot for you. The example app wraps it so the `provides`
 literal stays at the call site:
 
 ```ts
-import { jwtAuth } from 'kata/jwt'
+import { jwtAuth } from 'katajs/jwt'
 
 import { JWT_SECRET } from '../config'
 import { defineMiddleware } from '../context'
@@ -213,7 +213,7 @@ A route lists its middleware in `use:`, and they run left to right, all before t
 handler:
 
 ```ts
-import { ErrorBodySchema } from 'kata'
+import { ErrorBodySchema } from 'katajs'
 
 import { defineRoute } from '../../context'
 import { requireAuth } from '../../middlewares/auth'
@@ -253,7 +253,7 @@ repeating them in each route's `use:` would be noise. Declare them once on the a
 with `createApp({ middlewares })`:
 
 ```ts
-import { bodyLimit, cors, secureHeaders } from 'kata'
+import { bodyLimit, cors, secureHeaders } from 'katajs'
 
 import { createApp } from './context'
 import * as orders from './modules/orders/orders.route'

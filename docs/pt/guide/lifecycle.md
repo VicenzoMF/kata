@@ -10,7 +10,7 @@ e não tem container de IoC para desmontar. Singletons são eager: uma factory c
 `singleton(makeDb(env))` roda quando `context.ts` é importado, e o valor vive pelo
 processo inteiro. Resta uma única coisa sob sua responsabilidade — parar o processo
 *de forma limpa* quando o orquestrador pedir. Isso é o `gracefulShutdown` de
-`kata/node`.
+`katajs/node`.
 
 `createApp` não toca no processo. Ele não instala nenhum signal handler, não abre
 nenhum socket e não sabe nada sobre Node. Construir uma app é uma operação sem
@@ -34,7 +34,7 @@ const app = createApp({ modules: [users] })
 const port = Number(process.env['PORT'] ?? 3000)
 
 serve({ fetch: app.fetch, port }, (info) => {
-  k.registry.logger.__value.info(`listening on http://localhost:${info.port}`)
+  k.resolve('logger').info(`listening on http://localhost:${info.port}`)
 })
 ```
 
@@ -58,13 +58,13 @@ escape é trabalhoso e idêntico em toda app, então Kata cuida disso (ADR-0014)
 
 ## `gracefulShutdown`
 
-`gracefulShutdown` vive no subpath **`kata/node`** — o único ponto de entrada que
+`gracefulShutdown` vive no subpath **`katajs/node`** — o único ponto de entrada que
 toca em `node:process` — para que importar o core neutro em relação ao runtime
-(`kata`) de um build edge ou Workers nunca puxe o Node junto.
+(`katajs`) de um build edge ou Workers nunca puxe o Node junto.
 
 ```ts
-import { gracefulShutdown } from 'kata/node'
-import type { ServerType, GracefulShutdownOptions } from 'kata/node'
+import { gracefulShutdown } from 'katajs/node'
+import type { ServerType, GracefulShutdownOptions } from 'katajs/node'
 
 function gracefulShutdown(server: ServerType, options: GracefulShutdownOptions): void
 
@@ -78,12 +78,12 @@ type GracefulShutdownOptions = {
 Ele recebe o **server**, não a app. A app é o request handler; o server é o que é
 dono do socket e precisa de `close()` para drenar. `ServerType` é o handle que o
 `serve()` retorna — um `Server` `node:http`/`http2` — re-derivado de `@types/node`
-para que `kata/node` precise apenas de `@types/node` e nunca empacote o adaptador.
+para que `katajs/node` precise apenas de `@types/node` e nunca empacote o adaptador.
 
 ```ts
 // src/main.ts
 import { serve } from '@hono/node-server'
-import { gracefulShutdown } from 'kata/node'
+import { gracefulShutdown } from 'katajs/node'
 
 import { createApp, k } from './context'
 import * as users from './modules/users/users.route'
@@ -92,14 +92,14 @@ const app = createApp({ modules: [users] })
 const port = Number(process.env['PORT'] ?? 3000)
 
 const server = serve({ fetch: app.fetch, port }, (info) => {
-  k.registry.logger.__value.info(`listening on http://localhost:${info.port}`)
+  k.resolve('logger').info(`listening on http://localhost:${info.port}`)
 })
 
 gracefulShutdown(server, {
   onClose: async () => {
     // Teardown sob responsabilidade da app, na ordem que a app escolher. Recursos
     // são alcançados pelo registry ou por referências capturadas em closure.
-    await k.registry.db.__value.close()
+    await k.resolve('db').close()
   },
   // signals: ['SIGTERM', 'SIGINT'], // default
   // timeoutMs: 10_000,              // default
@@ -144,7 +144,7 @@ gracefulShutdown(server, {
   onClose: async () => {
     await metrics.flush()   // primeiro dá flush nas métricas bufferizadas
     await queue.stop()      // depois para o consumer da fila
-    await k.registry.db.__value.close() // por último, fecha o pool
+    await k.resolve('db').close() // por último, fecha o pool
   },
 })
 ```
@@ -194,7 +194,7 @@ nem re-exporta o `serve()`. `gracefulShutdown` opera sobre o handle `Server` que
 
 ## Outros runtimes
 
-`kata/node` é exclusivo de Node e é o único adaptador de ciclo de vida da v0.3.
+`katajs/node` é exclusivo de Node e é o único adaptador de ciclo de vida da v0.3.
 Edge e Workers não têm processo de longa duração para sinalizar; Bun e Deno expõem
 sinais mas divergem na semântica de fechamento de server. Ciclo de vida
 cross-runtime fica adiado para o milestone v0.4. Nesses runtimes você serve a app da
