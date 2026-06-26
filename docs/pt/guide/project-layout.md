@@ -177,7 +177,8 @@ como em `examples/shop`.
 
 ## Scaffolding
 
-`kata init --with-example` escreve a estrutura travada para você — `src/context.ts`,
-`src/main.ts` e um domínio `src/modules/health/` com seu `health.route.ts` e
-`health.schema.ts` — para que um projeto novo comece no formato que o harness espera. Veja
-[Bootstrap CLI](/pt/guide/cli).
+`kata init` escreve esta estrutura travada para você — `src/app.ts`,
+`src/context.ts`, `src/main.ts`, uma pasta `middlewares/` e dois módulos prontos
+(`health` e `greetings`), cada um com o conjunto completo route / service / schema
+/ test / hurl — para que um projeto novo comece no formato que o harness espera.
+Adicione mais com `kata new <domain>`. Veja [Bootstrap CLI](/pt/guide/cli).

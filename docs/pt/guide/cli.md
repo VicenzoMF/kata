@@ -1,244 +1,307 @@
 ---
 title: CLI de bootstrap
-description: kata init faz o scaffold de um projeto já conectado ao harness — hooks do Claude/Codex, instruções para agentes e um app GET /health executável opcional. Idempotente por padrão.
+description: kata init faz o scaffold de um app Kata completo e executável — o layout canônico, dois módulos de exemplo e o harness de agentes — em um comando. kata new adiciona módulos; kata verify roda as regras de lint.
 ---
 
 # CLI de bootstrap
 
-Kata distribui um único binário, `kata`, com dois comandos:
+O Kata distribui um binário, `kata`, com três comandos:
 
-- **`kata init`** — faz o scaffold do harness em um projeto. Esta página o cobre.
-- **`kata verify`** — roda as regras de lint do Kata sobre um projeto; no modo `--json` ele emite
-  o output de hook que um agente consome. Sua superfície completa — o conjunto de regras, `--json`, e
-  `--watch` — vive n'[o harness](/pt/guide/harness); a seção [`kata verify`](#kata-verify)
-  abaixo é uma referência rápida.
+- **`kata init [dir]`** — faz o scaffold de um app completo e executável. Esta página o cobre.
+- **`kata new <domain>`** — gera o esqueleto de um módulo em `src/modules/`.
+- **`kata verify [path]`** — roda as regras de lint do Kata; no modo `--json` emite
+  a saída de hook que um agente consome. Sua superfície completa — o conjunto de
+  regras, `--json` e `--watch` — vive em [o harness](/pt/guide/harness); a seção
+  [`kata verify`](#kata-verify) abaixo é uma referência rápida.
 
-`kata init` escreve o harness — as configs de hook do Claude Code e do Codex mais o
-par de instruções `AGENTS.md` / `CLAUDE.md`. Adicione `--with-example` e ele também faz o scaffold
-de um app `GET /health` executável que você pode subir com mais um passo. Ele não instala
-nada, não gerencia versões, nem gera código por rota: ele escreve um conjunto fixo de arquivos,
-de forma idempotente, e relata o que fez.
+`kata init` leva você de zero a um servidor rodando em um comando. Ele escreve o
+[layout de projeto](/pt/guide/project-layout) canônico — `src/app.ts`,
+`src/context.ts`, uma pasta `middlewares/` e dois módulos prontos — em cima do
+**harness de agentes** (as configs de hook do Claude / Codex / agents e o par de
+instruções `AGENTS.md` / `CLAUDE.md`) mais o toolchain de lint/format. Ele não
+instala nada: escreve um conjunto fixo de arquivos, de forma idempotente, e
+reporta o que fez.
 
 ## `kata init`
 
 ```bash
-kata init
+kata init my-app      # faz o scaffold em ./my-app
+kata init             # …ou faz o scaffold no diretório atual
 ```
 
-Escreve os quatro arquivos do harness no diretório atual:
+O `[dir]` opcional é criado se não existir e resolvido relativo a `--cwd`
+(padrão: o diretório atual). O `package.json` gerado recebe esse nome.
 
 ```
-kata init → /path/to/project
+kata init → /path/to/my-app
   create  .claude/settings.json
   create  .codex/hooks.json
+  create  .agents/hooks.json
   create  AGENTS.md
   create  CLAUDE.md
+  create  lefthook.yml
+  create  biome.json
+  create  .oxlintrc.json
+  create  src/context.ts
+  create  src/app.ts
+  create  src/main.ts
+  create  src/middlewares/request-logger.ts
+  create  src/modules/health/health.schema.ts
+  create  src/modules/health/health.service.ts
+  create  src/modules/health/health.route.ts
+  create  src/modules/health/health.test.ts
+  create  src/modules/health/health.hurl
+  create  src/modules/greetings/greetings.schema.ts
+  create  src/modules/greetings/greetings.service.ts
+  create  src/modules/greetings/greetings.route.ts
+  create  src/modules/greetings/greetings.test.ts
+  create  src/modules/greetings/greetings.hurl
+  create  package.json
+  create  tsconfig.json
+  create  .gitignore
+  create  README.md
+
+Next steps:
+  cd my-app
+  pnpm install
+  pnpm dev          # → http://localhost:3000/health
+  kata verify       # fast deterministic checks
+  pnpm test         # unit tests
 ```
+
+### Os arquivos do harness
+
+Eles transformam uma sessão de agente em uma sessão guardada: ela roda
+`kata verify --json` a cada escrita de arquivo e `pnpm test` antes de poder
+terminar. A paridade entre os harnesses é garantida por construção — veja
+[o harness](/pt/guide/harness).
 
 | Arquivo | O que é |
 |---|---|
-| `.claude/settings.json` | Hooks do Claude Code (PreToolUse / PostToolUse / Stop) mais uma lista `permissions.deny` que proíbe adulteração de configs e bypasses de verificação em commit/push. |
-| `.codex/hooks.json` | O espelho no Codex da mesma cadeia de hooks. O Codex não tem um slot `permissions`, então as mesmas proibições são impostas via `kata verify` no PreToolUse. |
-| `AGENTS.md` | O arquivo de instruções canônico e agnóstico a agente. O Codex o carrega nativamente. |
-| `CLAUDE.md` | Um ponto de entrada enxuto do Claude Code que importa o `AGENTS.md` via `@AGENTS.md` e adiciona notas de harness específicas do Claude. |
+| `.claude/settings.json` | Hooks do Claude Code (PreToolUse / PostToolUse / Stop) mais uma lista `permissions.deny` que bane adulteração de config e bypass de verificação no commit/push. |
+| `.codex/hooks.json` | O espelho Codex da mesma cadeia de hooks. O Codex não tem slot `permissions`, então os mesmos bans rodam via `kata verify` no PreToolUse. |
+| `.agents/hooks.json` | Um **espelho neutro de fornecedor** da mesma cadeia Pre/Post/Stop, para qualquer harness que leia a convenção emergente `.agents/`. Os mesmos comandos dos dois acima. |
+| `AGENTS.md` | O arquivo de instruções canônico, agnóstico de agente. O Codex o carrega nativamente. |
+| `CLAUDE.md` | Um entrypoint fino do Claude Code que importa `AGENTS.md` via `@AGENTS.md` e adiciona notas específicas do Claude. |
+| `lefthook.yml` | O pre-commit local do git: `kata verify`, formatação Biome, oxlint e typecheck a cada commit. |
 
-Estes quatro arquivos são o harness. Eles fazem um agente rodar `kata verify --json`
-a cada escrita de arquivo e `pnpm test` antes que ele possa encerrar uma sessão.
-Veja [o harness](/pt/guide/harness) para entender o que cada hook faz e por que a
-paridade entre Claude e Codex é imposta por construção.
+### Os arquivos do app
+
+O menor app *completo* que sobe, passa no typecheck, nos testes e no
+`kata verify` — o [layout](/pt/guide/project-layout) canônico, não um tutorial.
+
+| Arquivo | O que é |
+|---|---|
+| `src/context.ts` | `defineContext({})` mais um re-export de `createApp` / `defineRoute` / `defineMiddleware`. A superfície de DI tipada, começando vazia. |
+| `src/app.ts` | `createApp({ modules, middlewares })` — a aplicação, composta dos módulos e da cadeia de middleware global. |
+| `src/main.ts` | O entrypoint de runtime: `serve` o app com `@hono/node-server`. |
+| `src/middlewares/request-logger.ts` | Um middleware global de exemplo (`provides: []`) que loga cada requisição. |
+| `src/modules/health/` | `GET /health` → `200 {"status":"ok"}` — a menor rota, com o conjunto completo de cinco arquivos do módulo (route / service / schema / test / hurl). |
+| `src/modules/greetings/` | `POST /greetings` (body validado) + `GET /greetings/:id` (params validados, `404` se não achar) — o padrão criar/ler. |
+| `biome.json` / `.oxlintrc.json` | As configs de formatter e linter que o pre-commit roda. Escritas **só se ausentes**. |
+| `package.json` / `tsconfig.json` | Scripts, deps fixadas e opções estritas do compilador. Escritos **só se ausentes**. |
+| `.gitignore` / `README.md` | Ignores padrão e um quickstart por app. Escritos **só se ausentes**. |
 
 ### Opções
 
 ```
--C, --cwd <dir>     Project root to scaffold into (default: current directory)
--f, --force         Overwrite existing files instead of skipping them
-    --with-example  Also scaffold a runnable example app (GET /health)
--h, --help          Show this help
+-C, --cwd <dir>     Diretório base para resolver [dir] (padrão: cwd)
+    --minimal       Escreve só as configs do harness — sem app (para projetos existentes)
+-f, --force         Sobrescreve arquivos-fonte existentes (nunca os manifests/configs)
+-h, --help          Mostra esta ajuda
 ```
 
 `--cwd` também aceita a forma `--cwd=<dir>`.
 
-### Idempotência
-
-`kata init` é seguro de rodar de novo. Um arquivo existente é deixado intocado e
-relatado como `skip`; só os arquivos faltantes são escritos. Passe `--force` para
-sobrescrever os quatro arquivos do harness.
-
-```
-kata init → /path/to/project
-    skip  .claude/settings.json
-    skip  .codex/hooks.json
-    skip  AGENTS.md
-    skip  CLAUDE.md
-
-Some files already existed and were left untouched.
-Re-run with --force to overwrite them.
-```
-
-::: tip
-Rode `kata init` de novo depois de atualizar o Kata para puxar as configs de hook
-atualizadas com `--force`. Como os arquivos do harness são a única coisa que ele
-sobrescreve, seu código-fonte fica intocado.
-:::
-
-## `kata init --with-example`
+### De zero a um servidor rodando
 
 ```bash
-kata init --with-example
-```
-
-Escreve os quatro arquivos do harness **e** um app executável mínimo em cima
-deles:
-
-```
-kata init → /path/to/project
-  create  .claude/settings.json
-  create  .codex/hooks.json
-  create  AGENTS.md
-  create  CLAUDE.md
-  create  src/context.ts
-  create  src/main.ts
-  create  src/modules/health/health.route.ts
-  create  src/modules/health/health.schema.ts
-  create  package.json
-  create  tsconfig.json
-```
-
-O exemplo é o menor app que sobe e passa no `kata verify`: uma única rota
-`GET /health` que declara `input` e `output`, mantém seu schema em um
-`.schema.ts` separado e não usa DI.
-
-| Arquivo | O que é |
-|---|---|
-| `src/context.ts` | `defineContext({})` mais um re-export de `createApp` / `defineRoute`. A superfície tipada de DI, começando vazia. |
-| `src/main.ts` | `createApp({ modules: [health] })` conectado ao `serve` de `@hono/node-server`. |
-| `src/modules/health/health.route.ts` | `defineRoute` para `GET /health` → `200 {"status":"ok"}`. |
-| `src/modules/health/health.schema.ts` | `HealthSchema` — o DTO de resposta em Zod. |
-| `package.json` | Scripts e deps fixadas. Escrito **só se ausente**. |
-| `tsconfig.json` | Opções de compilador estritas e autocontidas. Escrito **só se ausente**. |
-
-### Do zero ao `GET /health`
-
-```bash
-mkdir my-app && cd my-app
-kata init --with-example
-pnpm install
-pnpm start          # tsx src/main.ts → http://localhost:3000
+kata init my-app
+cd my-app
+pnpm install        # o único passo manual — um scaffolder não pode enviar node_modules
+pnpm dev            # tsx watch src/main.ts → http://localhost:3000
 ```
 
 ```bash
 curl localhost:3000/health
 # {"status":"ok"}
+
+curl -X POST localhost:3000/greetings -H 'content-type: application/json' -d '{"name":"Ada"}'
+# {"id":"…","message":"Hello, Ada!"}
 ```
 
-Instalar as dependências é o único passo manual — um scaffolder não pode
-distribuir o `node_modules`. Depois disso, `pnpm start` roda `src/main.ts` e
-`pnpm dev` roda em modo watch.
+O `package.json` gerado conecta os scripts do dia a dia: `pnpm dev` (watch),
+`pnpm start`, `pnpm test` (Vitest), `pnpm typecheck`, `kata verify` e `pnpm hurl`
+(a suíte de E2E de API `.hurl` — precisa do [Hurl](https://hurl.dev) instalado e
+do servidor rodando).
 
 ::: warning Pré-lançamento
-O Kata ainda não foi publicado no npm, então o `pnpm install` ainda não consegue
-resolver o `package.json` gerado. Até lá, rode o exemplo trabalhado a partir do
-repositório — veja [Início rápido](/pt/guide/quickstart).
+O Kata ainda não foi publicado no npm, então `pnpm install` ainda não consegue
+resolver o `package.json` gerado. Até lá, rode o exemplo do repositório — veja o
+[Início rápido](/pt/guide/quickstart).
 :::
 
-### O que os arquivos gerados contêm
+### `kata init --minimal`
 
-`src/context.ts` — a superfície tipada de DI. Ela começa vazia; você registra
-slots `singleton(...)` / `scoped<T>()` aqui conforme o app cresce.
+Para adicionar o harness a um projeto **existente** sem espalhar um app nele,
+passe `--minimal`: ele escreve só os seis arquivos do harness (`.claude` /
+`.codex` / `.agents` / `AGENTS.md` / `CLAUDE.md` / `lefthook.yml`) e nada mais.
 
-```ts
-import { defineContext } from 'kata'
-
-export const k = defineContext({})
-
-export const { defineRoute, createApp } = k
+```bash
+kata init --minimal
 ```
 
-`src/modules/health/health.schema.ts` — o DTO de resposta. Schemas ficam no seu
-próprio `.schema.ts`, nunca inline na rota.
+```
+kata init → /path/to/project
+  create  .claude/settings.json
+  create  .codex/hooks.json
+  create  .agents/hooks.json
+  create  AGENTS.md
+  create  CLAUDE.md
+  create  lefthook.yml
+
+Harness configs written. Commit them, then start coding —
+the PreToolUse/Stop hooks run `kata verify` and `pnpm test` for you.
+```
+
+### Idempotência
+
+`kata init` é seguro de rodar de novo. Um arquivo existente é deixado intocado e
+reportado como `skip`; só os arquivos ausentes são escritos. Passe `--force` para
+sobrescrever os arquivos-**fonte** — os manifests e configs nunca são tocados
+(veja abaixo).
+
+```
+kata init → /path/to/my-app
+    skip  .claude/settings.json
+    skip  src/app.ts
+    …
+Some files already existed and were left untouched.
+Re-run with --force to overwrite source files (manifests are never touched).
+```
+
+::: tip
+Rode `kata init --force` de novo depois de atualizar o Kata para puxar os
+arquivos atualizados de harness e fonte. Seu `package.json`, `tsconfig.json` e
+configs de lint permanecem.
+:::
+
+### Manifests e configs nunca são sobrescritos
+
+Os arquivos `src/` respeitam `--force`. Os manifests e configs de lint/format
+não: um `package.json`, `tsconfig.json`, `biome.json`, `.oxlintrc.json`,
+`.gitignore` ou `README.md` existente é **sempre** deixado intocado, mesmo com
+`--force`. Rodar `kata init` dentro de um projeto que já tem esses arquivos
+preenche só os que faltam e reporta o resto como `skip` — ele nunca reescreve sua
+lista de dependências, config do compilador ou regras de lint.
+
+### O que os módulos de exemplo contêm
+
+`src/modules/greetings/greetings.schema.ts` — todos os schemas Zod do domínio
+vivem aqui, nunca inline na rota ([ADR-0005](/adr/0005-dtos-in-separate-schema-file)).
 
 ```ts
 import { z } from 'zod'
 
-export const HealthSchema = z.object({
-  status: z.literal('ok'),
-})
+export const CreateGreetingBodySchema = z.object({ name: z.string().min(1) })
+export const GreetingParamsSchema = z.object({ id: z.string() })
+export const GreetingSchema = z.object({ id: z.string(), message: z.string() })
 
-export type Health = z.infer<typeof HealthSchema>
+export type CreateGreetingBody = z.infer<typeof CreateGreetingBodySchema>
+export type Greeting = z.infer<typeof GreetingSchema>
 ```
 
-`src/modules/health/health.route.ts` — a menor rota válida. Ela declara tanto
-`input` quanto `output`.
+`src/modules/greetings/greetings.route.ts` — um POST e um GET, cada um declarando
+`input` e `output` e importando seus schemas por nome.
 
 ```ts
 import { defineRoute } from '../../context'
 
-import { HealthSchema } from './health.schema'
+import { CreateGreetingBodySchema, GreetingParamsSchema, GreetingSchema } from './greetings.schema'
+import { createGreeting, getGreeting } from './greetings.service'
 
-export const healthRoute = defineRoute({
+export const createGreetingRoute = defineRoute({
+  method: 'POST',
+  path: '/greetings',
+  input: { body: CreateGreetingBodySchema },
+  output: GreetingSchema,
+  handler: (c) => createGreeting(c.input.body),
+})
+
+export const getGreetingRoute = defineRoute({
   method: 'GET',
-  path: '/health',
-  input: {},
-  output: HealthSchema,
-  handler: () => ({ status: 'ok' as const }),
+  path: '/greetings/:id',
+  input: { params: GreetingParamsSchema },
+  output: GreetingSchema,
+  handler: (c) => {
+    const greeting = getGreeting(c.input.params.id)
+    if (!greeting) return c.error('not_found', 'Greeting not found', { status: 404 })
+    return greeting
+  },
 })
 ```
 
-`src/main.ts` — ponto de entrada. `createApp` recebe os módulos de rota como
-imports de namespace; `serve` os sobe no Node.
+`src/app.ts` — a aplicação: módulos como imports de namespace, mais a cadeia de
+middleware global ([ADR-0012](/adr/0012-app-level-middleware)).
 
 ```ts
-import { serve } from '@hono/node-server'
-
 import { createApp } from './context'
+import { requestLogger } from './middlewares/request-logger'
+import * as greetings from './modules/greetings/greetings.route'
 import * as health from './modules/health/health.route'
 
-const app = createApp({ modules: [health] })
-
-const port = Number(process.env['PORT'] ?? 3000)
-
-serve({ fetch: app.fetch, port }, (info) => {
-  console.log('kata: listening on http://localhost:' + info.port)
+export const app = createApp({
+  modules: [health, greetings],
+  middlewares: [requestLogger],
 })
 ```
 
 Faça o app crescer adicionando módulos em `src/modules/<domain>/` e listando-os
-em `createApp({ modules: [...] })`. Veja [Rotas e schemas](/pt/guide/routes-schemas)
-para a superfície completa de rotas e [Layout do projeto](/pt/guide/project-layout)
-para a estrutura de pastas travada.
+em `createApp({ modules: [...] })`. O `kata new` da próxima seção faz o boilerplate.
 
-### `package.json` / `tsconfig.json` nunca são sobrescritos
+## `kata new`
 
-Os quatro arquivos de código-fonte honram o `--force` como os arquivos do
-harness. Os dois manifestos não: um `package.json` ou `tsconfig.json` existente é
-**sempre** deixado intocado, mesmo com `--force`. Rodar `--with-example` dentro de
-um projeto que já tem um manifesto preenche só os arquivos de código faltantes e
-relata os manifestos como `skip` — ele nunca reescreve sua lista de dependências
-ou config de compilador.
+Adiciona um módulo a um app existente:
 
-::: warning
-`kata init --with-example` espalha arquivos `src/` no diretório atual. Rode-o em
-um diretório novo ou já no formato Kata; o skip-on-exists protege os arquivos
-existentes, mas os novos ainda aparecem onde você o roda.
-:::
+```bash
+kata new orders
+```
+
+```
+kata new orders → /path/to/project
+  create  src/modules/orders/orders.route.ts
+  create  src/modules/orders/orders.service.ts
+  create  src/modules/orders/orders.schema.ts
+  create  src/modules/orders/orders.test.ts
+  create  src/modules/orders/orders.hurl
+```
+
+Ele escreve o esqueleto de cinco arquivos do módulo — route / service / schema /
+test / hurl — em `src/modules/<domain>/`. Registre-o no `src/app.ts` importando o
+módulo de rota e adicionando-o a `createApp({ modules: [...] })`. Como o
+`kata init`, ele pula arquivos existentes a menos que você passe `--force`, e
+respeita `--cwd`.
 
 ## `kata verify`
 
-O segundo comando roda as regras determinísticas de lint do Kata sobre um projeto:
+Roda as regras de lint determinísticas do Kata sobre um projeto:
 
 ```bash
 kata verify [path]      # caminho padrão: o diretório atual
 ```
 
-Ele lê o projeto, verifica as regras ancoradas nas ADR-0003 / 0004 / 0005, e imprime
-um relatório legível para humanos. Duas flags moldam como ele roda:
+Ele lê o projeto, checa as regras ancoradas em ADR-0003 / 0004 / 0005 e imprime
+um relatório legível. Duas flags moldam como ele roda:
 
-- `kata verify --json` — emite JSON de hook `PostToolUse` do Claude Code em vez do
-  relatório no terminal. Isso é exatamente o que os hooks gerados chamam a cada escrita de arquivo.
-- `kata verify --watch` — continua rodando e reverifica ao mudar, para um loop local rápido.
+- `kata verify --json` — emite o JSON de hook `PostToolUse` do Claude Code em vez
+  do relatório de terminal. É exatamente o que os hooks gerados chamam a cada
+  escrita de arquivo.
+- `kata verify --watch` — fica rodando e re-checa a cada mudança, para um loop
+  local apertado.
 
-Rode `kata verify --help` para a lista completa de flags. O conjunto de regras, o contrato JSON e
-como os hooks o conectam ao Claude Code e ao Codex estão documentados n'[o harness](/pt/guide/harness).
+Rode `kata verify --help` para a lista completa de flags. O conjunto de regras, o
+contrato JSON e como os hooks o conectam ao Claude Code e ao Codex estão
+documentados em [o harness](/pt/guide/harness).
 
 ## Sem comando, ou um desconhecido
 
@@ -247,16 +310,13 @@ sai com código diferente de zero:
 
 ```bash
 kata
-# kata: missing command (try `kata init` or `kata verify`)
+# kata: missing command (try `kata init`)
 ```
-
-Um gerador de módulo por domínio (`kata new <domain>`) está reservado, mas ainda
-não foi implementado; veja [ADR-0015](/adr/0015-bootstrap-cli) para a decisão de
-estender o `kata init` com uma flag em vez de adicionar um segundo comando de
-scaffolding.
 
 ## Veja também
 
+- [Layout do projeto](/pt/guide/project-layout) — a estrutura de pastas travada que o `kata init` escreve.
 - [O harness](/pt/guide/harness) — o que as configs de hook geradas impõem.
-- [Início rápido](/pt/guide/quickstart) — construa e suba uma API `/users` completa à mão.
-- [ADR-0015](/adr/0015-bootstrap-cli) — por que o bootstrap é uma flag no `init`.
+- [Início rápido](/pt/guide/quickstart) — construa e suba uma API `/users` completa na mão.
+- [ADR-0015](/adr/0015-bootstrap-cli) — a decisão original de bootstrap (o app
+  mínimo atrás de `--with-example`), superada pelo scaffold de app completo por padrão.

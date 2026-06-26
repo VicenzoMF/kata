@@ -245,8 +245,9 @@ timeout de 180 segundos.
 ferramenta `Bash`/`apply_patch`. Os comandos, os eventos e o timeout do `Stop` são
 idênticos — essa paridade é o ponto.
 
-Passe `--with-example` para também scaffoldar um app `GET /health` executável em cima
-dos arquivos do harness. Veja [Bootstrap CLI](/pt/guide/cli) para cada flag.
+Por padrão, `kata init` faz o scaffold de um app completo e executável em cima
+destes arquivos do harness; `--minimal` escreve só o harness. Veja
+[Bootstrap CLI](/pt/guide/cli) para cada flag.
 
 ## Veja também
 

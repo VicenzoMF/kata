@@ -244,8 +244,9 @@ plus the three-event hook map: `PreToolUse` and `PostToolUse` matched on
 instead. The commands, the events, and the `Stop` timeout are identical — that
 parity is the point.
 
-Pass `--with-example` to also scaffold a runnable `GET /health` app on top of the
-harness files. See [Bootstrap CLI](/guide/cli) for every flag.
+`kata init` scaffolds a complete runnable app on top of these harness files by
+default; `--minimal` writes only the harness. See [Bootstrap CLI](/guide/cli) for
+every flag.
 
 ## See also
 
