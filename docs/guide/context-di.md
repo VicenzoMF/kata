@@ -272,7 +272,8 @@ The type system and the harness keep both sides of that contract honest:
   those keys with the right value type. Setting a singleton, or a name you never
   declared, does not compile.
 - `kata/scoped-slot-not-provided` fails a route that reads a scoped slot whose
-  providing middleware is not in its `use:` chain.
+  providing middleware is not in its chain — `use:` plus the app-level
+  `createApp({ middlewares })` — or is in it but *after* the read.
 - `kata/middleware-provides-mismatch` fails a middleware that declares a slot in
   `provides` but never actually sets it.
 

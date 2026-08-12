@@ -1,12 +1,13 @@
 import { describe, expect, it } from 'vitest'
 
+import { createProject } from '../project'
 import type { Project, SourceFile } from '../types'
 
 import { noRouteWithoutInputSchema } from './no-route-without-input-schema'
 
 function routeFile(text: string, relPath = 'src/modules/users/users.route.ts'): Project {
   const file: SourceFile = { path: `/repo/${relPath}`, relPath, text }
-  return { root: '/repo', files: [file], registryKeys: null }
+  return createProject({ root: '/repo', files: [file], registryKeys: null })
 }
 
 describe('kata/no-route-without-input-schema', () => {

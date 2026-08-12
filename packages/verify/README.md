@@ -8,9 +8,10 @@ either as a human-readable report or as JSON for a Claude Code PostToolUse hook.
 ## Usage
 
 ```sh
-kata verify [path]          # human-readable report (exit 1 on any error)
-kata verify [path] --json   # PostToolUse hook JSON on stdout (always exit 0)
-kata verify [path] --watch  # re-check on every file change (Ctrl-C to stop)
+kata verify [path]                    # human-readable report (exit 1 on any error)
+kata verify [path] --json             # PostToolUse hook JSON on stdout (always exit 0)
+kata verify [path] --watch            # re-check on every file change (Ctrl-C to stop)
+kata verify [path] --strict-coverage  # also exit 1 on any suppressed check
 kata verify --help
 ```
 
@@ -33,7 +34,7 @@ pnpm --filter=@kata/verify run verify -- ../../examples/hello   # via tsx (dev, 
 | `kata/no-route-without-output-schema` | [0003](../../docs/adr/0003-mandatory-input-output-schemas.md) | a `defineRoute({ … })` in a `*.route.ts` with no `output` schema |
 | `kata/no-route-without-input-schema` | [0003](../../docs/adr/0003-mandatory-input-output-schemas.md) | a `defineRoute({ … })` with no `input` field (an empty `input: {}` is fine) |
 | `kata/inline-schema` | [0005](../../docs/adr/0005-dtos-in-separate-schema-file.md) | a Zod schema built inline (`z.object(…)`) in a `*.route.ts` / `*.service.ts` instead of a `*.schema.ts` |
-| `kata/scoped-slot-not-provided` | [0004](../../docs/adr/0004-di-via-scoped-slots.md) | a handler reading `c.get('slot')` for a scoped slot with no providing middleware in its `use:` chain |
+| `kata/scoped-slot-not-provided` | [0004](../../docs/adr/0004-di-via-scoped-slots.md) | a handler — or a middleware — reading `c.get('slot')` for a scoped slot no *earlier* entry of its chain (`createApp({ middlewares })` then `use:`) provides |
 | `kata/middleware-provides-mismatch` | [0004](../../docs/adr/0004-di-via-scoped-slots.md) | a `defineMiddleware` whose `provides: ['x']` lists a slot its handler never `c.set`s |
 | `kata/context-key-not-registered` | [0004](../../docs/adr/0004-di-via-scoped-slots.md) | `c.get('key')` where `'key'` is not declared in `defineContext({ … })` |
 
@@ -41,6 +42,32 @@ Every rule is intentionally conservative: any construct it cannot statically
 prove (a spread config, a dynamic `c.get`/`c.set` key, an indeterminate registry,
 or an unresolvable `use:` entry) is left alone, so the false-positive rate stays
 at zero on conforming code.
+
+## Suppressions
+
+"Left alone" is not the same as "checked", and the two must not print the same
+report — one unresolvable `cors()` in `createApp({ middlewares })` used to switch
+`kata/scoped-slot-not-provided` off across an entire project while `kata verify`
+still printed *no problems found* (issue #206). A check a rule declines to make is
+now reported as a **suppression** naming the rule, the reason, the location, and
+how many checks it swallowed:
+
+```
+⚠ kata/scoped-slot-not-provided: suppressed for 3 checks — could not resolve `authFactory()` in createApp({ middlewares })
+    src/app.ts:17:18
+```
+
+Suppressions appear in the human report, in the `--json` payload (as a
+`suppressions` array plus prose in the injected context), and are fatal under
+`--strict-coverage`. A rule declares them by returning
+`{ issues, suppressions }` instead of a bare issue array.
+
+Middleware imported from an npm package resolves through the `provides.json`
+**manifest** the package ships — a map of export subpath → exported name →
+`{ provides, reads }`. `katajs` generates its own from source at build time
+(`kata-provides-manifest --entry .=src/index.ts …`), so `cors()` and friends are
+known rather than unknown, and third-party middleware authors can ship the same
+file to become resolvable in every Kata app.
 
 ## Watch mode
 

@@ -288,11 +288,15 @@ kata verify [path]      # default path: the current directory
 ```
 
 It reads the project, checks the rules anchored to ADR-0003 / 0004 / 0005, and prints
-a human-readable report. Two flags shape how it runs:
+a human-readable report. Three flags shape how it runs:
 
 - `kata verify --json` — emit Claude Code `PostToolUse` hook JSON instead of the
   terminal report. This is exactly what the generated hooks call on every file write.
 - `kata verify --watch` — keep running and re-check on change, for a tight local loop.
+- `kata verify --strict-coverage` — fail (exit 1) when a rule could not *prove* a
+  check and suppressed itself, not only when a check failed. The generated
+  `lefthook.yml` uses this on pre-commit; see
+  [suppressions](/guide/harness#when-a-rule-cannot-prove-a-check).
 
 Run `kata verify --help` for the full flag list. The rule set, the JSON contract, and
 how the hooks wire it into Claude Code and Codex are documented in

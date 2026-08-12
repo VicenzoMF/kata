@@ -3,7 +3,9 @@
 Loaded by Codex (native) and Claude Code (via `CLAUDE.md` import).
 
 ## Verify your work
-- `kata verify` — fast determ checks; use `--json` for hook output.
+- `kata verify` — fast determ checks; use `--json` for hook output, and
+  `--strict-coverage` to fail on checks a rule could not prove (CI + pre-commit
+  run it that way).
 - `pnpm test` — unit tests (vitest).
 - `pnpm --filter=<example> hurl` — API E2E (Hurl); needs the example server
   running (`pnpm --filter=<example> start`). CI boots hello + shop and runs both.

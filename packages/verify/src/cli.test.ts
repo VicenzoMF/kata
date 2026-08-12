@@ -18,6 +18,7 @@ describe('runCli() — help', () => {
     expect(exitCode).toBe(0)
     expect(output).toContain('Usage:')
     expect(output).toContain('kata/no-route-without-output-schema')
+    expect(output).toContain('--strict-coverage')
   })
 })
 
@@ -34,15 +35,52 @@ describe('runCli() — the hello example is clean', () => {
     expect(exitCode).toBe(0)
     expect(JSON.parse(output)).toEqual({})
   })
+
+  it('has no suppressed checks — every middleware in its chains resolves (#206)', () => {
+    // hello's app-level chain is `[cors(), secureHeaders(), bodyLimit(...)]`,
+    // exactly the shape that used to disable kata/scoped-slot-not-provided
+    // project-wide. They resolve through katajs's provides.json manifest now.
+    const { output, exitCode } = runCli(['--strict-coverage'], helloDir)
+    expect(exitCode).toBe(0)
+    expect(output).not.toContain('suppressed')
+  })
 })
 
 describe('runCli() — a project with violations', () => {
   let fixture: string
+  /** A project whose only scoped read hides behind an unresolvable chain entry. */
+  let suppressedFixture: string
 
   beforeAll(() => {
     fixture = mkdtempSync(join(tmpdir(), 'kata-verify-'))
     const moduleDir = join(fixture, 'src', 'modules', 'users')
     mkdirSync(moduleDir, { recursive: true })
+
+    suppressedFixture = mkdtempSync(join(tmpdir(), 'kata-verify-suppressed-'))
+    const suppressedModuleDir = join(suppressedFixture, 'src', 'modules', 'users')
+    mkdirSync(suppressedModuleDir, { recursive: true })
+    writeFileSync(
+      join(suppressedFixture, 'src', 'context.ts'),
+      `import { defineContext, scoped } from 'katajs'
+export const k = defineContext({ currentUser: scoped() })
+`,
+    )
+    writeFileSync(
+      join(suppressedModuleDir, 'users.route.ts'),
+      `import { z } from 'zod'
+import { cors } from 'katajs'
+import { defineRoute } from '../../context'
+
+export const meRoute = defineRoute({
+  method: 'GET',
+  path: '/me',
+  use: [cors()],
+  input: {},
+  output: UserSchema,
+  handler: async (c) => c.get('currentUser'),
+})
+`,
+    )
 
     writeFileSync(
       join(fixture, 'src', 'context.ts'),
@@ -78,6 +116,7 @@ export const listRoute = defineRoute({
 
   afterAll(() => {
     rmSync(fixture, { recursive: true, force: true })
+    rmSync(suppressedFixture, { recursive: true, force: true })
   })
 
   it('detects the missing output schema, the unregistered key, and the inline schema', () => {
@@ -114,6 +153,33 @@ export const listRoute = defineRoute({
     expect(context).toContain("c.get('currentUserr')")
     expect(context).toContain("missing the required 'output' schema")
     expect(context).toContain('built inline with z.object')
+  })
+
+  it('reports the coverage gap and exits non-zero under --strict-coverage', () => {
+    // The fixture's route chains through an unresolvable `cors()` (no manifest
+    // is installed in the temp dir), so the scoped read cannot be proven.
+    const { output, exitCode } = runCli(['--strict-coverage'], suppressedFixture)
+    expect(exitCode).toBe(1)
+    expect(output).toContain('no problems found')
+    expect(output).toContain('kata/scoped-slot-not-provided')
+    expect(output).toContain('cors()')
+  })
+
+  it('reports the same gap without failing when --strict-coverage is absent', () => {
+    const { output, exitCode } = runCli([], suppressedFixture)
+    expect(exitCode).toBe(0)
+    expect(output).toContain('1 check suppressed')
+  })
+
+  it('carries suppressions into the hook JSON without blocking', () => {
+    const { output } = runCli(['--json'], suppressedFixture)
+    const payload = JSON.parse(output) as {
+      decision?: string
+      suppressions?: { rule: string; affectedCount: number }[]
+    }
+    expect(payload.decision).toBeUndefined()
+    expect(payload.suppressions?.[0]?.rule).toBe('kata/scoped-slot-not-provided')
+    expect(payload.suppressions?.[0]?.affectedCount).toBe(1)
   })
 
   it('detects an injected typo well within the 100ms budget (acceptance #5)', () => {

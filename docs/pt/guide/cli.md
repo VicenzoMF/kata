@@ -293,13 +293,17 @@ kata verify [path]      # caminho padrão: o diretório atual
 ```
 
 Ele lê o projeto, checa as regras ancoradas em ADR-0003 / 0004 / 0005 e imprime
-um relatório legível. Duas flags moldam como ele roda:
+um relatório legível. Três flags moldam como ele roda:
 
 - `kata verify --json` — emite o JSON de hook `PostToolUse` do Claude Code em vez
   do relatório de terminal. É exatamente o que os hooks gerados chamam a cada
   escrita de arquivo.
 - `kata verify --watch` — fica rodando e re-checa a cada mudança, para um loop
   local apertado.
+- `kata verify --strict-coverage` — falha (exit 1) quando uma regra não conseguiu
+  *provar* uma checagem e se suprimiu, não apenas quando uma checagem falhou. O
+  `lefthook.yml` gerado usa essa flag no pre-commit; veja
+  [supressões](/pt/guide/harness#quando-uma-regra-nao-consegue-provar-uma-checagem).
 
 Rode `kata verify --help` para a lista completa de flags. O conjunto de regras, o
 contrato JSON e como os hooks o conectam ao Claude Code e ao Codex estão

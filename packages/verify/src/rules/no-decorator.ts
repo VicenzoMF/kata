@@ -20,7 +20,7 @@
  */
 import ts from 'typescript'
 
-import { forEachDescendant, parseSource, positionOf } from '../parse'
+import { forEachDescendant, positionOf } from '../parse'
 import type { Issue, Rule } from '../types'
 
 const NAME = 'kata/no-decorator'
@@ -33,13 +33,13 @@ function isGuardedFile(relPath: string): boolean {
   return relPath === 'src' || relPath.startsWith('src/')
 }
 
-export const noDecorator: Rule = {
+export const noDecorator = {
   name: NAME,
   check(project) {
     const issues: Issue[] = []
     for (const file of project.files) {
       if (!isGuardedFile(file.relPath)) continue
-      const sf = parseSource(file.path, file.text)
+      const sf = project.ast(file)
       forEachDescendant(sf, (node) => {
         if (!ts.isDecorator(node)) return
         // The decorated declaration (class/method/param/…) carries the leading
@@ -53,7 +53,7 @@ export const noDecorator: Rule = {
     }
     return issues
   },
-}
+} satisfies Rule
 
 /**
  * True when `node`'s leading trivia contains a `// kata-allow:` comment. The
