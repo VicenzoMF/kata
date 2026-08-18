@@ -42,6 +42,8 @@ const NAME = 'kata/middleware-provides-mismatch'
 
 export const middlewareProvidesMismatch: Rule = {
   name: NAME,
+  description: "provides[] matches the handler's c.set",
+  adr: 'ADR-0004',
   check(project) {
     const issues: Issue[] = []
     for (const file of project.files) {

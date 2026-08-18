@@ -33,6 +33,8 @@ function isGuardedFile(relPath: string): boolean {
 
 export const noClass: Rule = {
   name: NAME,
+  description: 'no classes anywhere under src/ (functional only)',
+  adr: 'ADR-0002',
   check(project) {
     const issues: Issue[] = []
     for (const file of project.files) {

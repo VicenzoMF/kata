@@ -43,6 +43,8 @@ const CONTEXT_PARAM = 'c'
 
 export const scopedReadOutsideRequest: Rule = {
   name: NAME,
+  description: 'scoped c.get only inside a request handler',
+  adr: 'ADR-0004',
   check(project) {
     const scoped = project.scopedKeys
     // No scoped slots (or an indeterminate registry) → nothing this rule can prove.

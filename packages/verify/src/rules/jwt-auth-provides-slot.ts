@@ -46,6 +46,8 @@ const DEFAULT_SLOT = 'currentUser'
 
 export const jwtAuthProvidesSlot: Rule = {
   name: NAME,
+  description: "jwtAuth's provides[] declares the slot it sets internally",
+  adr: 'ADR-0013',
   check(project) {
     const issues: Issue[] = []
     for (const file of project.files) {

@@ -49,6 +49,8 @@ type Provides = ReadonlySet<string> | null
 
 export const scopedSlotNotProvided: Rule = {
   name: NAME,
+  description: 'scoped c.get has a providing middleware',
+  adr: 'ADR-0004',
   check(project) {
     const scoped = project.scopedKeys
     // No scoped slots (or indeterminate registry) → nothing this rule can prove.

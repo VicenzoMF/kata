@@ -13,11 +13,28 @@
 import { resolve } from 'node:path'
 
 import { formatHookOutput, formatHuman } from './format'
+import { rules } from './rules'
 import { runVerify } from './runner'
 
 export type CliResult = {
   readonly output: string
   readonly exitCode: number
+}
+
+/**
+ * Render the `Rules:` block from {@link rules} so `--help` cannot drift from
+ * what `kata verify` actually runs (issue #212). Column widths are computed
+ * from the longest name/description rather than hardcoded.
+ */
+function renderRulesHelp(): string {
+  const nameWidth = Math.max(...rules.map((rule) => rule.name.length)) + 3
+  const descWidth = Math.max(...rules.map((rule) => rule.description.length)) + 3
+  return rules
+    .map(
+      (rule) =>
+        `  ${rule.name.padEnd(nameWidth)}${rule.description.padEnd(descWidth)}(${rule.adr})`,
+    )
+    .join('\n')
 }
 
 const HELP = `kata verify — fast deterministic checks for Kata projects
@@ -29,13 +46,7 @@ Usage:
   kata verify --help          Show this help
 
 Rules:
-  kata/no-route-without-output-schema   every defineRoute declares output         (ADR-0003)
-  kata/no-route-without-input-schema    every defineRoute declares input          (ADR-0003)
-  kata/inline-schema                    Zod schemas live in *.schema.ts           (ADR-0005)
-  kata/scoped-slot-not-provided         scoped c.get has a providing middleware   (ADR-0004)
-  kata/scoped-read-outside-request      scoped c.get only inside a request handler (ADR-0004)
-  kata/middleware-provides-mismatch     provides[] matches the handler's c.set    (ADR-0004)
-  kata/context-key-not-registered       c.get('key') is a registered context key  (ADR-0004)
+${renderRulesHelp()}
 `
 
 /** Resolve the target directory from argv (first positional, default cwd). */

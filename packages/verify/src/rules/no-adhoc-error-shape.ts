@@ -40,6 +40,8 @@ const MAX_ERROR_STATUS = 599
 
 export const noAdhocErrorShape: Rule = {
   name: NAME,
+  description: 'error responses use the ADR-0008 envelope, not ad-hoc JSON',
+  adr: 'ADR-0008',
   check(project) {
     const issues: Issue[] = []
     for (const file of project.files) {

@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 
 import { runCli } from './cli'
+import { rules } from './rules'
 import { runVerify } from './runner'
 
 const here = dirname(fileURLToPath(import.meta.url))
@@ -18,6 +19,21 @@ describe('runCli() — help', () => {
     expect(exitCode).toBe(0)
     expect(output).toContain('Usage:')
     expect(output).toContain('kata/no-route-without-output-schema')
+  })
+
+  it('lists exactly one help line per rule that actually runs (issue #212)', () => {
+    const { output } = runCli(['--help'], repoRoot)
+    const ruleLines = output.split('\n').filter((line) => /^ {2}kata\//.test(line))
+    expect(ruleLines.length).toBe(rules.length)
+  })
+
+  it('lists every rule with its description and ADR reference', () => {
+    const { output } = runCli(['--help'], repoRoot)
+    for (const rule of rules) {
+      expect(output).toContain(rule.name)
+      expect(output).toContain(rule.description)
+      expect(output).toContain(`(${rule.adr})`)
+    }
   })
 })
 

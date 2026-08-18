@@ -28,6 +28,8 @@ const NAME = 'kata/no-route-without-output-schema'
 
 export const noRouteWithoutOutputSchema: Rule = {
   name: NAME,
+  description: 'every defineRoute declares output',
+  adr: 'ADR-0003',
   check(project) {
     const issues: Issue[] = []
     for (const file of project.files) {
