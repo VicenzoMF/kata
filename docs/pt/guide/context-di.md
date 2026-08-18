@@ -201,7 +201,8 @@ O sistema de tipos e o harness mantêm ambos os lados desse contrato honestos:
   essas chaves com o tipo de valor correto. Definir um singleton, ou um nome que você nunca
   declarou, não compila.
 - `kata/scoped-slot-not-provided` reprova uma rota que lê um scoped slot cujo
-  middleware fornecedor não está na sua cadeia `use:`.
+  middleware fornecedor não está na sua cadeia — `use:` mais o
+  `createApp({ middlewares })` do app — ou está, porém *depois* da leitura.
 - `kata/middleware-provides-mismatch` reprova um middleware que declara um slot em
   `provides` mas nunca o define de fato.
 

@@ -66,6 +66,16 @@ earlier element of the same array:
   `provides: ['currentUser']` makes `c.get('currentUser')` valid in every route without
   that route listing it in `use:`.
 
+`kata verify` reads this chain the same way the runtime runs it. Its
+`kata/scoped-slot-not-provided` rule walks `[...config.middlewares, ...route.use]`
+in order per route, so a global provider satisfies every route's reads, and a
+global middleware that itself reads a slot nothing ahead of it provides is an
+error. The built-ins below resolve through the `provides.json` manifest `katajs`
+ships — `cors()` in a chain is a `provides: []` entry, not an unknown — so
+declaring them costs no verification coverage. An entry the rule *cannot* read is
+reported as a [suppression](/guide/harness#when-a-rule-cannot-prove-a-check)
+rather than passing silently.
+
 ::: warning A global runs for every route
 There is no per-route opt-out. A middleware in the global chain runs for every route,
 including ones that do not need it. Choosing and ordering the chain is your

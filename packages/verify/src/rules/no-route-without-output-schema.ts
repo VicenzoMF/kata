@@ -14,19 +14,12 @@
  */
 import ts from 'typescript'
 
-import {
-  forEachDescendant,
-  hasProperty,
-  hasSpread,
-  isCalleeNamed,
-  parseSource,
-  positionOf,
-} from '../parse'
+import { forEachDescendant, hasProperty, hasSpread, isCalleeNamed, positionOf } from '../parse'
 import type { Issue, Rule } from '../types'
 
 const NAME = 'kata/no-route-without-output-schema'
 
-export const noRouteWithoutOutputSchema: Rule = {
+export const noRouteWithoutOutputSchema = {
   name: NAME,
   description: 'every defineRoute declares output',
   adr: 'ADR-0003',
@@ -34,7 +27,7 @@ export const noRouteWithoutOutputSchema: Rule = {
     const issues: Issue[] = []
     for (const file of project.files) {
       if (!file.relPath.endsWith('.route.ts')) continue
-      const sf = parseSource(file.path, file.text)
+      const sf = project.ast(file)
       forEachDescendant(sf, (node) => {
         if (!ts.isCallExpression(node)) return
         if (!isCalleeNamed(node, 'defineRoute')) return
@@ -50,7 +43,7 @@ export const noRouteWithoutOutputSchema: Rule = {
     }
     return issues
   },
-}
+} satisfies Rule
 
 function makeIssue(file: string, line: number, column: number): Issue {
   return {

@@ -5,9 +5,10 @@
  * also dispatches the long-running `--watch` mode (see `watch.ts`).
  *
  * Usage:
- *   kata verify [path]          human-readable report (exit 1 on any error)
- *   kata verify [path] --json   PostToolUse hook JSON on stdout (always exit 0)
- *   kata verify [path] --watch  re-check on file changes (handled in main.ts)
+ *   kata verify [path]                    human-readable report (exit 1 on any error)
+ *   kata verify [path] --json             PostToolUse hook JSON on stdout (always exit 0)
+ *   kata verify [path] --strict-coverage  also exit 1 when a rule suppressed itself
+ *   kata verify [path] --watch            re-check on file changes (handled in main.ts)
  *   kata verify --help
  */
 import { resolve } from 'node:path'
@@ -45,6 +46,12 @@ Usage:
   kata verify [path] --watch  Re-check on every file change (Ctrl-C to stop)
   kata verify --help          Show this help
 
+Flags:
+  --strict-coverage           Fail (exit 1) when a rule could not prove a check
+                              and suppressed itself — an unresolvable middleware
+                              expression, an indeterminate context registry. Use
+                              in CI to keep coverage gaps from passing silently.
+
 Rules:
 ${renderRulesHelp()}
 `
@@ -61,13 +68,19 @@ export function runCli(argv: readonly string[], cwd: string): CliResult {
   }
 
   const json = argv.includes('--json')
+  const strictCoverage = argv.includes('--strict-coverage')
   const result = runVerify(resolveTarget(argv, cwd))
 
   if (json) {
     // Always exit 0 in JSON mode: the hook payload carries the decision, and a
     // non-zero exit would surface stderr instead of the JSON to the agent.
-    return { output: `${JSON.stringify(formatHookOutput(result), null, 2)}\n`, exitCode: 0 }
+    const output = JSON.stringify(formatHookOutput(result, { strictCoverage }), null, 2)
+    return { output: `${output}\n`, exitCode: 0 }
   }
 
-  return { output: formatHuman(result), exitCode: result.errorCount > 0 ? 1 : 0 }
+  // Under --strict-coverage a suppressed check fails the run on its own: the
+  // point of the flag is that "could not prove it" and "proved it" must not
+  // share an exit code (issue #206).
+  const failed = result.errorCount > 0 || (strictCoverage && result.suppressions.length > 0)
+  return { output: formatHuman(result, { strictCoverage }), exitCode: failed ? 1 : 0 }
 }

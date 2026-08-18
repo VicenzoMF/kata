@@ -111,11 +111,24 @@ export type HttpMethod = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE'
 
 export type RouteContext<R extends Registry, I extends InputSchemas> = {
   /**
-   * NOTE (ADR-0004 follow-up): in v1 `get` types all registered keys including
-   * scoped ones. Whether a scoped key was actually provided by the route's
-   * middleware chain is enforced by the `kata/scoped-slot-not-provided` lint
-   * rule (to be implemented), not by the type system. Tightening this to
-   * compile-time inference is a planned follow-up.
+   * Read a registered dependency. The key must be in `defineContext`, which the
+   * type parameter enforces; *whether a scoped slot was actually filled* is a
+   * question about the middleware chain, not about types, so `get` types every
+   * registered key — scoped ones included (ADR-0004).
+   *
+   * The chain question is answered statically by `kata verify`'s
+   * `kata/scoped-slot-not-provided` rule, which walks
+   * `[...createApp({ middlewares }), ...use]` in order and errors when a
+   * `c.get('<slot>')` has no middleware ahead of it declaring `provides:
+   * ['<slot>']` — a build-time error instead of the runtime throw ("scoped slot
+   * '<slot>' read before being set"). Ordering counts: a provider listed *after*
+   * the read is an error too.
+   *
+   * Where an expression in a chain cannot be resolved statically — a middleware
+   * built at runtime, or imported from a package that ships no `provides.json`
+   * manifest — the rule cannot prove the read either way. It then reports a
+   * *suppression* naming the expression rather than passing silently, and
+   * `kata verify --strict-coverage` turns those into a non-zero exit.
    */
   get<K extends keyof R>(key: K): ResolvedValue<R[K]>
   input: InferInput<I>

@@ -219,6 +219,13 @@ quanto `tx` estão preenchidos. Essa ordem do array *é* o contrato: se um slot 
 outro (um `tenantId` computado a partir de `currentUser`), coloque seu provedor mais
 cedo na lista.
 
+A ordem é checada, não apenas documentada. O `kata verify` percorre a cadeia
+efetiva de cada rota — `[...createApp({ middlewares }), ...use]` — em ordem, e um
+middleware que lê um slot que nenhuma entrada anterior fornece é um erro, mesmo
+quando uma entrada *posterior* o define. Trocar essas duas entradas de lugar
+transforma um 500 de runtime numa mensagem de build apontando para a entrada que
+lê cedo demais.
+
 Uma definição compõe sobre quantas rotas você quiser; não há duplicação por
 rota. O único `requireAuth` acima guarda o checkout, a listagem de pedidos e a
 busca de um único pedido de uma só vez.

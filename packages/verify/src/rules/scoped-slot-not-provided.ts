@@ -1,272 +1,445 @@
 /**
  * Rule: `kata/scoped-slot-not-provided` (issue #8, enforces ADR-0004; amended by
- * issue #88 / ADR-0012 to count app-level providers).
+ * issue #88 / ADR-0012 to count app-level providers, and by issue #206 to walk
+ * the chain in order and report what it could not check).
  *
  * A scoped slot (`scoped<T>()` in `defineContext`) is empty until a middleware
- * `c.set`s it. So a route handler that reads `c.get('<slot>')` must have a
- * middleware whose `provides` includes `'<slot>'` run before it — either in its
- * own `use:` chain or in the app-level `createApp({ middlewares: [...] })` chain,
- * which runs before every route (ADR-0012). Otherwise the read resolves an unset
- * slot and throws at runtime (`scoped slot '<slot>' read before being set`). The
- * type system intentionally does not enforce this (see the `RouteContext.get`
- * note in kata's context.ts) — this rule does.
+ * `c.set`s it. So anything that reads `c.get('<slot>')` — a route handler, or a
+ * middleware further down the chain — must have a middleware whose `provides`
+ * includes `'<slot>'` run *before* it. Otherwise the read resolves an unset slot
+ * and throws at runtime (`scoped slot '<slot>' read before being set`). The type
+ * system intentionally does not enforce this (see `RouteContext.get` in kata's
+ * context.ts) — this rule does.
  *
- * Detection (cross-file): build a `middleware identifier → provides` map from
- * every `defineMiddleware({ provides, ... })` in the project, then for each
- * `defineRoute` collect the scoped keys its handler reads via `<ctx>.get('key')`
- * and check each against the union of `provides` of the middlewares in `use:`
- * plus those of the app-level `createApp({ middlewares })` chain.
+ * ## The check is a chain walk, not a set union
  *
- * Bails (no issues for the affected read/route) to keep the false-positive rate
- * at zero when: the scoped-key set is indeterminate (no/spread `defineContext`);
- * the handler's context parameter is destructured; or a `use:` entry — or an
- * app-level `middlewares` entry — cannot be resolved to a known middleware (a
- * `cors()`-style factory call, a spread, or an identifier whose `provides` is
- * itself indeterminate) — any of which *might* supply the slot. An unresolvable
- * global entry suppresses the affected reads across every route.
+ * For each `defineRoute`, the effective chain is `[...createApp({ middlewares }),
+ * ...use]` — the app-level chain runs before every route (ADR-0012), then the
+ * route's own `use:` in order. The walk accumulates `provides` entry by entry:
+ *
+ *  - each entry's own scoped reads are checked against what the entries *before*
+ *    it provide (plus its own `provides`, since a middleware may set a slot then
+ *    read it back). That makes a wrong `use:` order an error rather than a
+ *    runtime 500 — the constraint the whole DI design rests on;
+ *  - a read placed after the entry's `next()` runs after everything downstream,
+ *    so it is checked against the whole chain instead of the prefix;
+ *  - the handler's reads are checked against the full chain, as before.
+ *
+ * ## When it cannot prove something, it says so
+ *
+ * A chain entry that cannot be resolved (see `middleware-graph.ts`) might supply
+ * any slot, so no read after it can be *disproved*. Reads still satisfied by the
+ * entries that did resolve pass; the rest become {@link Suppression}s carrying
+ * the offending expression's location — reported by the CLI and fatal under
+ * `--strict-coverage`. Before issue #206 this was silent and total: one `cors()`
+ * in `createApp({ middlewares })` switched the rule off for the entire project
+ * while `kata verify` still printed "no problems found".
+ *
+ * Suppressions (rather than issues) also cover: an indeterminate scoped registry,
+ * a destructured handler context, a `use:`/`middlewares:` value that is not an
+ * array literal, and a config object spread that could inject either.
  */
 import ts from 'typescript'
 
 import {
-  type FunctionLike,
-  firstParameterName,
+  collectSlotReads,
+  createMiddlewareResolver,
+  type MiddlewareResolver,
+  type ResolvedMiddleware,
+  type SlotRead,
+} from '../middleware-graph'
+import {
   forEachDescendant,
   functionProperty,
   hasSpread,
   isCalleeNamed,
-  parseSource,
   positionOf,
   propertyName,
-  providesOf,
   unwrapExpression,
 } from '../parse'
-import type { Issue, Rule, SourceFile } from '../types'
+import type { Issue, Project, Rule, RuleResult, SourceFile, Suppression } from '../types'
 
 const NAME = 'kata/scoped-slot-not-provided'
 
-/** A middleware's declared provides: the literal key set, or `null` when indeterminate. */
-type Provides = ReadonlySet<string> | null
+/** A position in the verified project, as reported to the user. */
+type Site = { readonly file: string; readonly line: number; readonly column: number }
 
-export const scopedSlotNotProvided: Rule = {
+/** One entry of a middleware chain, resolved or not, with where it was written. */
+type ChainEntry = {
+  /** The entry as written (`requireUser`, `cors()`), for messages. */
+  readonly label: string
+  readonly site: Site
+  /** The contract behind it, or `null` when it could not be resolved. */
+  readonly resolved: ResolvedMiddleware | null
+  /** Why it could not be resolved — the suppression `reason`. Set iff `resolved` is null. */
+  readonly reason?: string
+}
+
+export const scopedSlotNotProvided = {
   name: NAME,
   description: 'scoped c.get has a providing middleware',
   adr: 'ADR-0004',
-  check(project) {
+  check(project): RuleResult {
     const scoped = project.scopedKeys
-    // No scoped slots (or indeterminate registry) → nothing this rule can prove.
-    if (!scoped || scoped.size === 0) return []
+    if (scoped === null || scoped === undefined) {
+      return { issues: [], suppressions: registrySuppression(project) }
+    }
+    // A determinate registry with no scoped slots: nothing to prove, nothing lost.
+    if (scoped.size === 0) return { issues: [], suppressions: [] }
 
-    const providesByName = buildProvidesMap(project.files)
-    // App-level `createApp({ middlewares })` runs before every route (ADR-0012),
-    // so its providers count as provided for all of them. Resolve once.
-    const global = resolveGlobalProviders(project.files, providesByName)
-    const issues: Issue[] = []
+    const resolve = createMiddlewareResolver(project)
+    const globals = globalChain(project, resolve)
+    const out = createCollector(scoped)
+
+    // Walk the app-level chain on its own so its ordering errors surface even in
+    // a project with no routes. Only pre-`next()` reads are checked here: a
+    // post-`next()` read in a global middleware can legitimately be satisfied by
+    // a route's own `use:`, so it waits for the per-route walk below.
+    out.walk(globals, [], { checkAfterNext: false })
 
     for (const file of project.files) {
-      if (!file.relPath.endsWith('.route.ts')) continue
-      const sf = parseSource(file.path, file.text)
+      const sf = project.ast(file)
       forEachDescendant(sf, (node) => {
         if (!ts.isCallExpression(node) || !isCalleeNamed(node, 'defineRoute')) return
         const config = node.arguments[0]
         if (!config || !ts.isObjectLiteralExpression(config)) return
 
         const handler = functionProperty(config, 'handler')
+        // A handler that is not a function literal keeps its reads elsewhere;
+        // `kata/scoped-read-outside-request` is the rule that covers those.
         if (!handler) return
-        const ctx = firstParameterName(handler)
-        if (ctx === undefined) return // destructured ctx → can't trace reads → bail
 
-        const reads = collectScopedReads(handler, ctx, scoped)
-        if (reads.length === 0) return
-
-        const { provided, indeterminate } = resolveUse(config, providesByName)
-        const reported = new Set<string>()
-        for (const { key, node: readNode } of reads) {
-          if (provided.has(key) || global.provided.has(key)) continue
-          // An unresolved use: or app-level middlewares entry might provide it.
-          if (indeterminate || global.indeterminate) continue
-          if (reported.has(key)) continue
-          reported.add(key)
-          const { line, column } = positionOf(sf, readNode)
-          issues.push(makeIssue(file.relPath, line, column, key, scoped))
+        const ctx = handler.parameters[0]
+        if (ctx && !ts.isIdentifier(ctx.name)) {
+          // Destructured ctx (`handler: ({ get }) => …`) — the reads cannot be
+          // traced at all, so not even their number is known. A handler that
+          // takes *no* context parameter is different: it provably reads nothing.
+          out.suppress(
+            siteOf(sf, file, ctx),
+            'route handler context is destructured, so its scoped reads cannot be traced',
+            0,
+          )
+          return
         }
+
+        const chain = [...globals, ...useChain(config, file, sf, resolve)]
+        out.walk(chain, collectSlotReads(handler, file, sf), { checkAfterNext: true })
       })
     }
-    return issues
+
+    return out.result()
   },
-}
-
-/** Map every `const NAME = defineMiddleware({ provides })` in the project to its provides. */
-function buildProvidesMap(files: readonly SourceFile[]): ReadonlyMap<string, Provides> {
-  const map = new Map<string, Provides>()
-  for (const file of files) {
-    const sf = parseSource(file.path, file.text)
-    forEachDescendant(sf, (node) => {
-      if (!ts.isCallExpression(node) || !isCalleeNamed(node, 'defineMiddleware')) return
-      const name = bindingName(node)
-      if (name !== undefined) addProvides(map, name, providesOf(node))
-    })
-  }
-  return map
-}
-
-/** The identifier a `defineMiddleware(...)` call is assigned to (`const NAME = ...`). */
-function bindingName(call: ts.CallExpression): string | undefined {
-  const parent = call.parent
-  if (parent && ts.isVariableDeclaration(parent) && ts.isIdentifier(parent.name)) {
-    return parent.name.text
-  }
-  return undefined
-}
-
-/** Merge a middleware's provides into the map; collisions union, indeterminate wins. */
-function addProvides(map: Map<string, Provides>, name: string, provides: Provides): void {
-  const existing = map.get(name)
-  if (existing === undefined) {
-    map.set(name, provides)
-  } else if (existing === null || provides === null) {
-    map.set(name, null)
-  } else {
-    map.set(name, new Set([...existing, ...provides]))
-  }
-}
-
-/** The union of provides supplied by a route's `use:` chain, and whether any entry is unresolved. */
-function resolveUse(
-  config: ts.ObjectLiteralExpression,
-  providesByName: ReadonlyMap<string, Provides>,
-): { provided: ReadonlySet<string>; indeterminate: boolean } {
-  const useMember = config.properties.find(
-    (m): m is ts.PropertyAssignment => ts.isPropertyAssignment(m) && propertyName(m) === 'use',
-  )
-  return resolveMiddlewareList(useMember?.initializer, providesByName)
-}
+} satisfies Rule
 
 /**
- * The union of provides supplied by the app-level middleware chain
- * (`createApp({ middlewares: [...] })`), counted as provided for *every* route:
- * the global chain runs before any route's `use:` (ADR-0012), so a slot it
- * provides is populated before any handler reads it. Scans the whole project for
- * the `createApp` call — it lives in a non-route file such as `src/main.ts` — and
- * merges every match (union of provides, OR of indeterminacy) so the result does
- * not depend on call order or count.
- *
- * The contribution is determinate-empty — routes checked exactly as before — only
- * when there is demonstrably no global chain: no `createApp` at all, or a
- * `createApp({ ... })` object literal with no spread and no `middlewares`
- * property. Every shape where a global chain *might* exist but cannot be read is
- * indeterminate, suppressing the affected reads across every route to preserve the
- * zero-false-positive contract: a non-object-literal config, an object-level
- * spread that could inject `middlewares`, a shorthand/non-array `middlewares`, or
- * an array entry that is a `cors()`-style factory call, a spread, or an
- * unresolved-provides identifier (the same conservatism `use:` applies per route).
+ * Accumulates issues and suppressions across routes, deduplicating issues by
+ * location and message: an app-level entry appears in every route's chain, and
+ * one wrongly-ordered global middleware is one problem, not one per route.
  */
-function resolveGlobalProviders(
-  files: readonly SourceFile[],
-  providesByName: ReadonlyMap<string, Provides>,
-): { provided: ReadonlySet<string>; indeterminate: boolean } {
-  const provided = new Set<string>()
-  let indeterminate = false
-  for (const file of files) {
-    const sf = parseSource(file.path, file.text)
+function createCollector(scoped: ReadonlySet<string>) {
+  const issues: Issue[] = []
+  const suppressions: Suppression[] = []
+  const seen = new Set<string>()
+
+  const add = (issue: Issue): void => {
+    const key = `${issue.file}:${issue.line}:${issue.column}:${issue.message}`
+    if (seen.has(key)) return
+    seen.add(key)
+    issues.push(issue)
+  }
+
+  const suppress = (site: Site, reason: string, affectedCount: number): void => {
+    suppressions.push({ rule: NAME, reason, ...site, affectedCount })
+  }
+
+  /**
+   * Walk one chain in order, checking every scoped read it can and recording
+   * what it cannot. `handlerReads` are the route handler's reads (empty for the
+   * standalone app-level walk).
+   */
+  const walk = (
+    chain: readonly ChainEntry[],
+    handlerReads: readonly SlotRead[],
+    options: { checkAfterNext: boolean },
+  ): void => {
+    const provided = new Set<string>()
+    /** The first entry that could not be resolved: everything after it is unprovable. */
+    let blocked: ChainEntry | undefined
+    /** Reads left unchecked, counted per blocking entry for the suppression report. */
+    let unchecked = 0
+    /** Post-`next()` reads, held back until the whole chain's provides are known. */
+    const deferred: { entry: ChainEntry; read: SlotRead }[] = []
+
+    // Pass 1 — accumulate provides, checking each entry's pre-`next()` reads
+    // against the prefix that precedes it.
+    for (const entry of chain) {
+      const resolved = entry.resolved
+      if (!resolved || resolved.provides === null) {
+        blocked ??= entry
+        continue
+      }
+
+      for (const read of resolved.reads) {
+        if (!scoped.has(read.key)) continue
+        if (read.afterNext) {
+          if (options.checkAfterNext) deferred.push({ entry, read })
+          continue
+        }
+        // A middleware may set a slot and read it back, so its own provides count.
+        if (provided.has(read.key) || resolved.provides.has(read.key)) continue
+        if (blocked) unchecked += 1
+        else add(chainReadIssue(entry, read, scoped, 'before'))
+      }
+
+      for (const key of resolved.provides) provided.add(key)
+    }
+
+    // Pass 2 — reads that observe the finished chain: a middleware's own
+    // post-`next()` reads, then the route handler's.
+    for (const { entry, read } of deferred) {
+      if (provided.has(read.key)) continue
+      if (blocked) unchecked += 1
+      else add(chainReadIssue(entry, read, scoped, 'anywhere'))
+    }
+    for (const read of handlerReads) {
+      if (!scoped.has(read.key) || provided.has(read.key)) continue
+      if (blocked) unchecked += 1
+      else add(handlerReadIssue(read, scoped))
+    }
+
+    if (blocked && unchecked > 0) {
+      suppress(blocked.site, blocked.reason ?? unresolvedReason(blocked.label), unchecked)
+    }
+  }
+
+  return { walk, suppress, result: (): RuleResult => ({ issues, suppressions }) }
+}
+
+// ── chain construction ─────────────────────────────────────────────────────
+
+/**
+ * The app-level chain: every `createApp({ middlewares: [...] })` in the project,
+ * concatenated. Kata apps declare one; concatenating several is safe because an
+ * entry is only ever judged against the entries listed before it, and merging
+ * chains can only *add* providers to that prefix.
+ *
+ * A `createApp` whose config cannot be read might still declare a chain, so it
+ * contributes an unresolved entry rather than nothing.
+ */
+function globalChain(project: Project, resolve: MiddlewareResolver): ChainEntry[] {
+  const entries: ChainEntry[] = []
+  for (const file of project.files) {
+    const sf = project.ast(file)
     forEachDescendant(sf, (node) => {
       if (!ts.isCallExpression(node) || !isCalleeNamed(node, 'createApp')) return
+
       const config = node.arguments[0]
-      // A createApp whose config can't be fully read might still declare a global
-      // chain; be indeterminate rather than miss its providers and false-positive
-      // on every route that reads one.
       if (!config || !ts.isObjectLiteralExpression(config) || hasSpread(config)) {
-        indeterminate = true
+        entries.push({
+          label: 'createApp(…)',
+          site: siteOf(sf, file, config ?? node),
+          resolved: null,
+          reason:
+            'could not read createApp({ … }) — its config is not a plain object literal, so an app-level middlewares chain may be hidden in it',
+        })
         return
       }
+
       const member = config.properties.find((m) => propertyName(m) === 'middlewares')
-      if (!member) return // no `middlewares` chain on this app → contributes nothing
+      if (!member) return // no app-level chain on this app → contributes nothing
       if (!ts.isPropertyAssignment(member)) {
-        indeterminate = true // shorthand / method `middlewares` → can't read the array
+        entries.push({
+          label: 'middlewares',
+          site: siteOf(sf, file, member),
+          resolved: null,
+          reason: 'could not read the middlewares: property of createApp({ … })',
+        })
         return
       }
-      const resolved = resolveMiddlewareList(member.initializer, providesByName)
-      for (const key of resolved.provided) provided.add(key)
-      if (resolved.indeterminate) indeterminate = true
+      entries.push(...listEntries(member.initializer, file, sf, resolve, GLOBAL))
     })
   }
-  return { provided, indeterminate }
+  return entries
 }
+
+/** A route's own `use:` chain, in declaration order. */
+function useChain(
+  config: ts.ObjectLiteralExpression,
+  file: SourceFile,
+  sf: ts.SourceFile,
+  resolve: MiddlewareResolver,
+): ChainEntry[] {
+  if (hasSpread(config)) {
+    return [
+      {
+        label: 'defineRoute(…)',
+        site: siteOf(sf, file, config),
+        resolved: null,
+        reason:
+          'could not read defineRoute({ … }) — a spread in its config could inject a use: chain',
+      },
+    ]
+  }
+
+  const member = config.properties.find((m) => propertyName(m) === 'use')
+  if (!member) return [] // no `use:` → determinately empty
+  if (!ts.isPropertyAssignment(member)) {
+    return [
+      {
+        label: 'use',
+        site: siteOf(sf, file, member),
+        resolved: null,
+        reason: `could not read the use: property of ${USE}`,
+      },
+    ]
+  }
+  return listEntries(member.initializer, file, sf, resolve, USE)
+}
+
+const GLOBAL = 'createApp({ middlewares })'
+const USE = "this route's use: chain"
+
+/** Resolve every element of a middleware array literal into a chain entry. */
+function listEntries(
+  value: ts.Expression,
+  file: SourceFile,
+  sf: ts.SourceFile,
+  resolve: MiddlewareResolver,
+  where: string,
+): ChainEntry[] {
+  const list = unwrapExpression(value)
+  if (!ts.isArrayLiteralExpression(list)) {
+    return [
+      {
+        label: labelOf(list),
+        site: siteOf(sf, file, list),
+        resolved: null,
+        reason: `could not read ${where} — it is not an array literal, so its middlewares are unknown`,
+      },
+    ]
+  }
+
+  return list.elements.map((element) => {
+    const label = labelOf(element)
+    const site = siteOf(sf, file, element)
+    if (ts.isSpreadElement(element)) {
+      return {
+        label,
+        site,
+        resolved: null,
+        reason: `could not resolve \`${label}\` in ${where} — a spread can contribute any middleware`,
+      }
+    }
+    const resolved = resolve(element, file)
+    return resolved
+      ? { label, site, resolved }
+      : { label, site, resolved: null, reason: `could not resolve \`${label}\` in ${where}` }
+  })
+}
+
+// ── reporting ──────────────────────────────────────────────────────────────
 
 /**
- * Resolve a middleware-array literal — a route's `use:` or the app-level
- * `middlewares:` — to the union of provides its entries supply, plus whether any
- * entry is unresolved. Both arrays hold `Middleware` values resolved against the
- * same `defineMiddleware → provides` map, so they share this logic.
+ * The project's registry could not be read, so no scoped read was checked at
+ * all — reported, since "proved nothing" must not look like "proved it".
  *
- * An absent property (`value === undefined`) provides nothing, determinately. A
- * non-array initializer, a non-identifier entry (a `cors()`-style factory call or
- * a spread), or an identifier whose `provides` is itself indeterminate makes the
- * whole list indeterminate — the conservatism that keeps false positives at zero.
+ * Nothing is reported for a directory that declares no route and no app: there
+ * is no chain to walk there, so no check was lost. That keeps `kata verify` from
+ * inventing a coverage gap when it is pointed at a library (kata's own package
+ * has a `src/context.ts` that *defines* `defineContext` rather than calling it).
  */
-function resolveMiddlewareList(
-  value: ts.Expression | undefined,
-  providesByName: ReadonlyMap<string, Provides>,
-): { provided: ReadonlySet<string>; indeterminate: boolean } {
-  const provided = new Set<string>()
-  if (value === undefined) return { provided, indeterminate: false }
+function registrySuppression(project: Project): Suppression[] {
+  if (!declaresApp(project)) return []
+  return [
+    {
+      rule: NAME,
+      reason:
+        'the context registry is indeterminate — src/context.ts has no defineContext({ … }) call, or a spread inside it hides the scoped slots, so no scoped read could be checked',
+      file: 'src/context.ts',
+      line: 1,
+      column: 1,
+      affectedCount: 0,
+    },
+  ]
+}
 
-  const list = unwrapExpression(value)
-  if (!ts.isArrayLiteralExpression(list)) return { provided, indeterminate: true }
-
-  let indeterminate = false
-  for (const element of list.elements) {
-    if (!ts.isIdentifier(element)) {
-      // A factory call (`cors()`), spread, or other expression — unknown provides.
-      indeterminate = true
-      continue
-    }
-    const provides = providesByName.get(element.text)
-    if (provides === undefined || provides === null) {
-      indeterminate = true
-      continue
-    }
-    for (const key of provides) provided.add(key)
+/** Does anything here define a route or an app — i.e. is there a chain to check? */
+function declaresApp(project: Project): boolean {
+  for (const file of project.files) {
+    let found = false
+    forEachDescendant(project.ast(file), (node) => {
+      if (found || !ts.isCallExpression(node)) return
+      if (isCalleeNamed(node, 'defineRoute') || isCalleeNamed(node, 'createApp')) found = true
+    })
+    if (found) return true
   }
-  return { provided, indeterminate }
+  return false
 }
 
-/** Collect `<ctx>.get('key')` reads whose key is a scoped slot. */
-function collectScopedReads(
-  handler: FunctionLike,
-  ctx: string,
-  scoped: ReadonlySet<string>,
-): { key: string; node: ts.Node }[] {
-  const reads: { key: string; node: ts.Node }[] = []
-  forEachDescendant(handler, (node) => {
-    if (!ts.isCallExpression(node)) return
-    const callee = node.expression
-    if (!ts.isPropertyAccessExpression(callee) || callee.name.text !== 'get') return
-    if (!ts.isIdentifier(callee.expression) || callee.expression.text !== ctx) return
-
-    const arg = node.arguments[0]
-    if (!arg || !ts.isStringLiteralLike(arg)) return
-    if (scoped.has(arg.text)) reads.push({ key: arg.text, node })
-  })
-  return reads
+function siteOf(sf: ts.SourceFile, file: SourceFile, node: ts.Node): Site {
+  const { line, column } = positionOf(sf, node)
+  return { file: file.relPath, line, column }
 }
 
-function makeIssue(
-  file: string,
-  line: number,
-  column: number,
-  key: string,
+/** The entry's source text, collapsed to one line and clipped for a message. */
+function labelOf(node: ts.Node): string {
+  const text = node.getText().replace(/\s+/g, ' ').trim()
+  return text.length > 48 ? `${text.slice(0, 45)}…` : text
+}
+
+function unresolvedReason(label: string): string {
+  return `could not resolve \`${label}\``
+}
+
+/** A middleware in the chain reads a slot the chain does not (yet) provide. */
+function chainReadIssue(
+  entry: ChainEntry,
+  read: SlotRead,
   scoped: ReadonlySet<string>,
+  position: 'before' | 'anywhere',
 ): Issue {
-  const slots = [...scoped].sort().join(', ')
+  const where =
+    position === 'before'
+      ? "no middleware earlier in this route's chain provides it"
+      : "no middleware in this route's chain provides it"
+  const readAt = read.line > 0 ? ` The read is at ${read.file}:${read.line}:${read.column}.` : ''
   return {
     rule: NAME,
     severity: 'error',
-    file,
-    line,
-    column,
-    message: `route reads scoped slot c.get('${key}') but no middleware in its use: chain provides it`,
-    why: `ADR-0004 (Pattern C): a scoped slot is empty until a middleware c.sets it. Reading c.get('${key}') with no providing middleware in the route's \`use:\` chain throws at runtime ("scoped slot '${key}' read before being set").`,
-    fix: `Add a middleware that provides '${key}' so it runs before this read — a defineMiddleware declaring \`provides: ['${key}']\` that c.sets it — either in this route's \`use: [...]\` array or app-wide in \`createApp({ middlewares: [...] })\` (ADR-0012). Scoped slots in this project: ${slots}.`,
+    ...entry.site,
+    message: `middleware \`${entry.label}\` reads scoped slot c.get('${read.key}') but ${where}`,
+    why: `ADR-0004 (Pattern C) + ADR-0012: a scoped slot is empty until a middleware c.sets it, and a chain runs in order — the app-level \`createApp({ middlewares })\` entries first, then the route's \`use:\` entries. A middleware that reads '${read.key}' before any entry ahead of it provides the slot throws at runtime ("scoped slot '${read.key}' read before being set"), no matter that some *later* entry sets it.${readAt}`,
+    fix: `Move the middleware that provides '${read.key}' ahead of \`${entry.label}\` in the chain — earlier in this route's \`use: [...]\`, or into \`createApp({ middlewares: [...] })\`, which runs before every route. Scoped slots in this project: ${slotList(scoped)}.`,
+    example: {
+      bad: [
+        'defineRoute({',
+        "  // requireOrg reads c.get('currentUser') — but it runs first",
+        '  use: [requireOrg, requireUser],',
+        '  // …',
+        '})',
+      ].join('\n'),
+      good: [
+        'defineRoute({',
+        "  // requireUser sets 'currentUser' before requireOrg reads it",
+        '  use: [requireUser, requireOrg],',
+        '  // …',
+        '})',
+      ].join('\n'),
+    },
+  }
+}
+
+/** A route handler reads a slot nothing in its chain provides. */
+function handlerReadIssue(read: SlotRead, scoped: ReadonlySet<string>): Issue {
+  return {
+    rule: NAME,
+    severity: 'error',
+    file: read.file,
+    line: read.line,
+    column: read.column,
+    message: `route reads scoped slot c.get('${read.key}') but no middleware in its use: chain provides it`,
+    why: `ADR-0004 (Pattern C): a scoped slot is empty until a middleware c.sets it. Reading c.get('${read.key}') with no providing middleware in the route's \`use:\` chain — nor in the app-level \`createApp({ middlewares })\` chain that runs before it (ADR-0012) — throws at runtime ("scoped slot '${read.key}' read before being set").`,
+    fix: `Add a middleware that provides '${read.key}' so it runs before this read — a defineMiddleware declaring \`provides: ['${read.key}']\` that c.sets it — either in this route's \`use: [...]\` array or app-wide in \`createApp({ middlewares: [...] })\` (ADR-0012). Scoped slots in this project: ${slotList(scoped)}.`,
     example: {
       bad: [
         'defineRoute({',
@@ -289,4 +462,8 @@ function makeIssue(
       ].join('\n'),
     },
   }
+}
+
+function slotList(scoped: ReadonlySet<string>): string {
+  return [...scoped].sort().join(', ')
 }

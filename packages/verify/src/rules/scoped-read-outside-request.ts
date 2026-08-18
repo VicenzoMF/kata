@@ -33,7 +33,7 @@
  */
 import ts from 'typescript'
 
-import { forEachDescendant, isCalleeNamed, parseSource, positionOf, propertyName } from '../parse'
+import { forEachDescendant, isCalleeNamed, positionOf, propertyName } from '../parse'
 import type { Issue, Rule } from '../types'
 
 const NAME = 'kata/scoped-read-outside-request'
@@ -41,7 +41,7 @@ const NAME = 'kata/scoped-read-outside-request'
 /** The conventional context parameter name (ADR-0004 examples all use `c`). */
 const CONTEXT_PARAM = 'c'
 
-export const scopedReadOutsideRequest: Rule = {
+export const scopedReadOutsideRequest = {
   name: NAME,
   description: 'scoped c.get only inside a request handler',
   adr: 'ADR-0004',
@@ -52,7 +52,7 @@ export const scopedReadOutsideRequest: Rule = {
 
     const issues: Issue[] = []
     for (const file of project.files) {
-      const sf = parseSource(file.path, file.text)
+      const sf = project.ast(file)
       forEachDescendant(sf, (node) => {
         if (!ts.isCallExpression(node)) return
         const key = contextGetKey(node)
@@ -65,7 +65,7 @@ export const scopedReadOutsideRequest: Rule = {
     }
     return issues
   },
-}
+} satisfies Rule
 
 /** The literal key of a `c.get('key')` call (receiver `c`, single string arg), or `undefined`. */
 function contextGetKey(call: ts.CallExpression): string | undefined {

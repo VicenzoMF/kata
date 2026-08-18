@@ -52,6 +52,7 @@
   },
   "files": [
     "dist",
+    "provides.json",
     "README.md",
     "LICENSE",
     "NOTICE"
@@ -63,9 +64,10 @@
     "access": "public"
   },
   "scripts": {
-    "build": "tsup",
+    "build": "pnpm run provides-manifest && tsup",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "prepare": "tsup",
+    "provides-manifest": "kata-provides-manifest --entry .=src/index.ts --entry ./jwt=src/jwt/index.ts --entry ./node=src/node/index.ts",
+    "prepare": "pnpm run build",
     "prepublishOnly": "pnpm run build && pnpm run typecheck"
   },
   "peerDependencies": {
@@ -83,6 +85,7 @@
     "@types/node": "^20",
     "hono": "^4",
     "tsup": "^8",
+    "tsx": "^4.19",
     "typescript": "^5.6",
     "zod": "^3"
   }

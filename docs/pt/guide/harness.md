@@ -105,7 +105,7 @@ As regras que `kata verify` impõe, cada uma ancorada no ADR que a justifica:
 | `kata/no-route-without-input-schema` | todo `defineRoute` declara `input` | ADR-0003 |
 | `kata/inline-schema` | schemas Zod vivem em `*.schema.ts` | ADR-0005 |
 | `kata/context-key-not-registered` | `c.get('key')` é uma chave de contexto registrada | ADR-0004 |
-| `kata/scoped-slot-not-provided` | um `c.get` scoped tem um middleware que o fornece | ADR-0004 |
+| `kata/scoped-slot-not-provided` | um `c.get` scoped tem um middleware que o fornece *antes dele na cadeia* — no `use:` da rota ou em `createApp({ middlewares })` | ADR-0004 |
 | `kata/scoped-read-outside-request` | um `c.get` scoped só é lido dentro de um handler de request | ADR-0004 |
 | `kata/middleware-provides-mismatch` | `provides[]` casa com o `c.set` do handler (avisa quando um slot de `c.set` é omitido de `provides`) | ADR-0004 |
 | `kata/jwt-auth-provides-slot` | um middleware `jwtAuth({ slot })` declara `provides: [slot]` | ADR-0013 |
@@ -117,6 +117,50 @@ As regras que `kata verify` impõe, cada uma ancorada no ADR que a justifica:
 
 Veja [Bootstrap CLI](/pt/guide/cli) para a superfície completa de comandos, incluindo
 `kata verify --watch` para um loop de re-checagem no terminal.
+
+## Quando uma regra não consegue provar uma checagem
+
+Toda regra lê código-fonte, nunca tipos ou valores de runtime. Algumas expressões
+são portanto ilegíveis para ela — um middleware montado em runtime, um importado
+de um pacote cujo fonte ela não enxerga, um `...spread` que pode contribuir com
+qualquer coisa. Diante de uma dessas, a regra tem três opções, e só uma é honesta:
+
+1. reprovar mesmo assim → falsos positivos, que te treinam a ignorar a ferramenta;
+2. pular em silêncio → um check verde que afirma algo que ninguém provou;
+3. **dizer o que não conseguiu checar.**
+
+O Kata escolhe a terceira. O caso não checado é reportado como uma **supressão**:
+a regra, o motivo, a localização exata e quantas checagens ela engoliu.
+
+```
+✓ kata verify: no problems found (13 files checked)
+
+⚠ 1 check suppressed — a rule could not prove its property here:
+  kata/scoped-slot-not-provided: suppressed for 3 checks — could not resolve `authFactory()` in createApp({ middlewares })
+    src/app.ts:17:18
+
+A suppressed rule is not a passing rule. Re-run with --strict-coverage to fail on these.
+```
+
+Supressões também viajam no payload `--json`, num array `suppressions` e no
+contexto injetado, então o agente enxerga a lacuna em vez de ler um relatório
+limpo. Sozinhas elas não bloqueiam — o código pode estar perfeitamente correto —
+mas `kata verify --strict-coverage` sai com código diferente de zero em qualquer
+uma delas. O `lefthook.yml` gerado usa essa flag, então uma cadeia que se torna
+inverificável reprova o commit em vez de reduzir a cobertura silenciosamente.
+
+Fechar uma supressão significa tornar a expressão legível:
+
+- **Um middleware de um pacote npm.** O pacote publica um manifesto
+  `provides.json` descrevendo o que cada middleware exportado fornece e lê; o
+  `katajs` gera o seu no build, que é por que `cors()`, `secureHeaders()` e
+  `bodyLimit()` resolvem. Autores de middleware de terceiros podem publicar o
+  mesmo arquivo.
+- **Uma factory local.** O `kata verify` segue a chamada até o `return`, então
+  `requireRole('admin')` resolve desde que a factory retorne um
+  `defineMiddleware({ ... })` (ou um literal de middleware) que ele consiga ler.
+- **Um spread ou uma lista computada.** Escreva o array literalmente.
+  `use: [a, b]` é checável; `use: [...preset]` não é.
 
 ## Por que o harness é rápido
 

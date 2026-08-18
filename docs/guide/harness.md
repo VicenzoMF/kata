@@ -104,7 +104,7 @@ The rules `kata verify` enforces, each anchored to the ADR that justifies it:
 | `kata/no-route-without-input-schema` | every `defineRoute` declares `input` | ADR-0003 |
 | `kata/inline-schema` | Zod schemas live in `*.schema.ts` | ADR-0005 |
 | `kata/context-key-not-registered` | `c.get('key')` is a registered context key | ADR-0004 |
-| `kata/scoped-slot-not-provided` | a scoped `c.get` has a providing middleware | ADR-0004 |
+| `kata/scoped-slot-not-provided` | a scoped `c.get` has a providing middleware *earlier in the chain* — in the route's `use:` or in `createApp({ middlewares })` | ADR-0004 |
 | `kata/scoped-read-outside-request` | a scoped `c.get` is read only inside a request handler | ADR-0004 |
 | `kata/middleware-provides-mismatch` | `provides[]` matches the handler's `c.set` (warns when a `c.set` slot is omitted from `provides`) | ADR-0004 |
 | `kata/jwt-auth-provides-slot` | a `jwtAuth({ slot })` middleware declares `provides: [slot]` | ADR-0013 |
@@ -116,6 +116,50 @@ The rules `kata verify` enforces, each anchored to the ADR that justifies it:
 
 See [Bootstrap CLI](/guide/cli) for the full command surface, including
 `kata verify --watch` for a re-checking terminal loop.
+
+## When a rule cannot prove a check
+
+Every rule reads source, never types or runtime values. Some expressions are
+therefore unreadable to it — a middleware assembled at runtime, one imported from
+a package whose source it cannot see, a `...spread` that could contribute
+anything. A rule facing one of those has three options, and only one of them is
+honest:
+
+1. flag it anyway → false positives, which train you to ignore the tool;
+2. skip it silently → a green checkmark that asserts something nobody proved;
+3. **say what it could not check.**
+
+Kata takes the third. The unchecked case is reported as a **suppression**: the
+rule, the reason, the exact location, and how many checks it swallowed.
+
+```
+✓ kata verify: no problems found (13 files checked)
+
+⚠ 1 check suppressed — a rule could not prove its property here:
+  kata/scoped-slot-not-provided: suppressed for 3 checks — could not resolve `authFactory()` in createApp({ middlewares })
+    src/app.ts:17:18
+
+A suppressed rule is not a passing rule. Re-run with --strict-coverage to fail on these.
+```
+
+Suppressions ride in the `--json` payload too, under a `suppressions` array and in
+the injected context, so an agent sees the gap instead of reading a clean report.
+They do not block on their own — the code may be perfectly correct — but
+`kata verify --strict-coverage` exits non-zero on any of them. The generated
+`lefthook.yml` uses that flag, so a chain that becomes unverifiable fails the
+commit rather than quietly reducing coverage.
+
+Closing a suppression means making the expression readable:
+
+- **A middleware from an npm package.** The package ships a `provides.json`
+  manifest describing what each exported middleware provides and reads; `katajs`
+  generates its own at build time, which is why `cors()`, `secureHeaders()` and
+  `bodyLimit()` resolve. Third-party middleware authors can ship the same file.
+- **A local factory.** `kata verify` follows a call to its `return`, so
+  `requireRole('admin')` resolves as long as the factory returns a
+  `defineMiddleware({ ... })` (or a middleware literal) it can read.
+- **A spread or a computed list.** Write the array literally. `use: [a, b]` is
+  checkable; `use: [...preset]` is not.
 
 ## Why the harness is fast
 

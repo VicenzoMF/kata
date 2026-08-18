@@ -8,6 +8,9 @@
   "exports": {
     ".": "./src/index.ts"
   },
+  "bin": {
+    "kata-provides-manifest": "./src/manifest-cli.ts"
+  },
   "files": [
     "src",
     "README.md"

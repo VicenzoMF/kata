@@ -19,6 +19,7 @@ import { basename, join, relative } from 'node:path'
 
 import { formatHuman } from './format'
 import { isAnalysable } from './fs-walk'
+import { createAstCache, createProject } from './project'
 import { extractRegistryKeys, extractScopedKeys } from './registry'
 import { buildProject, verifyProject } from './runner'
 import type { Project, SourceFile, VerifyResult } from './types'
@@ -37,19 +38,25 @@ export type WatchSession = {
  * scoped-slot sets that several rules depend on.
  */
 export function createWatchSession(targetDir: string): WatchSession {
-  const initial = buildProject(targetDir)
+  // One cache for the session, handed to every snapshot: only the file that
+  // changed misses on content and re-parses (see `project.ts`).
+  const ast = createAstCache()
+  const initial = buildProject(targetDir, ast)
   const files = new Map<string, SourceFile>(initial.files.map((file) => [file.path, file]))
   let registryKeys = initial.registryKeys
   let scopedKeys = initial.scopedKeys
 
   const contextPath = join(targetDir, 'src', 'context.ts')
 
-  const snapshot = (): Project => ({
-    root: targetDir,
-    files: [...files.values()],
-    registryKeys,
-    scopedKeys,
-  })
+  // The manifest loader memoizes disk lookups; reuse the one `buildProject`
+  // made so a watch session reads each package's provides.json at most once.
+  const { packageManifest } = initial
+
+  const snapshot = (): Project =>
+    createProject(
+      { root: targetDir, files: [...files.values()], registryKeys, scopedKeys, packageManifest },
+      ast,
+    )
 
   return {
     targetDir,

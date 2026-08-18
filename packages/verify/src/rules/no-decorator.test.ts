@@ -1,12 +1,13 @@
 import { describe, expect, it } from 'vitest'
 
+import { createProject } from '../project'
 import type { Project, SourceFile } from '../types'
 
 import { noDecorator } from './no-decorator'
 
 function fileProject(text: string, relPath = 'src/modules/users/users.route.ts'): Project {
   const file: SourceFile = { path: `/repo/${relPath}`, relPath, text }
-  return { root: '/repo', files: [file], registryKeys: null }
+  return createProject({ root: '/repo', files: [file], registryKeys: null })
 }
 
 describe('kata/no-decorator', () => {

@@ -5,12 +5,12 @@
  * `// kata-allow: hono-boundary` comment to document their necessity.
  */
 import ts from 'typescript'
-import { forEachDescendant, parseSource, positionOf } from '../parse'
+import { forEachDescendant, positionOf } from '../parse'
 import type { Issue, Rule } from '../types'
 
 const NAME = 'kata/no-raw-boundary-cast'
 
-export const noRawBoundaryCast: Rule = {
+export const noRawBoundaryCast = {
   name: NAME,
   description: 'Hono boundary `as` casts are explicitly marked',
   adr: 'ADR-0016',
@@ -20,7 +20,7 @@ export const noRawBoundaryCast: Rule = {
     for (const file of project.files) {
       if (!file.relPath.endsWith('.ts')) continue
 
-      const sf = parseSource(file.path, file.text)
+      const sf = project.ast(file)
       const lines = file.text.split('\n')
 
       forEachDescendant(sf, (node) => {
@@ -65,4 +65,4 @@ export const noRawBoundaryCast: Rule = {
     }
     return issues
   },
-}
+} satisfies Rule

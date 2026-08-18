@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
+import { createProject } from '../project'
 import type { Project, SourceFile } from '../types'
 
 import { scopedReadOutsideRequest } from './scoped-read-outside-request'
@@ -9,7 +10,7 @@ const SCOPED = new Set(['currentUser', 'tenantId'])
 function project(text: string, scoped: ReadonlySet<string> | null = SCOPED): Project {
   const relPath = 'src/modules/users/users.route.ts'
   const file: SourceFile = { path: `/repo/${relPath}`, relPath, text }
-  return { root: '/repo', files: [file], registryKeys: null, scopedKeys: scoped }
+  return createProject({ root: '/repo', files: [file], registryKeys: null, scopedKeys: scoped })
 }
 
 describe('kata/scoped-read-outside-request', () => {

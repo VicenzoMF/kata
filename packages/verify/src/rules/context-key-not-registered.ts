@@ -14,7 +14,7 @@
  */
 import ts from 'typescript'
 
-import { forEachDescendant, parseSource, positionOf } from '../parse'
+import { forEachDescendant, positionOf } from '../parse'
 import type { Issue, Rule } from '../types'
 
 const NAME = 'kata/context-key-not-registered'
@@ -22,7 +22,7 @@ const NAME = 'kata/context-key-not-registered'
 /** The conventional context parameter name (ADR-0004 examples all use `c`). */
 const CONTEXT_PARAM = 'c'
 
-export const contextKeyNotRegistered: Rule = {
+export const contextKeyNotRegistered = {
   name: NAME,
   description: "c.get('key') is a registered context key",
   adr: 'ADR-0004',
@@ -32,7 +32,7 @@ export const contextKeyNotRegistered: Rule = {
 
     const issues: Issue[] = []
     for (const file of project.files) {
-      const sf = parseSource(file.path, file.text)
+      const sf = project.ast(file)
       forEachDescendant(sf, (node) => {
         if (!ts.isCallExpression(node)) return
         const key = contextGetKey(node)
@@ -44,7 +44,7 @@ export const contextKeyNotRegistered: Rule = {
     }
     return issues
   },
-}
+} satisfies Rule
 
 /** The literal key of a `c.get('key')` call, or `undefined` if it isn't one. */
 function contextGetKey(call: ts.CallExpression): string | undefined {

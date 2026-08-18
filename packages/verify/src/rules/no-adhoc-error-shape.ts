@@ -20,14 +20,7 @@
  */
 import ts from 'typescript'
 
-import {
-  forEachDescendant,
-  hasProperty,
-  hasSpread,
-  parseSource,
-  positionOf,
-  unwrapExpression,
-} from '../parse'
+import { forEachDescendant, hasProperty, hasSpread, positionOf, unwrapExpression } from '../parse'
 import type { Issue, Rule } from '../types'
 
 const NAME = 'kata/no-adhoc-error-shape'
@@ -38,14 +31,14 @@ const CONTEXT_PARAM = 'c'
 const MIN_ERROR_STATUS = 400
 const MAX_ERROR_STATUS = 599
 
-export const noAdhocErrorShape: Rule = {
+export const noAdhocErrorShape = {
   name: NAME,
   description: 'error responses use the ADR-0008 envelope, not ad-hoc JSON',
   adr: 'ADR-0008',
   check(project) {
     const issues: Issue[] = []
     for (const file of project.files) {
-      const sf = parseSource(file.path, file.text)
+      const sf = project.ast(file)
       forEachDescendant(sf, (node) => {
         if (!ts.isCallExpression(node)) return
         const status = adhocErrorStatus(node)
@@ -57,7 +50,7 @@ export const noAdhocErrorShape: Rule = {
     }
     return issues
   },
-}
+} satisfies Rule
 
 /**
  * The HTTP status of a `c.json({ error: ... }, <4xx|5xx>)` call, or `undefined`

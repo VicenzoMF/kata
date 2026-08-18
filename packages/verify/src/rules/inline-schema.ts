@@ -18,7 +18,7 @@
  */
 import ts from 'typescript'
 
-import { forEachDescendant, parseSource, positionOf } from '../parse'
+import { forEachDescendant, positionOf } from '../parse'
 import type { Issue, Rule } from '../types'
 
 const NAME = 'kata/inline-schema'
@@ -31,7 +31,7 @@ function isGuardedFile(relPath: string): boolean {
   return relPath.endsWith('.route.ts') || relPath.endsWith('.service.ts')
 }
 
-export const inlineSchema: Rule = {
+export const inlineSchema = {
   name: NAME,
   description: 'Zod schemas live in *.schema.ts',
   adr: 'ADR-0005',
@@ -39,7 +39,7 @@ export const inlineSchema: Rule = {
     const issues: Issue[] = []
     for (const file of project.files) {
       if (!isGuardedFile(file.relPath)) continue
-      const sf = parseSource(file.path, file.text)
+      const sf = project.ast(file)
       forEachDescendant(sf, (node) => {
         const method = zodRootMethod(node)
         if (method === undefined) return
@@ -53,7 +53,7 @@ export const inlineSchema: Rule = {
     }
     return issues
   },
-}
+} satisfies Rule
 
 /**
  * The method name of a Zod-chain root call — `z.<method>(...)` whose receiver is

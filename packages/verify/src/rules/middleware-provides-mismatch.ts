@@ -33,21 +33,20 @@ import {
   functionProperty,
   hasSpread,
   isCalleeNamed,
-  parseSource,
   positionOf,
 } from '../parse'
 import type { Issue, Rule } from '../types'
 
 const NAME = 'kata/middleware-provides-mismatch'
 
-export const middlewareProvidesMismatch: Rule = {
+export const middlewareProvidesMismatch = {
   name: NAME,
   description: "provides[] matches the handler's c.set",
   adr: 'ADR-0004',
   check(project) {
     const issues: Issue[] = []
     for (const file of project.files) {
-      const sf = parseSource(file.path, file.text)
+      const sf = project.ast(file)
       forEachDescendant(sf, (node) => {
         if (!ts.isCallExpression(node)) return
         if (!isCalleeNamed(node, 'defineMiddleware')) return
@@ -88,7 +87,7 @@ export const middlewareProvidesMismatch: Rule = {
     }
     return issues
   },
-}
+} satisfies Rule
 
 /**
  * Collect `<ctx>.set('key', ...)` calls in the handler, mapping each literal key

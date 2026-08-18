@@ -2,7 +2,7 @@ import type { Issue, Rule } from '../types'
 
 const NAME = 'kata/schema-file-naming'
 
-export const schemaFileNaming: Rule = {
+export const schemaFileNaming = {
   name: NAME,
   description: 'domain module files are named <domain>.<suffix>',
   adr: 'ADR-0016',
@@ -44,4 +44,4 @@ export const schemaFileNaming: Rule = {
     }
     return issues
   },
-}
+} satisfies Rule
