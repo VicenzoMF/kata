@@ -2,7 +2,7 @@ import type { Issue, Rule } from '../types'
 
 const NAME = 'kata/schema-file-naming'
 
-export const schemaFileNaming: Rule = {
+export const schemaFileNaming = {
   name: NAME,
   check(project) {
     const issues: Issue[] = []
@@ -42,4 +42,4 @@ export const schemaFileNaming: Rule = {
     }
     return issues
   },
-}
+} satisfies Rule

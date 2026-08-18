@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
+import { createProject } from '../project'
 import type { Project, SourceFile } from '../types'
 
 import { contextKeyNotRegistered } from './context-key-not-registered'
@@ -10,7 +11,7 @@ function project(text: string, registryKeys: ReadonlySet<string> | null): Projec
     relPath: 'src/modules/users/users.route.ts',
     text,
   }
-  return { root: '/repo', files: [file], registryKeys }
+  return createProject({ root: '/repo', files: [file], registryKeys })
 }
 
 const registry = new Set(['logger', 'currentUser'])

@@ -66,6 +66,17 @@ apenas um elemento anterior do mesmo array:
   `provides: ['currentUser']` torna `c.get('currentUser')` válido em toda rota
   sem que essa rota o liste em `use:`.
 
+O `kata verify` lê essa cadeia do mesmo jeito que o runtime a executa. A regra
+`kata/scoped-slot-not-provided` percorre `[...config.middlewares, ...route.use]`
+em ordem por rota, então um provedor global satisfaz as leituras de todas as
+rotas, e um middleware global que ele próprio lê um slot que nada à sua frente
+fornece é um erro. Os built-ins abaixo resolvem pelo manifesto `provides.json`
+que o `katajs` publica — `cors()` numa cadeia é uma entrada `provides: []`, não
+uma incógnita — então declará-los não custa cobertura de verificação. Uma entrada
+que a regra *não* consegue ler é reportada como uma
+[supressão](/pt/guide/harness#quando-uma-regra-nao-consegue-provar-uma-checagem)
+em vez de passar em silêncio.
+
 ::: warning Um global roda para toda rota
 Não há opt-out por rota. Um middleware na cadeia global roda para toda
 rota, inclusive as que não precisam dele. Escolher e ordenar a cadeia é

@@ -31,7 +31,6 @@ import {
   forEachDescendant,
   hasSpread,
   isCalleeNamed,
-  parseSource,
   positionOf,
   propertyName,
   providesOf,
@@ -44,12 +43,12 @@ const NAME = 'kata/jwt-auth-provides-slot'
 /** Slot `jwtAuth` fills when its `slot` option is omitted (mirrors `DEFAULT_SLOT`). */
 const DEFAULT_SLOT = 'currentUser'
 
-export const jwtAuthProvidesSlot: Rule = {
+export const jwtAuthProvidesSlot = {
   name: NAME,
   check(project) {
     const issues: Issue[] = []
     for (const file of project.files) {
-      const sf = parseSource(file.path, file.text)
+      const sf = project.ast(file)
       forEachDescendant(sf, (node) => {
         if (!ts.isCallExpression(node)) return
         if (!isCalleeNamed(node, 'defineMiddleware')) return
@@ -74,7 +73,7 @@ export const jwtAuthProvidesSlot: Rule = {
     }
     return issues
   },
-}
+} satisfies Rule
 
 /**
  * The slot a `jwtAuth(...)` call fills: its `slot` string-literal option, or the

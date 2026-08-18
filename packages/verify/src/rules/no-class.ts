@@ -18,7 +18,7 @@
  */
 import ts from 'typescript'
 
-import { forEachDescendant, parseSource, positionOf } from '../parse'
+import { forEachDescendant, positionOf } from '../parse'
 import type { Issue, Rule } from '../types'
 
 const NAME = 'kata/no-class'
@@ -31,13 +31,13 @@ function isGuardedFile(relPath: string): boolean {
   return relPath.startsWith('src/') && !relPath.endsWith('.d.ts')
 }
 
-export const noClass: Rule = {
+export const noClass = {
   name: NAME,
   check(project) {
     const issues: Issue[] = []
     for (const file of project.files) {
       if (!isGuardedFile(file.relPath)) continue
-      const sf = parseSource(file.path, file.text)
+      const sf = project.ast(file)
       forEachDescendant(sf, (node) => {
         if (!ts.isClassDeclaration(node) && !ts.isClassExpression(node)) return
         if (hasEscapeHatch(sf, node)) return
@@ -48,7 +48,7 @@ export const noClass: Rule = {
     }
     return issues
   },
-}
+} satisfies Rule
 
 /**
  * True when the `// kata-allow: class-required-by-vendor` comment sits in the

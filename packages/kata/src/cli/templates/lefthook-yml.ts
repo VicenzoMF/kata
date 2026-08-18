@@ -8,7 +8,10 @@ pre-commit:
   parallel: false # format must finish before lint reads the file
   commands:
     00-verify:
-      run: pnpm exec kata verify
+      # \`--strict-coverage\` also fails when a rule could not *prove* a check —
+      # an unresolvable middleware expression, an indeterminate context registry.
+      # Without it a coverage gap reads exactly like a passing check (issue #206).
+      run: pnpm exec kata verify --strict-coverage
     01-format-write:
       glob: '*.{ts,tsx,js,jsx,json}'
       run: pnpm exec biome check --write --no-errors-on-unmatched {staged_files}

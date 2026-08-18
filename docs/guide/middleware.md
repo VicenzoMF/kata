@@ -242,6 +242,12 @@ export const checkoutRoute = defineRoute({
 are filled. That array order *is* the contract: if one slot is derived from another (a
 `tenantId` computed from `currentUser`), put its provider earlier in the list.
 
+The order is checked, not just documented. `kata verify` walks each route's
+effective chain — `[...createApp({ middlewares }), ...use]` — in order, and a
+middleware that reads a slot no earlier entry provides is an error, even when a
+*later* entry sets it. Swapping those two entries turns a runtime 500 into a
+build-time message pointing at the entry that reads too early.
+
 One definition composes onto as many routes as you like; there is no per-route
 duplication. The single `requireAuth` above guards checkout, the order list, and a
 single-order lookup all at once.

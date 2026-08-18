@@ -1,12 +1,13 @@
 import { describe, expect, it } from 'vitest'
 
+import { createProject } from '../project'
 import type { Project, SourceFile } from '../types'
 
 import { inlineSchema } from './inline-schema'
 
 function fileProject(text: string, relPath: string): Project {
   const file: SourceFile = { path: `/repo/${relPath}`, relPath, text }
-  return { root: '/repo', files: [file], registryKeys: null }
+  return createProject({ root: '/repo', files: [file], registryKeys: null })
 }
 
 const ROUTE = 'src/modules/users/users.route.ts'

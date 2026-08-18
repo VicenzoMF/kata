@@ -1,12 +1,13 @@
 import { describe, expect, it } from 'vitest'
 
+import { createProject } from '../project'
 import type { Project, SourceFile } from '../types'
 
 import { noClass } from './no-class'
 
 function fileProject(text: string, relPath: string): Project {
   const file: SourceFile = { path: `/repo/${relPath}`, relPath, text }
-  return { root: '/repo', files: [file], registryKeys: null }
+  return createProject({ root: '/repo', files: [file], registryKeys: null })
 }
 
 const MODULE = 'src/modules/users/users.service.ts'
