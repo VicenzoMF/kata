@@ -196,9 +196,9 @@ describe('global error boundary (#62)', () => {
 
     expect(JSON.stringify(await res.json())).not.toContain('hunter2')
     expect(errSpy).toHaveBeenCalled()
-    const loggedTheRealError = errSpy.mock.calls
-      .flat()
-      .some((arg) => arg instanceof Error && arg.message.includes('hunter2'))
+    const loggedTheRealError = errSpy.mock.calls.some(([, extra]) =>
+      (extra as { err?: { message?: string } } | undefined)?.err?.message?.includes('hunter2'),
+    )
     expect(loggedTheRealError).toBe(true)
   })
 })
@@ -208,10 +208,13 @@ describe('scoped slot access errors', () => {
     vi.restoreAllMocks()
   })
 
-  // The thrown error is funnelled into the 5xx envelope and the original is
-  // logged server-side; assert on the logged Error to check the thrown message.
-  const thrownError = (errSpy: { mock: { calls: unknown[][] } }): Error | undefined =>
-    errSpy.mock.calls.flat().find((arg): arg is Error => arg instanceof Error)
+  // The thrown error is funnelled into the 5xx envelope and logged server-side
+  // as a serialised `{ err }` (issue #210), never a raw `Error` instance; read
+  // the flattened `err.message` to check the thrown message.
+  const thrownError = (errSpy: { mock: { calls: unknown[][] } }): { message: string } | undefined =>
+    errSpy.mock.calls
+      .map(([, extra]) => (extra as { err?: { message: string } } | undefined)?.err)
+      .find((err): err is { message: string } => err !== undefined)
 
   it('throws "read before being set" when a route reads a scoped slot never provided', async () => {
     const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
@@ -283,6 +286,86 @@ describe('scoped slot access errors', () => {
 
     expect(res.status).toBe(500)
     expect(thrownError(errSpy)?.message).toContain('not a scoped slot')
+  })
+})
+
+describe('unhandled errors reach the logger pre-flattened (issue #210)', () => {
+  // The exact failure mode issue #210 reports: `JSON.stringify(new Error(...))`
+  // is `"{}"` because `message`/`stack` are non-enumerable, so a logger this
+  // naive is the regression test — if the framework ever hands it a raw
+  // `Error` again, the log line silently loses everything but comes back.
+  function naiveJsonLogger() {
+    const lines: string[] = []
+    const write = (message: string, extra?: object) => {
+      lines.push(JSON.stringify({ message, ...extra }))
+    }
+    return { lines, logger: { info: write, warn: write, error: write } }
+  }
+
+  it('a route that throws logs name, message and stack under a naive JSON.stringify logger', async () => {
+    const { lines, logger } = naiveJsonLogger()
+    const k = defineContext({ logger: singleton(logger) })
+    const route = k.defineRoute({
+      method: 'GET',
+      path: '/boom',
+      input: {},
+      output: z.object({ ok: z.boolean() }),
+      handler: () => {
+        throw new Error('handler exploded')
+      },
+    })
+    const app = k.createApp({ modules: [{ route }] })
+    const res = await app.request('/boom')
+
+    expect(res.status).toBe(500)
+    const errorLine = lines.map((line) => JSON.parse(line)).find((line) => line.err)
+    expect(errorLine.err).toMatchObject({ name: 'Error', message: 'handler exploded' })
+    expect(typeof errorLine.err.stack).toBe('string')
+  })
+
+  it('serialises a `cause` chain and an AggregateError without crashing the logger', async () => {
+    const { lines, logger } = naiveJsonLogger()
+    const k = defineContext({ logger: singleton(logger) })
+    const route = k.defineRoute({
+      method: 'GET',
+      path: '/boom',
+      input: {},
+      output: z.object({ ok: z.boolean() }),
+      handler: () => {
+        throw new AggregateError(
+          [new Error('leaf one'), new Error('leaf two', { cause: new Error('root') })],
+          'multiple failures',
+        )
+      },
+    })
+    const app = k.createApp({ modules: [{ route }] })
+    const res = await app.request('/boom')
+
+    expect(res.status).toBe(500)
+    const errorLine = lines.map((line) => JSON.parse(line)).find((line) => line.err)
+    expect(errorLine.err.errors).toHaveLength(2)
+    expect(errorLine.err.errors[0]).toMatchObject({ name: 'Error', message: 'leaf one' })
+    expect(errorLine.err.errors[1].cause).toMatchObject({ name: 'Error', message: 'root' })
+  })
+
+  it('a non-Error throw does not crash the logger', async () => {
+    const { lines, logger } = naiveJsonLogger()
+    const k = defineContext({ logger: singleton(logger) })
+    const route = k.defineRoute({
+      method: 'GET',
+      path: '/boom',
+      input: {},
+      output: z.object({ ok: z.boolean() }),
+      handler: () => {
+        throw 'a string, not an Error'
+      },
+    })
+    const app = k.createApp({ modules: [{ route }] })
+    const res = await app.request('/boom')
+
+    expect(res.status).toBe(500)
+    const errorLine = lines.map((line) => JSON.parse(line)).find((line) => line.err)
+    expect(errorLine.err).toEqual({ name: 'string', message: 'a string, not an Error' })
   })
 })
 

@@ -160,6 +160,13 @@ text/HTML 500 page. That boundary exists so a bug can never leak a stack trace o
 HTML error page to a client: the raw error is logged server-side, and the underlying
 message is never surfaced.
 
+The error handed to your `logger.error` arrives **pre-flattened**, not as a raw
+`Error`: `{ err: { name, message, stack?, cause?, errors? } }`, with `cause` chains
+walked (depth-capped, cycle-safe) and `AggregateError.errors` expanded. A raw `Error`
+serialises to `"{}"` under the naive `JSON.stringify`-based logger most structured
+loggers start as — its `message` and `stack` are non-enumerable — so Kata never hands
+one to your logger directly.
+
 Reserve throwing for genuine bugs. For failures the client should understand, return
 `c.error(...)`.
 

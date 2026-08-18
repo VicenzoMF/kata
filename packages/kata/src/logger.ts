@@ -1,8 +1,19 @@
+import type { SerializedError } from './errors'
 import type { Registry, Singleton } from './types'
 
 // ────────────────────────────────────────────────────────────────────────────
 // Central request logging (issue #63)
 // ────────────────────────────────────────────────────────────────────────────
+
+/**
+ * The `extra` payload a {@link Logger} method receives. Open — a handler or
+ * middleware can log whatever fields it wants — except for the reserved `err`
+ * key: when the framework logs an unhandled error (issue #210) it is always a
+ * {@link SerializedError}, never a raw `Error`, so a naive
+ * `JSON.stringify`-based logger cannot lose `message`/`stack` to `Error`'s
+ * non-enumerable properties.
+ */
+export type LogExtra = Record<string, unknown> & { err?: SerializedError }
 
 /**
  * Minimal structured logger the request pipeline writes to. A `singleton`
@@ -14,9 +25,9 @@ import type { Registry, Singleton } from './types'
  * works.
  */
 export type Logger = {
-  info(message: string, extra?: Record<string, unknown>): void
-  warn?(message: string, extra?: Record<string, unknown>): void
-  error?(message: string, extra?: Record<string, unknown>): void
+  info(message: string, extra?: LogExtra): void
+  warn?(message: string, extra?: LogExtra): void
+  error?(message: string, extra?: LogExtra): void
 }
 
 /**
@@ -57,12 +68,31 @@ export type RequestLogFields = {
 export function logRequest(logger: Logger, fields: RequestLogFields): void {
   const { requestId, method, path, status, durationMs } = fields
   const message = `${method} ${path} ${status} ${durationMs}ms`
-  const extra: Record<string, unknown> = { requestId, method, path, status, durationMs }
+  const extra: LogExtra = { requestId, method, path, status, durationMs }
   if (status >= 500 && logger.error) {
     logger.error(message, extra)
   } else if (status >= 400 && logger.warn) {
     logger.warn(message, extra)
   } else {
     logger.info(message, extra)
+  }
+}
+
+/**
+ * Emit one framework-internal diagnostic — an unhandled error or an output
+ * mismatch — through the app's `logger.error`, falling back to `console.error`
+ * when no logger is registered. The single call site every such diagnostic
+ * goes through (issue #210), so the fallback and the reserved-key shape can
+ * never drift between them.
+ */
+export function logFrameworkError(
+  logger: Logger | undefined,
+  message: string,
+  extra: LogExtra,
+): void {
+  if (logger?.error) {
+    logger.error(message, extra)
+  } else {
+    console.error(message, extra)
   }
 }

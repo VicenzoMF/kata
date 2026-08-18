@@ -3,8 +3,8 @@ import { Hono as HonoApp } from 'hono'
 import type { z } from 'zod'
 
 import type { ErrorExtra, FieldIssue } from './errors'
-import { buildErrorBody, formatZodIssues } from './errors'
-import { type Logger, logRequest, resolveLogger } from './logger'
+import { buildErrorBody, formatZodIssues, serializeError } from './errors'
+import { type Logger, logFrameworkError, logRequest, resolveLogger } from './logger'
 import { type OutputValidationMode, resolveOutputValidationMode } from './output-validation'
 import { REQUEST_ID_HEADER, resolveRequestId } from './request-id'
 import type { KataApp } from './rpc'
@@ -377,12 +377,9 @@ function buildHonoApp<R extends Registry>(registry: R, config: AppConfig<R>): Ho
   // still serialises through the unified envelope instead of Hono's default
   // text/HTML 500.
   app.onError((err, c) => {
-    const msg = 'kata: unhandled error escaped the route pipeline'
-    if (options.logger?.error) {
-      options.logger.error(msg, { err })
-    } else {
-      console.error(msg, err)
-    }
+    logFrameworkError(options.logger, 'kata: unhandled error escaped the route pipeline', {
+      err: serializeError(err),
+    })
     return errorResponse(c, 'internal_error', 'Internal server error', { status: 500 })
   })
   return app
@@ -657,11 +654,7 @@ function logOutputMismatch<R extends Registry>(
   options: RuntimeOptions<R>,
 ): void {
   const msg = `kata: output schema mismatch in ${route.method} ${route.path} (status ${status})`
-  if (options.logger?.error) {
-    options.logger.error(msg, { issues })
-  } else {
-    console.error(msg, issues)
-  }
+  logFrameworkError(options.logger, msg, { issues })
 }
 
 /** The 500 envelope (ADR-0008) `strict` returns when a response violates its declared output schema. */
@@ -778,12 +771,9 @@ function registerRoute<R extends Registry>(
     try {
       await runChain()
     } catch (err) {
-      const msg = `kata: unhandled error in ${route.method} ${route.path}`
-      if (options.logger?.error) {
-        options.logger.error(msg, { err })
-      } else {
-        console.error(msg, err)
-      }
+      logFrameworkError(options.logger, `kata: unhandled error in ${route.method} ${route.path}`, {
+        err: serializeError(err),
+      })
       shortCircuit = errorResponse(c, 'internal_error', 'Internal server error', { status: 500 })
     }
     // 5. Echo the correlation id and emit the per-request log line (issue #63).
