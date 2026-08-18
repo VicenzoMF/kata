@@ -21,3 +21,21 @@ HTTP 200
 [Asserts]
 header "X-Request-Id" == "trace-from-edge-1"
 jsonpath "$.requestId" == "trace-from-edge-1"
+
+
+# 3. GET /export.csv — a non-JSON route: the handler returns `new Response(...)`
+#    directly instead of `c.json`. Regression coverage for issue #207: this used
+#    to be the one return path that dropped every app-level response header
+#    (main.ts's `[cors(), secureHeaders(), bodyLimit()]` chain). The handler's
+#    own `content-type` must survive untouched alongside the merged-in headers.
+GET http://localhost:3000/export.csv
+HTTP 200
+[Asserts]
+header "Content-Type" == "text/csv; charset=utf-8"
+header "Content-Disposition" == "attachment; filename=\"export.csv\""
+header "X-Request-Id" matches "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+header "X-Content-Type-Options" == "nosniff"
+header "X-Frame-Options" == "SAMEORIGIN"
+header "Strict-Transport-Security" == "max-age=15552000; includeSubDomains"
+header "Access-Control-Allow-Origin" == "*"
+body == "id,name\n1,Ada Lovelace\n2,Grace Hopper\n"

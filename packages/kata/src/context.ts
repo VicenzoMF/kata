@@ -398,6 +398,43 @@ function getScopedStore(c: import('hono').Context): Map<string, unknown> {
   return store
 }
 
+const CONTEXT_HEADERS_TOUCHED = Symbol('kata.context-headers-touched')
+
+/**
+ * Marks that a Hono middleware wrapped by `fromHono` ran and may have set
+ * headers on `c.res` (`secureHeaders()`, `cors()`, …) — the header half of the
+ * ADR-0016 response seam (issue #207). Called from `from-hono.ts`, checked by
+ * `applyResponseHeaders` before it reads `c.res`: that getter *materialises* a
+ * Response, so a request with no app-level middleware must not pay for it.
+ */
+export function markContextHeadersTouched(c: import('hono').Context): void {
+  // kata-allow: hono-boundary
+  c.set(CONTEXT_HEADERS_TOUCHED as never, true as never)
+}
+
+function contextHeadersTouched(c: import('hono').Context): boolean {
+  // kata-allow: hono-boundary
+  return c.get(CONTEXT_HEADERS_TOUCHED as never) === true
+}
+
+/**
+ * Merge `source` (headers a Hono middleware set on `c.res`) onto `target` (the
+ * response kata is about to send) — additive only, per ADR-0016 / issue #207:
+ * a header the handler already set on its own `Response` wins, and
+ * `set-cookie` is appended rather than replaced since it is legitimately
+ * multi-valued — a middleware cookie and a handler cookie must both survive.
+ */
+function mergeContextHeaders(target: Headers, source: Headers): void {
+  for (const [key, value] of source) {
+    if (key === 'set-cookie') continue
+    if (!target.has(key)) target.set(key, value)
+  }
+  const existingCookies = new Set(target.getSetCookie())
+  for (const cookie of source.getSetCookie()) {
+    if (!existingCookies.has(cookie)) target.append('set-cookie', cookie)
+  }
+}
+
 /**
  * Single funnel for every Kata 4xx/5xx response (ADR-0008). Builds the unified
  * envelope via `buildErrorBody` and wraps it in a Hono JSON response. The
@@ -617,8 +654,10 @@ function buildOutputResponse<R extends Registry>(
  * Validate a handler-returned `Response`'s body against the schema declared for
  * its status (ADR-0011), as a shape check. The original `Response` is forwarded
  * verbatim on success — Kata never re-serialises a response the handler built, so
- * a custom header or content type the handler set is preserved. Reached only in
- * the map form, for a declared status, when the mode is not `off`.
+ * a custom header or content type the handler set is preserved. `finalizeResponse`
+ * merges in app-level headers afterwards (ADR-0016, issue #207); it is not this
+ * function's concern. Reached only in the map form, for a declared status, when
+ * the mode is not `off`.
  */
 async function validateResponseBody<R extends Registry>(
   c: import('hono').Context,
@@ -668,11 +707,46 @@ function outputMismatchResponse(c: import('hono').Context): Response {
 }
 
 /**
- * Final step of every request (issue #63): echo the correlation id on the
- * response header and emit the per-request log line. Runs for every outcome —
- * success, validation failure, middleware short-circuit, or the 5xx boundary.
+ * Merge app-level response headers (ADR-0016, issue #207) and echo the
+ * correlation id (issue #63) onto the outgoing response. Both writes share one
+ * `Headers` object, so an immutable one — `Response.redirect()`, or a
+ * `Response` handed back straight from `fetch()` — is handled once: rebuild a
+ * fresh `Response` carrying the merged headers rather than silently drop them.
+ * `response.body` is passed through to the rebuild, never buffered, so a
+ * streamed download is unaffected.
+ */
+function applyResponseHeaders(
+  c: import('hono').Context,
+  response: Response,
+  requestId: string,
+): Response {
+  const touched = contextHeadersTouched(c)
+  const apply = (headers: Headers): void => {
+    if (touched) mergeContextHeaders(headers, c.res.headers)
+    headers.set(REQUEST_ID_HEADER, requestId)
+  }
+  try {
+    apply(response.headers)
+    return response
+  } catch {
+    const headers = new Headers(response.headers)
+    apply(headers)
+    return new Response(response.body, {
+      status: response.status,
+      statusText: response.statusText,
+      headers,
+    })
+  }
+}
+
+/**
+ * Final step of every request (issue #63): merge app-level response headers
+ * (ADR-0016, issue #207), echo the correlation id, and emit the per-request
+ * log line. Runs for every outcome — success, validation failure, middleware
+ * short-circuit, or the 5xx boundary — so no response path is left behind.
  */
 function finalizeResponse<R extends Registry>(
+  c: import('hono').Context,
   route: Route<R>,
   requestId: string,
   startedAt: number,
@@ -680,15 +754,7 @@ function finalizeResponse<R extends Registry>(
   options: RuntimeOptions<R>,
 ): Response | undefined {
   if (response) {
-    // kata returns a response detached from `c.res` (see middlewares/from-hono.ts),
-    // so the header is set on this object directly. Some responses — e.g. one
-    // returned straight from `fetch` — have immutable headers; skip rather than
-    // throw if so.
-    try {
-      response.headers.set(REQUEST_ID_HEADER, requestId)
-    } catch {
-      // immutable headers — leave the response untouched
-    }
+    response = applyResponseHeaders(c, response, requestId)
   }
   if (options.requestLogging && options.logger) {
     logRequest(options.logger, {
@@ -776,7 +842,7 @@ function registerRoute<R extends Registry>(
       })
       shortCircuit = errorResponse(c, 'internal_error', 'Internal server error', { status: 500 })
     }
-    // 5. Echo the correlation id and emit the per-request log line (issue #63).
-    return finalizeResponse(route, requestId, startedAt, shortCircuit, options)
+    // 5. Merge app-level headers, echo the correlation id, and log (#63, #207).
+    return finalizeResponse(c, route, requestId, startedAt, shortCircuit, options)
   })
 }

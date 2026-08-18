@@ -369,8 +369,8 @@ describe('unhandled errors reach the logger pre-flattened (issue #210)', () => {
   })
 })
 
-describe('finalizeResponse with an immutable Response', () => {
-  it('skips the x-request-id echo instead of throwing when headers are immutable', async () => {
+describe('finalizeResponse with an immutable Response (issue #207)', () => {
+  it('rebuilds rather than skips the x-request-id echo when headers are immutable', async () => {
     const k = defineContext({})
     const route = k.defineRoute({
       method: 'GET',
@@ -378,17 +378,75 @@ describe('finalizeResponse with an immutable Response', () => {
       input: {},
       output: z.object({ ok: z.boolean() }),
       // `Response.redirect()` yields immutable headers — like a Response handed
-      // back straight from `fetch()`. finalizeResponse must not throw trying to
-      // set the correlation-id header on it.
+      // back straight from `fetch()`. finalizeResponse must rebuild rather than
+      // throw or silently drop the correlation-id header.
       handler: () => Response.redirect('https://example.test/elsewhere', 302),
     })
     const app = k.createApp({ modules: [{ route }] })
     const res = await app.request('/frozen')
 
-    // No throw into the 5xx funnel: the original redirect passes through, and
-    // the header was skipped (immutable) rather than set.
     expect(res.status).toBe(302)
-    expect(res.headers.get('x-request-id')).toBeNull()
+    expect(res.headers.get('x-request-id')).toMatch(
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/,
+    )
     expect(res.headers.get('location')).toBe('https://example.test/elsewhere')
+  })
+
+  it('streams the body through the rebuild rather than buffering it', async () => {
+    // A stream that stalls (enqueues nothing) until `released` flips. A
+    // `ReadableStream` calls `pull` once on its own right after construction
+    // to try to fill its queue — that alone must not be mistaken for a read,
+    // so the first pull staying a no-op is expected, not a bug. What proves
+    // "not buffered" is that `app.request()` below resolves while still
+    // stalled: `await response.text()` would hang forever waiting for the
+    // stream to close, so the request finishing means kata never called it.
+    let released = false
+    const body = new ReadableStream<Uint8Array>({
+      pull(controller) {
+        if (!released) return
+        controller.enqueue(new TextEncoder().encode('chunk'))
+        controller.close()
+      },
+    })
+    // A minimal Headers-shaped object (not a real `Headers` — wrapping a real
+    // one in a Proxy breaks undici's private-field internals) whose mutators
+    // throw `TypeError`, the way genuinely immutable headers do (e.g. `fetch()`
+    // responses on Cloudflare Workers). Reads stay real so the rebuild's
+    // `new Headers(response.headers)` copy can iterate it.
+    const store = new Map([['content-type', 'application/octet-stream']])
+    const throwImmutable = (): never => {
+      throw new TypeError('immutable headers')
+    }
+    const frozenHeaders = {
+      set: throwImmutable,
+      append: throwImmutable,
+      delete: throwImmutable,
+      has: (name: string) => store.has(name.toLowerCase()),
+      get: (name: string) => store.get(name.toLowerCase()) ?? null,
+      getSetCookie: () => [] as string[],
+      [Symbol.iterator]: () => store.entries(),
+    } as unknown as Headers
+    const immutable = new Response(body, { status: 200 })
+    Object.defineProperty(immutable, 'headers', { get: () => frozenHeaders })
+
+    const k = defineContext({})
+    const route = k.defineRoute({
+      method: 'GET',
+      path: '/stream',
+      input: {},
+      output: z.object({ ok: z.boolean() }),
+      handler: () => immutable,
+    })
+    const app = k.createApp({ modules: [{ route }] })
+    // Resolves without ever releasing the stall — proof the rebuild passed
+    // `response.body` through untouched instead of awaiting it to completion.
+    const res = await app.request('/stream')
+
+    expect(res.headers.get('x-request-id')).toMatch(
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/,
+    )
+
+    released = true
+    expect(await res.text()).toBe('chunk')
   })
 })
