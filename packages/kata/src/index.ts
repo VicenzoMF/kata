@@ -14,9 +14,15 @@ export type {
   SuccessOutput,
 } from './context'
 export { defineContext, scoped, singleton } from './context'
-export type { ErrorBody, ErrorExtra, FieldIssue, FieldIssues } from './errors'
-export { buildErrorBody, ErrorBodySchema, FieldIssueSchema, formatZodIssues } from './errors'
-export type { Logger } from './logger'
+export type { ErrorBody, ErrorExtra, FieldIssue, FieldIssues, SerializedError } from './errors'
+export {
+  buildErrorBody,
+  ErrorBodySchema,
+  FieldIssueSchema,
+  formatZodIssues,
+  serializeError,
+} from './errors'
+export type { LogExtra, Logger } from './logger'
 export type { BodyLimitOptions, CorsOptions, SecureHeadersOptions } from './middlewares'
 export { bodyLimit, cors, DEFAULT_MAX_BODY_SIZE, secureHeaders } from './middlewares'
 export type { OutputValidationMode } from './output-validation'

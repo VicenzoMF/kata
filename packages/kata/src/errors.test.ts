@@ -2,7 +2,13 @@ import { describe, expect, it } from 'vitest'
 import { z } from 'zod'
 
 import type { ErrorBody } from './errors'
-import { buildErrorBody, ErrorBodySchema, FieldIssueSchema, formatZodIssues } from './errors'
+import {
+  buildErrorBody,
+  ErrorBodySchema,
+  FieldIssueSchema,
+  formatZodIssues,
+  serializeError,
+} from './errors'
 
 function issuesOf(schema: z.ZodTypeAny, value: unknown) {
   const result = schema.safeParse(value)
@@ -123,5 +129,67 @@ describe('FieldIssueSchema (ADR-0011)', () => {
   it('round-trips a formatZodIssues entry', () => {
     const [issue] = formatZodIssues(z.object({ name: z.string() }).safeParse({ name: 1 }).error!)
     expect(FieldIssueSchema.safeParse(issue).success).toBe(true)
+  })
+})
+
+describe('serializeError() (issue #210)', () => {
+  it('flattens name, message and stack onto plain, enumerable fields', () => {
+    const err = new Error('boom')
+    const serialized = serializeError(err)
+    expect(serialized.name).toBe('Error')
+    expect(serialized.message).toBe('boom')
+    expect(serialized.stack).toEqual(expect.any(String))
+    // The whole point: a naive JSON.stringify-based logger must not lose this.
+    expect(JSON.parse(JSON.stringify(serialized))).toMatchObject({ name: 'Error', message: 'boom' })
+  })
+
+  it('walks a `cause` chain', () => {
+    const root = new Error('root cause')
+    const wrapped = new Error('wrapped', { cause: root })
+    const serialized = serializeError(wrapped)
+    expect(serialized.cause).toMatchObject({ name: 'Error', message: 'root cause' })
+  })
+
+  it('caps the `cause` chain depth and does not throw on a self-referencing cycle', () => {
+    const cyclic = new Error('cyclic', { cause: undefined })
+    cyclic.cause = cyclic
+    expect(() => serializeError(cyclic)).not.toThrow()
+    let depth = 0
+    let node: { cause?: unknown } | undefined = serializeError(cyclic)
+    while (node?.cause) {
+      depth++
+      node = node.cause as { cause?: unknown }
+      if (depth > 10) break // safety valve so a regression fails fast, not hangs
+    }
+    expect(depth).toBeLessThanOrEqual(5)
+  })
+
+  it('caps a long acyclic `cause` chain at the same depth', () => {
+    let err = new Error('level 0')
+    for (let i = 1; i <= 10; i++) {
+      err = new Error(`level ${i}`, { cause: err })
+    }
+    let depth = 0
+    let node: { cause?: unknown } | undefined = serializeError(err)
+    while (node?.cause) {
+      depth++
+      node = node.cause as { cause?: unknown }
+    }
+    expect(depth).toBeLessThanOrEqual(5)
+  })
+
+  it('serialises AggregateError.errors', () => {
+    const agg = new AggregateError([new Error('one'), new Error('two')], 'multiple failures')
+    const serialized = serializeError(agg)
+    expect(serialized.errors).toHaveLength(2)
+    expect(serialized.errors?.[0]).toMatchObject({ name: 'Error', message: 'one' })
+    expect(serialized.errors?.[1]).toMatchObject({ name: 'Error', message: 'two' })
+  })
+
+  it('does not crash on a non-Error throw and describes it structurally', () => {
+    expect(serializeError('boom')).toEqual({ name: 'string', message: 'boom' })
+    expect(serializeError(42)).toEqual({ name: 'number', message: '42' })
+    expect(serializeError(undefined)).toEqual({ name: 'undefined', message: 'undefined' })
+    expect(serializeError({ code: 'x' })).toEqual({ name: 'object', message: '[object Object]' })
   })
 })

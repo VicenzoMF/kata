@@ -61,6 +61,7 @@ Values:
 | `DEFAULT_MAX_BODY_SIZE` | const | The default byte cap `bodyLimit` enforces when no `maxBytes` is given. |
 | `buildErrorBody` | function | Build the unified error envelope (ADR-0008) as a plain object — `{ error, message, issues? }`. |
 | `formatZodIssues` | function | Convert a `ZodError` into the `FieldIssue[]` shape used in error envelopes. |
+| `serializeError` | function | Flatten an unhandled throw into a `SerializedError` — the shape Kata's own `logger.error` calls receive under `extra.err`. |
 | `ErrorBodySchema` | Zod schema | Zod schema for the error envelope; declare it behind a 4xx/5xx status in an `output` map. |
 | `FieldIssueSchema` | Zod schema | Zod schema for one structured field issue; composes `ErrorBodySchema`. |
 | `REQUEST_ID_HEADER` | const | The header (`x-request-id`) Kata reads an inbound correlation id from and echoes back. |
@@ -89,7 +90,9 @@ Types:
 | `SingletonKeys` | The singleton keys of a registry. |
 | `ScopedKeys` | The scoped keys of a registry — the only keys a middleware may `provides`/`set`. |
 | `ResolvedValue` | The value type a slot resolves to via `c.get`. |
-| `Logger` | The structured logger shape a `logger` singleton may satisfy for per-request logging. |
+| `Logger` | The structured logger shape a `logger` singleton may satisfy for per-request logging. `extra.err` arrives pre-flattened as a `SerializedError`, never a raw `Error`. |
+| `SerializedError` | The plain-data mirror of an `Error` — `{ name, message, stack?, cause?, errors? }` — that `logger.error` receives under `extra.err`. |
+| `LogExtra` | The `extra` payload type of every `Logger` method: open (`Record<string, unknown>`), with the reserved `err` key typed as `SerializedError`. |
 | `OutputValidationMode` | `'strict' \| 'log' \| 'off'` — how an output-schema mismatch is handled (ADR-0009). |
 | `ErrorBody` | The error-envelope object type: `{ error, message, issues? }`. |
 | `ErrorExtra` | The optional extras for `c.error` / `buildErrorBody`: `{ status?, issues? }`. |
