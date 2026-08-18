@@ -1,9 +1,11 @@
+import type { MiddlewareHandler } from 'hono'
 import { describe, expect, it } from 'vitest'
 import { z } from 'zod'
 
 import { defineContext } from '../context'
 import { bodyLimit, DEFAULT_MAX_BODY_SIZE } from './body-limit'
 import { cors } from './cors'
+import { fromHono } from './from-hono'
 import { secureHeaders } from './secure-headers'
 
 // A minimal kata app with one POST /echo route, parameterised by the `use`
@@ -30,6 +32,27 @@ function post(use: UseChain, body: unknown, headers: Record<string, string> = {}
     body: typeof body === 'string' ? body : JSON.stringify(body),
     headers: { 'content-type': 'application/json', ...headers },
   })
+}
+
+// A route whose handler returns a raw `Response` — the case that used to drop
+// every app-level header (issue #207) because it never goes through `c.json`.
+function buildRawApp(use: UseChain, body: string, headers: Record<string, string> = {}) {
+  const raw = defineRoute({
+    method: 'GET',
+    path: '/raw',
+    use,
+    input: {},
+    output: z.string(),
+    handler: () => new Response(body, { headers }),
+  })
+  return createApp({ modules: [{ raw }] })
+}
+
+// Wraps a plain Hono middleware the same way `cors()`/`secureHeaders()` do, for
+// exercising the header merge with a middleware that isn't one of the shipped
+// hardening middlewares (e.g. one that sets `set-cookie` or `content-type`).
+function honoMiddleware(handler: MiddlewareHandler): UseChain[number] {
+  return { __kata: 'middleware', provides: [], handler: fromHono(handler) }
 }
 
 describe('cors()', () => {
@@ -138,5 +161,59 @@ describe('composition + opt-in defaults', () => {
     expect(res.headers.get('access-control-allow-origin')).toBeNull()
     expect(res.headers.get('x-content-type-options')).toBeNull()
     expect(res.headers.get('x-frame-options')).toBeNull()
+  })
+})
+
+describe('handler-returned Response header merge (issue #207)', () => {
+  it('carries app-level headers onto a Response the handler built directly', async () => {
+    const app = buildRawApp(
+      [cors(), secureHeaders(), bodyLimit({ maxSize: 1024 })],
+      'id,name\n1,Ada\n',
+      { 'content-type': 'text/csv' },
+    )
+    const res = await app.request('/raw')
+
+    expect(res.status).toBe(200)
+    expect(res.headers.get('access-control-allow-origin')).toBe('*')
+    expect(res.headers.get('x-content-type-options')).toBe('nosniff')
+    expect(res.headers.get('x-frame-options')).toBe('SAMEORIGIN')
+    expect(res.headers.get('strict-transport-security')).toBe('max-age=15552000; includeSubDomains')
+    expect(res.headers.get('x-request-id')).not.toBeNull()
+    expect(await res.text()).toBe('id,name\n1,Ada\n')
+  })
+
+  it('does not overwrite a header the handler already set', async () => {
+    const setJsonContentType = honoMiddleware(async (c, next) => {
+      c.header('content-type', 'application/json')
+      await next()
+    })
+    const app = buildRawApp([setJsonContentType], 'id,name\n1,Ada\n', {
+      'content-type': 'text/csv',
+    })
+    const res = await app.request('/raw')
+
+    expect(res.headers.get('content-type')).toBe('text/csv')
+  })
+
+  it('appends a middleware-set cookie alongside a handler-set cookie, keeping both', async () => {
+    const setSessionCookie = honoMiddleware(async (c, next) => {
+      c.header('set-cookie', 'session=abc; Path=/', { append: true })
+      await next()
+    })
+    const app = buildRawApp([setSessionCookie], 'ok', { 'set-cookie': 'theme=dark; Path=/' })
+    const res = await app.request('/raw')
+
+    expect(res.headers.getSetCookie().sort()).toEqual(
+      ['session=abc; Path=/', 'theme=dark; Path=/'].sort(),
+    )
+  })
+
+  it('skips the merge entirely — never reads c.res — when no middleware touched headers', async () => {
+    const app = buildRawApp([], 'id,name\n1,Ada\n', { 'content-type': 'text/csv' })
+    const res = await app.request('/raw')
+
+    expect(res.status).toBe(200)
+    expect(res.headers.get('content-type')).toBe('text/csv')
+    expect(res.headers.get('x-request-id')).not.toBeNull()
   })
 })
