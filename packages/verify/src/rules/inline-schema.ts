@@ -33,6 +33,8 @@ function isGuardedFile(relPath: string): boolean {
 
 export const inlineSchema = {
   name: NAME,
+  description: 'Zod schemas live in *.schema.ts',
+  adr: 'ADR-0005',
   check(project) {
     const issues: Issue[] = []
     for (const file of project.files) {

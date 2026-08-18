@@ -35,6 +35,8 @@ function isGuardedFile(relPath: string): boolean {
 
 export const noDecorator = {
   name: NAME,
+  description: 'no decorators anywhere under src/',
+  adr: 'ADR-0002',
   check(project) {
     const issues: Issue[] = []
     for (const file of project.files) {

@@ -4,6 +4,8 @@ const NAME = 'kata/schema-file-naming'
 
 export const schemaFileNaming = {
   name: NAME,
+  description: 'domain module files are named <domain>.<suffix>',
+  adr: 'ADR-0016',
   check(project) {
     const issues: Issue[] = []
     for (const file of project.files) {

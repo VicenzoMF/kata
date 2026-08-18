@@ -77,6 +77,8 @@ type ChainEntry = {
 
 export const scopedSlotNotProvided = {
   name: NAME,
+  description: 'scoped c.get has a providing middleware',
+  adr: 'ADR-0004',
   check(project): RuleResult {
     const scoped = project.scopedKeys
     if (scoped === null || scoped === undefined) {

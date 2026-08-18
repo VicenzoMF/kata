@@ -12,6 +12,8 @@ const NAME = 'kata/no-raw-boundary-cast'
 
 export const noRawBoundaryCast = {
   name: NAME,
+  description: 'Hono boundary `as` casts are explicitly marked',
+  adr: 'ADR-0016',
   check(project) {
     const issues: Issue[] = []
 
