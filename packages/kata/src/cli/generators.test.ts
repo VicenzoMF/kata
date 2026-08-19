@@ -259,7 +259,7 @@ describe('renderExample* — `kata init` app skeleton (issue #200)', () => {
     expect(renderExampleHealthTest()).toContain("import { describe, expect, it } from 'vitest'")
     expect(renderExampleHealthTest()).toContain('checkHealth()')
     const hurl = renderExampleHealthHurl()
-    expect(hurl).toContain('GET http://localhost:3000/health')
+    expect(hurl).toContain('GET {{host}}/health')
     expect(hurl).toContain('jsonpath "$.status" == "ok"')
   })
 
@@ -285,9 +285,9 @@ describe('renderExample* — `kata init` app skeleton (issue #200)', () => {
     expect(route).not.toMatch(/\bz\./)
     expect(renderExampleGreetingsTest()).toContain("import { describe, expect, it } from 'vitest'")
     const hurl = renderExampleGreetingsHurl()
-    expect(hurl).toContain('POST http://localhost:3000/greetings')
+    expect(hurl).toContain('POST {{host}}/greetings')
     expect(hurl).toContain('greeting_id: jsonpath "$.id"')
-    expect(hurl).toContain('GET http://localhost:3000/greetings/{{greeting_id}}')
+    expect(hurl).toContain('GET {{host}}/greetings/{{greeting_id}}')
   })
 
   it('every generated source file ends in exactly one trailing newline', () => {
@@ -330,6 +330,12 @@ describe('renderExample* — `kata init` app skeleton (issue #200)', () => {
     expect(pkg.scripts.test).toBe('vitest run')
     expect(pkg.scripts.typecheck).toBe('tsc --noEmit')
     expect(pkg.scripts.verify).toBe('kata verify')
+    // Globbed, {{host}}-templated (#214): a module added later via `kata new`
+    // is covered with no edit here, and HURL_HOST can point the suite at a
+    // deployed environment instead of the localhost default.
+    expect(pkg.scripts.hurl).toBe(
+      'hurl --test --color --variable host=${HURL_HOST:-http://localhost:3000} src/modules/*/*.hurl',
+    )
     expect(pkg.dependencies.katajs).toBeDefined() // published as `katajs` (#199); bin stays `kata`
     expect(pkg.dependencies.hono).toBeDefined()
     expect(pkg.dependencies.zod).toBeDefined()
@@ -362,41 +368,58 @@ describe('renderExample* — `kata init` app skeleton (issue #200)', () => {
 })
 
 describe('renderModule* — `kata new <domain>` source files (Issue #102)', () => {
-  it('route imports service and schema, defines route with domain', () => {
+  it('route: POST + GET/:id, body/params schemas, a 404, no inline schema (mirrors greetings)', () => {
     const src = renderModuleRoute('ping')
     expect(src).toContain("import { defineRoute } from '../../context'")
-    expect(src).toContain("import { pingAction } from './ping.service'")
-    expect(src).toContain("import { PingSchema } from './ping.schema'")
+    expect(src).toContain(
+      "import { CreatePingBodySchema, PingParamsSchema, PingSchema } from './ping.schema'",
+    )
+    expect(src).toContain("import { createPing, getPing } from './ping.service'")
+    expect(src).toContain("method: 'POST'")
     expect(src).toContain("path: '/ping'")
+    expect(src).toContain('input: { body: CreatePingBodySchema }')
     expect(src).toContain('output: PingSchema')
-    expect(src).toContain('handler: () => pingAction()')
+    expect(src).toContain('handler: (c) => createPing(c.input.body)')
+    expect(src).toContain("method: 'GET'")
+    expect(src).toContain("path: '/ping/:id'")
+    expect(src).toContain('input: { params: PingParamsSchema }')
+    expect(src).toContain("c.error('not_found', 'Ping not found', { status: 404 })")
+    expect(src).not.toMatch(/\bz\./) // schemas imported by name (ADR-0005)
   })
 
-  it('service implements action', () => {
+  it('service creates and reads back via an in-memory store', () => {
     const src = renderModuleService('ping')
-    expect(src).toContain("import type { Ping } from './ping.schema'")
-    expect(src).toContain('export function pingAction(): Ping {')
-    expect(src).toContain("return { status: 'ok' }")
+    expect(src).toContain("import type { CreatePingBody, Ping } from './ping.schema'")
+    expect(src).toContain('export function createPing(input: CreatePingBody): Ping {')
+    expect(src).toContain('crypto.randomUUID()')
+    expect(src).toContain('export function getPing(id: string): Ping | null {')
   })
 
-  it('schema defines Zod object', () => {
+  it('schema defines the body/params/response Zod objects', () => {
     const src = renderModuleSchema('ping')
     expect(src).toContain("import { z } from 'zod'")
+    expect(src).toContain('export const CreatePingBodySchema = z.object({')
+    expect(src).toContain('export const PingParamsSchema = z.object({')
     expect(src).toContain('export const PingSchema = z.object({')
+    expect(src).toContain('export type CreatePingBody = z.infer<typeof CreatePingBodySchema>')
     expect(src).toContain('export type Ping = z.infer<typeof PingSchema>')
   })
 
-  it('test imports and asserts service output', () => {
+  it('test creates, reads back, and 404s on an unknown id', () => {
     const src = renderModuleTest('ping')
     expect(src).toContain("import { describe, expect, it } from 'vitest'")
-    expect(src).toContain("describe('pingAction', () => {")
+    expect(src).toContain("import { createPing, getPing } from './ping.service'")
+    expect(src).toContain("describe('ping.service', () => {")
+    expect(src).toContain('toBeNull()')
   })
 
-  it('hurl defines end-to-end API test', () => {
+  it('hurl: POST then GET by captured id, templated {{host}}', () => {
     const src = renderModuleHurl('ping')
-    expect(src).toContain('GET {{host}}/ping')
+    expect(src).toContain('POST {{host}}/ping')
+    expect(src).toContain('ping_id: jsonpath "$.id"')
+    expect(src).toContain('GET {{host}}/ping/{{ping_id}}')
     expect(src).toContain('HTTP 200')
-    expect(src).toContain('jsonpath "$.status" == "ok"')
+    expect(src).toContain('jsonpath "$.name" == "Ada"')
   })
 })
 

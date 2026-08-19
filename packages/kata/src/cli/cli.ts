@@ -7,6 +7,7 @@ import { runCli } from '@kata/verify'
 
 import { type InitResult, init } from './init'
 import { createModule, type NewResult } from './new'
+import { pmCommands } from './package-manager'
 
 export type ParsedArgs = {
   command: string | undefined
@@ -102,7 +103,11 @@ const STATUS_MARK: Record<InitResult['files'][number]['status'], string> = {
   skipped: '  skip',
 }
 
-/** The `cd … && pnpm install && …` block printed after a successful `init`. */
+/** The `cd … && <install> && …` block printed after a successful `init`, in
+ *  the detected package manager's own spelling (issue #214) — a bare `kata`
+ *  after `--minimal` guidance is fine (nothing to run yet), but a full scaffold
+ *  must print commands that actually work on the first try, not a pnpm-only
+ *  script + a `kata` bin that is never on PATH after an npm/yarn/bun install. */
 function nextSteps(result: InitResult): string[] {
   if (result.minimal) {
     return [
@@ -110,12 +115,13 @@ function nextSteps(result: InitResult): string[] {
       'the PreToolUse/Stop hooks run `kata verify` and `pnpm test` for you.',
     ]
   }
+  const pm = pmCommands(result.packageManager)
   const steps = ['Next steps:']
   if (result.dir !== '.') steps.push(`  cd ${result.dir}`)
-  steps.push('  pnpm install')
-  steps.push('  pnpm dev          # → http://localhost:3000/health')
-  steps.push('  kata verify       # fast deterministic checks')
-  steps.push('  pnpm test         # unit tests')
+  steps.push(`  ${pm.install}`)
+  steps.push(`  ${pm.run('dev')}          # → http://localhost:3000/health`)
+  steps.push(`  ${pm.exec('kata verify')}       # fast deterministic checks`)
+  steps.push(`  ${pm.run('test')}         # unit tests`)
   return steps
 }
 
@@ -138,11 +144,29 @@ export function formatResult(result: InitResult): string {
   return `${lines.join('\n')}\n`
 }
 
-/** Human-readable summary of what `new` did. */
+/** Human-readable summary of what `new` did, including whether it wired the
+ *  module into `src/app.ts` (issue #214) — a module that never got imported
+ *  and registered is dead code no matter how correct its five files are. */
 export function formatNewResult(result: NewResult): string {
   const lines = [`kata new ${result.domain} → ${result.cwd}`]
   for (const file of result.files) {
     lines.push(`  ${STATUS_MARK[file.status]}  ${file.path}`)
+  }
+
+  const wiring = result.appWiring
+  if (wiring.status === 'wired') {
+    lines.push(`  ${STATUS_MARK.overwritten}  src/app.ts`)
+  } else if (wiring.status === 'already-wired') {
+    lines.push(`  ${STATUS_MARK.skipped}  src/app.ts (already wired)`)
+  } else if (wiring.status === 'unrecognized' || wiring.status === 'missing') {
+    lines.push('')
+    lines.push(
+      wiring.status === 'missing'
+        ? 'src/app.ts not found. Wire the module up yourself, adding:'
+        : "src/app.ts doesn't match the expected createApp({ modules: [...] }) shape.",
+    )
+    if (wiring.status === 'unrecognized') lines.push('Wire it up yourself, adding:')
+    for (const paste of wiring.pasteLines) lines.push(`  ${paste}`)
   }
 
   if (result.files.some((file) => file.status === 'skipped')) {

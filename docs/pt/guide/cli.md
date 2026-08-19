@@ -65,9 +65,17 @@ Next steps:
   cd my-app
   pnpm install
   pnpm dev          # → http://localhost:3000/health
-  kata verify       # fast deterministic checks
+  pnpm exec kata verify       # fast deterministic checks
   pnpm test         # unit tests
 ```
+
+Os comandos impressos combinam com o gerenciador de pacotes que rodou o `kata
+init` — detectado via `npm_config_user_agent` (definido por npm/pnpm/yarn/bun
+ao rodar um script ou `dlx`/`npx`/`exec`), com fallback para um lockfile já
+presente no diretório de destino e, por fim, `npm`. No npm este bloco imprime
+`npm install` / `npm run dev` / `npx kata verify` / `npm run test` — o binário
+`kata` nunca está no `PATH` depois de uma instalação local, então `kata verify`
+sozinho falharia ao pé da letra para quem não usa pnpm.
 
 ### Os arquivos do harness
 
@@ -259,7 +267,9 @@ export const app = createApp({
 ```
 
 Faça o app crescer adicionando módulos em `src/modules/<domain>/` e listando-os
-em `createApp({ modules: [...] })`. O `kata new` da próxima seção faz o boilerplate.
+em `createApp({ modules: [...] })`. O `kata new` da próxima seção faz o
+boilerplate — incluindo a fiação do módulo, que já fica no ar assim que o
+comando retorna.
 
 ## `kata new`
 
@@ -276,13 +286,25 @@ kata new orders → /path/to/project
   create  src/modules/orders/orders.schema.ts
   create  src/modules/orders/orders.test.ts
   create  src/modules/orders/orders.hurl
+  update  src/app.ts
 ```
 
 Ele escreve o esqueleto de cinco arquivos do módulo — route / service / schema /
-test / hurl — em `src/modules/<domain>/`. Registre-o no `src/app.ts` importando o
-módulo de rota e adicionando-o a `createApp({ modules: [...] })`. Como o
-`kata init`, ele pula arquivos existentes a menos que você passe `--force`, e
-respeita `--cwd`.
+test / hurl — em `src/modules/<domain>/`, espelhando o formato do exemplo
+`greetings`: um `POST /orders` que valida um body e um `GET /orders/:id` que
+valida um parâmetro de rota e retorna 404 quando não encontra — um par
+create/read funcional, não um stub de uma linha.
+
+Ele também conecta o módulo em `src/app.ts` por você: insere `import * as orders
+from './modules/orders/orders.route'` na posição ordenada e adiciona `orders` a
+`createApp({ modules: [...] })`, então a rota já fica no ar — sem edição manual,
+e rodar `kata new orders` de novo é um no-op em `app.ts` (ele detecta a entrada
+já existente). Se `app.ts` não bater com o formato esperado de
+`createApp({ modules: [...] })`, ele desiste em vez de adivinhar e imprime as
+duas linhas para você colar manualmente.
+
+Como o `kata init`, ele pula arquivos existentes a menos que você passe
+`--force`, e respeita `--cwd`.
 
 ## `kata verify`
 

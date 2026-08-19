@@ -131,6 +131,18 @@ describe('init() — full project scaffold (issue #200)', () => {
     expect(result.minimal).toBe(false)
   })
 
+  it('reports the package manager detected from env (issue #214)', async () => {
+    const npm = await init({ cwd: dir, env: { npm_config_user_agent: 'npm/10.2.0 node/v20' } })
+    expect(npm.packageManager).toBe('npm')
+
+    const pnpm = await init({
+      cwd: dir,
+      force: true,
+      env: { npm_config_user_agent: 'pnpm/8.6.0 npm/? node/v20' },
+    })
+    expect(pnpm.packageManager).toBe('pnpm')
+  })
+
   it('is idempotent: a second run skips everything', async () => {
     await init({ cwd: dir })
     const second = await init({ cwd: dir })

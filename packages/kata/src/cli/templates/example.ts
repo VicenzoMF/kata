@@ -142,12 +142,12 @@ describe('checkHealth', () => {
 })
 `
 
-/** `src/modules/health/health.hurl` — API E2E (literal host; run against a live server). */
+/** `src/modules/health/health.hurl` — API E2E ({{host}}; run against a live server). */
 export const exampleHealthHurlSource = `# API E2E for the health module. Run with the server already listening:
 #   pnpm start    # in another terminal
 #   pnpm hurl
 
-GET http://localhost:3000/health
+GET {{host}}/health
 HTTP 200
 [Asserts]
 jsonpath "$.status" == "ok"
@@ -258,7 +258,7 @@ export const exampleGreetingsHurlSource = `# API E2E for the greetings module. R
 #   pnpm hurl
 
 # Create a greeting, capture the returned id, then read it back.
-POST http://localhost:3000/greetings
+POST {{host}}/greetings
 Content-Type: application/json
 { "name": "Ada" }
 HTTP 200
@@ -267,7 +267,7 @@ greeting_id: jsonpath "$.id"
 [Asserts]
 jsonpath "$.message" == "Hello, Ada!"
 
-GET http://localhost:3000/greetings/{{greeting_id}}
+GET {{host}}/greetings/{{greeting_id}}
 HTTP 200
 [Asserts]
 jsonpath "$.message" == "Hello, Ada!"
@@ -363,7 +363,11 @@ export function examplePackageJson(name: string): Record<string, unknown> {
       test: 'vitest run',
       typecheck: 'tsc --noEmit',
       verify: 'kata verify',
-      hurl: 'hurl --test --color src/modules/health/health.hurl src/modules/greetings/greetings.hurl',
+      // `{{host}}` in every .hurl file, resolved by --variable; override the
+      // default with HURL_HOST=... to point the suite at a deployed env
+      // instead of a local server. Globbed (not a fixed file list) so a
+      // module added later via `kata new` is picked up without editing this.
+      hurl: 'hurl --test --color --variable host=${HURL_HOST:-http://localhost:3000} src/modules/*/*.hurl',
       format: 'biome check --write .',
       lint: 'oxlint',
     },
