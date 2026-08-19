@@ -7,8 +7,11 @@ import {
   renderClaudeMd,
   renderClaudeSettings,
   renderCodexHooks,
+  renderExampleAdrReadme,
+  renderExampleAdrTemplate,
   renderExampleApp,
   renderExampleContext,
+  renderExampleEnvExample,
   renderExampleGitignore,
   renderExampleGreetingsHurl,
   renderExampleGreetingsRoute,
@@ -196,6 +199,14 @@ describe('renderAgentsMd() / renderClaudeMd() — issue #31', () => {
     expect(md).toContain('--no-verify')
   })
 
+  it("distinguishes this app's own ADRs from a version-pinned framework link (issue #213)", () => {
+    const md = renderAgentsMd()
+    expect(md).toContain("This app's own decisions live as ADRs under `docs/adr/`")
+    expect(md).toMatch(/https:\/\/github\.com\/VicenzoMF\/kata\/tree\/v\d+\.\d+\.\d+\/docs\/adr/)
+    // Never a relative path into a directory the consumer's project doesn't have.
+    expect(md).not.toMatch(/`docs\/adr\/\d{4}-/)
+  })
+
   it('CLAUDE.md imports AGENTS.md via the @-include directive', () => {
     expect(renderClaudeMd()).toContain('@AGENTS.md')
   })
@@ -307,11 +318,41 @@ describe('renderExample* — `kata init` app skeleton (issue #200)', () => {
       renderExampleGreetingsTest(),
       renderExampleGreetingsHurl(),
       renderExampleGitignore(),
+      renderExampleEnvExample(),
+      renderExampleAdrTemplate(),
+      renderExampleAdrReadme(),
     ]
     for (const src of sources) {
       expect(src.endsWith('\n')).toBe(true)
       expect(src.endsWith('\n\n')).toBe(false)
     }
+  })
+
+  it('.gitignore excludes app state (data/) and the real .env (issue #213)', () => {
+    const gitignore = renderExampleGitignore()
+    expect(gitignore).toContain('data/')
+    expect(gitignore).toContain('.env')
+  })
+
+  it('.env.example documents JWT_SECRET, the one env var kata/jwt requires (issue #213)', () => {
+    expect(renderExampleEnvExample()).toContain('JWT_SECRET=')
+  })
+
+  it('docs/adr/_template.md mirrors the ADR skeleton (issue #213)', () => {
+    const template = renderExampleAdrTemplate()
+    expect(template).toContain('# ADR-NNNN:')
+    expect(template).toContain('## Decision')
+    expect(template).toContain('## Consequences')
+  })
+
+  it('docs/adr/README.md distinguishes app ADRs from a version-pinned framework link (issue #213)', () => {
+    const readme = renderExampleAdrReadme()
+    expect(readme).toContain("this app's own")
+    expect(readme).toMatch(
+      /https:\/\/github\.com\/VicenzoMF\/kata\/tree\/v\d+\.\d+\.\d+\/docs\/adr/,
+    )
+    // Never a relative path into a directory the consumer's project doesn't have.
+    expect(readme).not.toMatch(/`docs\/adr\/\d{4}-/)
   })
 
   it('package.json is named after the app and carries the kata + boot + harness deps', () => {

@@ -413,7 +413,7 @@ const CONTEXT_HEADERS_TOUCHED = Symbol('kata.context-headers-touched')
 /**
  * Marks that a Hono middleware wrapped by `fromHono` ran and may have set
  * headers on `c.res` (`secureHeaders()`, `cors()`, …) — the header half of the
- * ADR-0016 response seam (issue #207). Called from `from-hono.ts`, checked by
+ * ADR-0020 response seam (issue #207). Called from `from-hono.ts`, checked by
  * `applyResponseHeaders` before it reads `c.res`: that getter *materialises* a
  * Response, so a request with no app-level middleware must not pay for it.
  */
@@ -429,7 +429,7 @@ function contextHeadersTouched(c: import('hono').Context): boolean {
 
 /**
  * Merge `source` (headers a Hono middleware set on `c.res`) onto `target` (the
- * response kata is about to send) — additive only, per ADR-0016 / issue #207:
+ * response kata is about to send) — additive only, per ADR-0020 / issue #207:
  * a header the handler already set on its own `Response` wins, and
  * `set-cookie` is appended rather than replaced since it is legitimately
  * multi-valued — a middleware cookie and a handler cookie must both survive.
@@ -665,7 +665,7 @@ function buildOutputResponse<R extends Registry>(
  * its status (ADR-0011), as a shape check. The original `Response` is forwarded
  * verbatim on success — Kata never re-serialises a response the handler built, so
  * a custom header or content type the handler set is preserved. `finalizeResponse`
- * merges in app-level headers afterwards (ADR-0016, issue #207); it is not this
+ * merges in app-level headers afterwards (ADR-0020, issue #207); it is not this
  * function's concern. Reached only in the map form, for a declared status, when
  * the mode is not `off`.
  */
@@ -717,7 +717,7 @@ function outputMismatchResponse(c: import('hono').Context): Response {
 }
 
 /**
- * Merge app-level response headers (ADR-0016, issue #207) and echo the
+ * Merge app-level response headers (ADR-0020, issue #207) and echo the
  * correlation id (issue #63) onto the outgoing response. Both writes share one
  * `Headers` object, so an immutable one — `Response.redirect()`, or a
  * `Response` handed back straight from `fetch()` — is handled once: rebuild a
@@ -751,7 +751,7 @@ function applyResponseHeaders(
 
 /**
  * Final step of every request (issue #63): merge app-level response headers
- * (ADR-0016, issue #207), echo the correlation id, and emit the per-request
+ * (ADR-0020, issue #207), echo the correlation id, and emit the per-request
  * log line. Runs for every outcome — success, validation failure, middleware
  * short-circuit, the 5xx boundary, or an unmatched route (issue #209) — so no
  * response path is left behind. `route` is widened to a bare descriptor (not
@@ -786,7 +786,7 @@ function finalizeResponse<R extends Registry>(
  * `Response` a handler returns without calling `next()` (issue #209 factors
  * this out of `registerRoute` so `notFound` can run the same ADR-0012 global
  * chain — no route `use:`, since there is no route — before it ever builds a
- * 404/405; this is also why the CORS preflight responder ADR-0016 documents,
+ * 404/405; this is also why the CORS preflight responder ADR-0020 documents,
  * once declared as a global, answers `OPTIONS` itself instead of falling into
  * the 405 path below). `onComplete` runs once every entry has called `next()`
  * through to the end, and supplies whatever response follows — a route's

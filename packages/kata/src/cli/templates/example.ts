@@ -273,12 +273,24 @@ HTTP 200
 jsonpath "$.message" == "Hello, Ada!"
 `
 
-/** `.gitignore` for the generated app — node_modules + common build output. */
+/** `.gitignore` for the generated app — node_modules, common build output, app
+ *  state (`data/`), and the real `.env` (only `.env.example` is committed). */
 export const exampleGitignoreSource = `node_modules
 dist
+data/
+.env
 *.log
 .DS_Store
 lefthook-local.yml
+`
+
+/** \`.env.example\` for the generated app (issue #213): documents \`JWT_SECRET\`,
+ *  the one env var \`kata/jwt\` requires, so a newcomer isn't left to guess the
+ *  production-secret convention. Emitted only-if-absent like the other
+ *  manifests. */
+export const exampleEnvExampleSource = `# Secret used to sign/verify JWTs (see AGENTS.md and the \`katajs/jwt\` guide).
+# Generate one with: node -e "console.log(require('node:crypto').randomBytes(32).toString('hex'))"
+JWT_SECRET=
 `
 
 /** `README.md` for the generated app — quickstart + the example endpoints. */

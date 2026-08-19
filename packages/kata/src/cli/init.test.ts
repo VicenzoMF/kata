@@ -35,7 +35,10 @@ const GREETINGS_HURL = 'src/modules/greetings/greetings.hurl'
 const PACKAGE_JSON = 'package.json'
 const TSCONFIG_JSON = 'tsconfig.json'
 const GITIGNORE = '.gitignore'
+const ENV_EXAMPLE = '.env.example'
 const README = 'README.md'
+const ADR_TEMPLATE = 'docs/adr/_template.md'
+const ADR_README = 'docs/adr/README.md'
 
 let dir = ''
 
@@ -105,6 +108,18 @@ describe('init() — full project scaffold (issue #200)', () => {
     }
   })
 
+  it('writes .env.example and the app-local ADR scaffold (issue #213)', async () => {
+    const result = await init({ cwd: dir })
+
+    for (const path of [ENV_EXAMPLE, ADR_TEMPLATE, ADR_README]) {
+      expect(statusOf(result, path)).toBe('created')
+    }
+    expect(await readFile(join(dir, ENV_EXAMPLE), 'utf8')).toContain('JWT_SECRET=')
+    expect(await readFile(join(dir, ADR_README), 'utf8')).toMatch(
+      /github\.com\/VicenzoMF\/kata\/tree\/v\d+\.\d+\.\d+\/docs\/adr/,
+    )
+  })
+
   it('writes exactly what the generators render', async () => {
     const result = await init({ cwd: dir })
 
@@ -120,7 +135,7 @@ describe('init() — full project scaffold (issue #200)', () => {
   it('creates the harness parent directories', async () => {
     await init({ cwd: dir })
 
-    const subs = ['.claude', '.codex', '.agents', 'src/modules/greetings']
+    const subs = ['.claude', '.codex', '.agents', 'src/modules/greetings', 'docs/adr']
     const present = await Promise.all(subs.map((s) => exists(join(dir, s))))
     expect(present).toEqual(subs.map(() => true))
   })
@@ -147,7 +162,7 @@ describe('init() — full project scaffold (issue #200)', () => {
     await init({ cwd: dir })
     const second = await init({ cwd: dir })
 
-    for (const path of [CLAUDE, APP_TS, PACKAGE_JSON, GREETINGS_ROUTE]) {
+    for (const path of [CLAUDE, APP_TS, PACKAGE_JSON, GREETINGS_ROUTE, ENV_EXAMPLE, ADR_README]) {
       expect(statusOf(second, path)).toBe('skipped')
     }
   })
@@ -182,8 +197,10 @@ describe('init({ minimal: true }) — harness only', () => {
     expect(statusOf(result, APP_TS)).toBeUndefined()
     expect(statusOf(result, PACKAGE_JSON)).toBeUndefined()
     expect(statusOf(result, BIOME)).toBeUndefined()
+    expect(statusOf(result, ADR_README)).toBeUndefined()
     expect(await exists(join(dir, MAIN_TS))).toBe(false)
     expect(await exists(join(dir, PACKAGE_JSON))).toBe(false)
+    expect(await exists(join(dir, ADR_README))).toBe(false)
   })
 })
 
@@ -214,6 +231,9 @@ describe('init() — overwrite / idempotency rules', () => {
     await seed(OXLINT, 'KEEP-OX')
     await seed(GITIGNORE, 'KEEP-IGNORE')
     await seed(README, 'KEEP-README')
+    await seed(ENV_EXAMPLE, 'KEEP-ENV')
+    await seed(ADR_TEMPLATE, 'KEEP-ADR-TEMPLATE')
+    await seed(ADR_README, 'KEEP-ADR-README')
 
     const result = await init({ cwd: dir, force: true })
 
@@ -224,6 +244,9 @@ describe('init() — overwrite / idempotency rules', () => {
       [OXLINT, 'KEEP-OX'],
       [GITIGNORE, 'KEEP-IGNORE'],
       [README, 'KEEP-README'],
+      [ENV_EXAMPLE, 'KEEP-ENV'],
+      [ADR_TEMPLATE, 'KEEP-ADR-TEMPLATE'],
+      [ADR_README, 'KEEP-ADR-README'],
     ] as const
     for (const [path] of cases) expect(statusOf(result, path)).toBe('skipped')
     const contents = await Promise.all(cases.map(([path]) => readFile(join(dir, path), 'utf8')))
