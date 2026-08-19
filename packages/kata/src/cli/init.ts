@@ -22,8 +22,11 @@ import {
   renderClaudeMd,
   renderClaudeSettings,
   renderCodexHooks,
+  renderExampleAdrReadme,
+  renderExampleAdrTemplate,
   renderExampleApp,
   renderExampleContext,
+  renderExampleEnvExample,
   renderExampleGitignore,
   renderExampleGreetingsHurl,
   renderExampleGreetingsRoute,
@@ -139,7 +142,12 @@ function appTargets(name: string): readonly Target[] {
     { path: 'package.json', render: () => renderExamplePackageJson(name), onlyIfAbsent: true },
     { path: 'tsconfig.json', render: renderExampleTsconfig, onlyIfAbsent: true },
     { path: '.gitignore', render: renderExampleGitignore, onlyIfAbsent: true },
+    { path: '.env.example', render: renderExampleEnvExample, onlyIfAbsent: true },
     { path: 'README.md', render: () => renderExampleReadme(name), onlyIfAbsent: true },
+    // This app's own ADRs (issue #213), separate from Kata's framework ADRs
+    // (linked from AGENTS.md instead of duplicated here).
+    { path: 'docs/adr/_template.md', render: renderExampleAdrTemplate, onlyIfAbsent: true },
+    { path: 'docs/adr/README.md', render: renderExampleAdrReadme, onlyIfAbsent: true },
   ]
 }
 

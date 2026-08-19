@@ -5,7 +5,7 @@ const NAME = 'kata/schema-file-naming'
 export const schemaFileNaming = {
   name: NAME,
   description: 'domain module files are named <domain>.<suffix>',
-  adr: 'ADR-0016',
+  adr: 'ADR-0018',
   check(project) {
     const issues: Issue[] = []
     for (const file of project.files) {
@@ -33,7 +33,7 @@ export const schemaFileNaming = {
           line: 1,
           column: 1,
           message: `File ${filename} violates the naming convention. Expected one of: ${domain}.{route,service,schema}.ts`,
-          why: 'ADR-0016: files within a domain module must be named <domain>.<suffix>. Ad-hoc file names dilute findability and introduce cognitive load.',
+          why: 'ADR-0018: files within a domain module must be named <domain>.<suffix>. Ad-hoc file names dilute findability and introduce cognitive load.',
           fix: `Rename the file to match the ${domain} domain (e.g. ${domain}.schema.ts) or move it out of the domain module.`,
           example: {
             bad: `src/modules/${domain}/auth.schema.ts\nsrc/modules/${domain}/utils.ts`,

@@ -1,4 +1,4 @@
-# ADR-0016: Middleware ordering with provides dependencies
+# ADR-0017: Middleware ordering with provides dependencies
 
 - **Status:** Accepted
 - **Date:** 2026-06-20

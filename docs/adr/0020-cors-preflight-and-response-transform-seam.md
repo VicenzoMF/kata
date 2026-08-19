@@ -1,4 +1,4 @@
-# ADR-0016: CORS preflight synthesis + middleware response-transform seam
+# ADR-0020: CORS preflight synthesis + middleware response-transform seam
 
 - **Status:** Accepted
 - **Date:** 2026-06-22
@@ -217,7 +217,7 @@ but as a redirect *to* `fromHonoTransform`, not as a dead end.
 
 ## Companion rules
 
-Mechanical enforcement of this ADR will live in `0016.rules.ts` (archgate
+Mechanical enforcement of this ADR will live in `0020.rules.ts` (archgate
 pattern), implemented with the `kata verify` rule engine. Rule IDs introduced:
 
 - `kata/transform-via-from-hono` — a known response-transformer (`compress`,

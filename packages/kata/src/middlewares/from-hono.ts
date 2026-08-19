@@ -21,10 +21,10 @@ import type { Registry } from '../types'
  * This runs the wrapped middleware's post-`next` logic BEFORE the downstream
  * handler, so it is correct for middleware that only set response headers or
  * reject a request — not for response-transformers (compression, ETag) that
- * must observe the final body. For those, ADR-0016 introduces an opt-in
+ * must observe the final body. For those, ADR-0020 introduces an opt-in
  * `fromHonoTransform()` that wires a real `next` and threads Kata's final
  * `Response` back through the wrapped middleware. See
- * `docs/adr/0016-cors-preflight-and-response-transform-seam.md`.
+ * https://github.com/VicenzoMF/kata/blob/v0.1.0/docs/adr/0020-cors-preflight-and-response-transform-seam.md.
  *
  * Headers the wrapped middleware set land on `c.res` here, not on the
  * `Response` the route pipeline eventually builds — those are merged onto it
