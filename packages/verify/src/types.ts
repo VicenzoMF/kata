@@ -149,6 +149,10 @@ export type Project = {
 
 export type Rule = {
   readonly name: string
+  /** One-line summary rendered by `--help`. Required so `--help` cannot drift from `rules`. */
+  readonly description: string
+  /** ADR this rule enforces, e.g. `'ADR-0004'`. */
+  readonly adr: string
   readonly check: (project: Project) => readonly Issue[] | RuleResult
 }
 

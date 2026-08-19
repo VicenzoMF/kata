@@ -26,3 +26,6 @@ export type SingletonKeys<R extends Registry> = {
 export type ScopedKeys<R extends Registry> = {
   [K in keyof R]: R[K] extends Scoped<unknown> ? K : never
 }[keyof R]
+
+/** The value type a scoped slot holds — the same projection `RouteContext.get` uses. */
+export type SlotValue<R extends Registry, K extends ScopedKeys<R>> = ResolvedValue<R[K]>

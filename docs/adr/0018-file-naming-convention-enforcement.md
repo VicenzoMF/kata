@@ -1,4 +1,4 @@
-# ADR-0016: File-naming convention enforcement
+# ADR-0018: File-naming convention enforcement
 
 - **Status:** Accepted
 - **Date:** 2026-06-20

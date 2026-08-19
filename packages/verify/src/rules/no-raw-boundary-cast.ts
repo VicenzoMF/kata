@@ -1,5 +1,5 @@
 /**
- * Rule: `kata/no-raw-boundary-cast` (ADR-0016).
+ * Rule: `kata/no-raw-boundary-cast` (ADR-0019).
  *
  * Disallows raw `as never` and `as unknown` casts, requiring a
  * `// kata-allow: hono-boundary` comment to document their necessity.
@@ -12,6 +12,8 @@ const NAME = 'kata/no-raw-boundary-cast'
 
 export const noRawBoundaryCast = {
   name: NAME,
+  description: 'Hono boundary `as` casts are explicitly marked',
+  adr: 'ADR-0019',
   check(project) {
     const issues: Issue[] = []
 
@@ -52,7 +54,7 @@ export const noRawBoundaryCast = {
           line: lineAndChar.line,
           column: lineAndChar.column,
           message: `Raw \`as ${isNever ? 'never' : 'unknown'}\` cast is not allowed without a \`// kata-allow: hono-boundary\` marker`,
-          why: 'ADR-0016: Hono boundary casts must be explicitly marked to prevent uncontrolled type circumvention.',
+          why: 'ADR-0019: Hono boundary casts must be explicitly marked to prevent uncontrolled type circumvention.',
           fix: 'Add `// kata-allow: hono-boundary` on the line preceding this cast.',
           example: {
             bad: 'const store = c.get(SCOPED_STORE as never)',

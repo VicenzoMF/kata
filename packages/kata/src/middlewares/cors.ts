@@ -26,11 +26,11 @@ export type CorsOptions = NonNullable<Parameters<typeof honoCors>[0]>
  * Preflight: today kata registers a handler only for a route's declared method
  * and has no implicit `OPTIONS` route, so a browser preflight (`OPTIONS`) is not
  * intercepted by `cors()` in a `use` chain — it still only sets the CORS headers
- * on the actual response. ADR-0016 decides to close this gap by auto-synthesizing
+ * on the actual response. ADR-0020 decides to close this gap by auto-synthesizing
  * an `OPTIONS` responder for any path bearing `cors()`; until that lands, apply
  * CORS at the app level on the Hono instance returned by `createApp`
  * (`app.use('*', ...)`) for full preflight handling. See
- * `docs/adr/0016-cors-preflight-and-response-transform-seam.md`.
+ * https://github.com/VicenzoMF/kata/blob/v0.1.0/docs/adr/0020-cors-preflight-and-response-transform-seam.md.
  */
 export function cors<R extends Registry = Registry>(options?: CorsOptions): Middleware<R> {
   return {

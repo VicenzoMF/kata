@@ -23,6 +23,8 @@ const NAME = 'kata/no-route-without-input-schema'
 
 export const noRouteWithoutInputSchema = {
   name: NAME,
+  description: 'every defineRoute declares input',
+  adr: 'ADR-0003',
   check(project) {
     const issues: Issue[] = []
     for (const file of project.files) {

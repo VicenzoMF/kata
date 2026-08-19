@@ -258,17 +258,20 @@ array.
 ### `guard`
 
 ```ts
-guard<R extends Registry, C = unknown>(
-  options: GuardOptions<R, C>,
+guard<R extends Registry, const S extends ScopedKeys<R> = 'currentUser'>(
+  options: GuardOptions<R, S>,
 ): Middleware<R>['handler']
 ```
 
-The general form. `C` is your assertion of the slot value's type.
+`S` is the slot's *key*, not its value type — `authorize`'s parameter is derived
+from `R` via `SlotValue<R, S>`, the same projection `RouteContext.get` uses. You
+supply `R` explicitly; `S` is inferred from `options.slot` (or defaults to
+`'currentUser'`), never passed as an explicit second type argument.
 
 ```ts
-type GuardOptions<R extends Registry, C = unknown> = {
-  slot?: string
-  authorize: (claims: C, c: MiddlewareContext<R>) => boolean | Promise<boolean>
+type GuardOptions<R extends Registry, S extends ScopedKeys<R> = 'currentUser'> = {
+  slot?: S
+  authorize: (claims: SlotValue<R, S>, c: MiddlewareContext<R>) => boolean | Promise<boolean>
   code?: string
   message?: string
 }
@@ -277,7 +280,7 @@ type GuardOptions<R extends Registry, C = unknown> = {
 | Field | Type | Effect |
 | --- | --- | --- |
 | `authorize` | `(claims, c) => boolean \| Promise<boolean>` | Predicate over the slot value. Return `false` to reject with 403 (required). |
-| `slot?` | `string` | Slot the guard reads. Default `'currentUser'`. |
+| `slot?` | `S extends ScopedKeys<R>` | Slot the guard reads. Default `'currentUser'`. Must be a real scoped key of `R`. |
 | `code?` | `string` | 403 envelope `error` code. Default `'forbidden'`. |
 | `message?` | `string` | 403 envelope message. Default `'Insufficient permissions'`. |
 
@@ -286,7 +289,7 @@ import { guard } from 'katajs/jwt'
 
 const requireOwner = defineMiddleware({
   provides: [] as const,
-  handler: guard<AppRegistry, User>({
+  handler: guard<AppRegistry>({
     authorize: (user, c) => user.id === c.raw.req.param('id'),
     code: 'forbidden',
     message: 'Not your resource',
@@ -294,18 +297,29 @@ const requireOwner = defineMiddleware({
 })
 ```
 
+::: warning Breaking change (#211)
+`slot` was a bare `string` and `C` (now `S`) an unchecked assertion of the slot
+value's type — `guard<R, Membership>({ slot: 'currentOrg', authorize: (m) =>
+m.role === 'owner' })` compiled even though `currentOrg` holds an `Org`, and
+403'd every request at runtime. `slot` is now `S extends ScopedKeys<R>` and
+`authorize`'s claims type is derived from `R`, so a wrong `slot` / predicate
+pairing is now a `tsc` error. Drop any explicit second type argument you were
+passing — it no longer means "the claims type", and the old usage will not
+satisfy the new `ScopedKeys<R>` constraint.
+:::
+
 ### `requireRole`
 
 ```ts
-requireRole<R extends Registry>(
+requireRole<R extends Registry, const S extends ScopedKeys<R> = 'currentUser'>(
   role: string | readonly string[],
-  options?: { slot?: string },
+  options?: { slot?: S },
 ): Middleware<R>['handler']
 ```
 
 Sugar over `guard`. Allow only when the slot value's `role` is (one of) `role`.
-Reads the default `currentUser` slot (override via `options.slot`) and rejects
-with the default 403 `forbidden` envelope.
+Reads the default `currentUser` slot (override via `options.slot`, inferred the
+same way as `guard`'s) and rejects with the default 403 `forbidden` envelope.
 
 ```ts
 use: [requireUser, requireRole('admin')]
@@ -315,16 +329,17 @@ use: [requireUser, requireRole(['admin', 'editor'])]
 ### `requireClaim`
 
 ```ts
-requireClaim<R extends Registry, C extends Record<string, unknown> = Record<string, unknown>>(
+requireClaim<R extends Registry, const S extends ScopedKeys<R> = 'currentUser'>(
   key: string,
   expected: unknown | ((value: unknown) => boolean),
-  options?: { slot?: string },
+  options?: { slot?: S },
 ): Middleware<R>['handler']
 ```
 
 Sugar over `guard`. Allow only when the slot value's claim at `key` matches
 `expected` — by strict equality, or by predicate when `expected` is a function.
-Reads the default `currentUser` slot (override via `options.slot`).
+Reads the default `currentUser` slot (override via `options.slot`, inferred the
+same way as `guard`'s).
 
 ```ts
 // strict equality
@@ -345,10 +360,11 @@ handler: requireClaim('plan', (v) => v === 'pro' || v === 'team')
 | `JwtError` | A verify failure: `{ code, message, issues? }`. |
 | `JwtVerifyResult<T>` | The `verifyJwt` result: `{ ok: true, claims }` or `{ ok: false, error }`. |
 | `JwtAuthOptions<S, R>` | Options for `jwtAuth`. |
-| `GuardOptions<R, C>` | Options for `guard`. |
+| `GuardOptions<R, S>` | Options for `guard`. |
 
-`Registry`, `Middleware`, `MiddlewareContext`, and `FieldIssue` are core types
-re-used in these signatures; they are exported from `katajs`, not `katajs/jwt`.
+`Registry`, `Middleware`, `MiddlewareContext`, `ScopedKeys`, `SlotValue`, and
+`FieldIssue` are core types re-used in these signatures; they are exported from
+`katajs`, not `katajs/jwt`.
 
 ::: info You own the login flow
 `katajs/jwt` gives you signing, verification, the auth middleware, and guards.

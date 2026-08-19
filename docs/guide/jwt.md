@@ -370,11 +370,13 @@ export const UserClaimsSchema = z.object({
 ### `requireRole`
 
 ```ts
-requireRole(role: string | readonly string[], options?: { slot?: string })
+requireRole<R, S>(role: string | readonly string[], options?: { slot?: S })
 ```
 
 Allows only when the slot value's `role` is (one of) `role`. Reads the default
-`currentUser` slot. A non-admin gets:
+`currentUser` slot. `S` — the slot's key — is inferred from `options.slot` (or
+defaults to `'currentUser'`) and checked against `R`'s registry, exactly as
+[`guard`](#guard) below. A non-admin gets:
 
 ```http
 GET /admin/metrics
@@ -385,10 +387,10 @@ Authorization: Bearer <token for a non-admin>
 ### `requireClaim`
 
 ```ts
-requireClaim(
+requireClaim<R, S>(
   key: string,
   expected: unknown | ((value: unknown) => boolean),
-  options?: { slot?: string },
+  options?: { slot?: S },
 )
 ```
 
@@ -417,12 +419,16 @@ The general form. Supply any predicate over the slot value; it may be `async` an
 receives the middleware context as a second argument.
 
 ```ts
-guard<R, C>(options: GuardOptions<R, C>)
+guard<R, S extends ScopedKeys<R> = 'currentUser'>(options: GuardOptions<R, S>)
 ```
 
 `GuardOptions`: `authorize` (the predicate, required), `slot?` (default
 `'currentUser'`), `code?` (default `'forbidden'`), and `message?` (default
 `'Insufficient permissions'`).
+
+`slot` is generic over `R`: `authorize`'s parameter is inferred as the *real*
+type of the slot it names — you only ever supply `R` explicitly, never a second
+type argument for the claims type.
 
 ```ts
 import { guard } from 'katajs/jwt'
@@ -430,7 +436,7 @@ import { guard } from 'katajs/jwt'
 // Only the owner of the resource may read it.
 const requireOwner = defineMiddleware({
   provides: [] as const,
-  handler: guard<AppRegistry, User>({
+  handler: guard<AppRegistry>({
     authorize: (user, c) => user.id === c.raw.req.param('id'),
     code: 'forbidden',
     message: 'Not your resource',
@@ -439,6 +445,18 @@ const requireOwner = defineMiddleware({
 ```
 
 `requireRole` and `requireClaim` are thin sugar over `guard`.
+
+:::: warning Breaking change: `slot` is now checked against the registry
+Before, `guard<R, C>({ slot, authorize })` took `slot` as a bare `string` and
+`C` as an unchecked assertion of what it held — `guard({ slot: 'currentOrg',
+authorize: (m: Membership) => m.role === 'owner' })` compiled even though
+`currentOrg` holds an `Org`, and 403'd every request at runtime instead. `slot`
+is now `S extends ScopedKeys<R>` and `authorize`'s parameter is derived from
+`R` itself, so that call is a `tsc` error. Drop any explicit second type
+argument you passed to `guard` / `requireRole` / `requireClaim` — it is
+inferred now, and passing the old claims type there will not compile against
+the new `S extends ScopedKeys<R>` constraint.
+::::
 
 ## What you own
 

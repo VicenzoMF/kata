@@ -2,6 +2,7 @@
 // here (that's `init.ts`), so these are trivially testable and the generated
 // bytes are asserted directly in generators.test.ts.
 
+import { exampleAdrReadme, exampleAdrTemplateSource } from './templates/adr'
 import { agentsHooksTemplate } from './templates/agents-hooks'
 import { agentsMd } from './templates/agents-md'
 import { biomeJsonTemplate } from './templates/biome-json'
@@ -11,6 +12,7 @@ import { codexHooksTemplate } from './templates/codex-hooks'
 import {
   exampleAppSource,
   exampleContextSource,
+  exampleEnvExampleSource,
   exampleGitignoreSource,
   exampleGreetingsHurlSource,
   exampleGreetingsRouteSource,
@@ -166,6 +168,24 @@ export function renderExampleGreetingsHurl(): string {
 /** Render `.gitignore` for the generated app. */
 export function renderExampleGitignore(): string {
   return exampleGitignoreSource
+}
+
+/** Render `.env.example` for the generated app — documents `JWT_SECRET`
+ *  (emitted only-if-absent, issue #213). */
+export function renderExampleEnvExample(): string {
+  return exampleEnvExampleSource
+}
+
+/** Render `docs/adr/_template.md` for the generated app — the same skeleton
+ *  Kata itself uses (issue #213). */
+export function renderExampleAdrTemplate(): string {
+  return exampleAdrTemplateSource
+}
+
+/** Render `docs/adr/README.md` for the generated app — distinguishes the
+ *  app's own ADRs from Kata's framework ADRs (issue #213). */
+export function renderExampleAdrReadme(): string {
+  return exampleAdrReadme()
 }
 
 /** Render the generated app's `README.md`, titled after the project (#200). */

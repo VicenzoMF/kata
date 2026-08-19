@@ -61,7 +61,7 @@ describe('request id', () => {
       method: 'GET',
       path: '/bad',
       input: {},
-      output: z.object({ ok: z.boolean() }),
+      output: { 200: z.object({ ok: z.boolean() }) },
       handler: (c) => c.error('nope', 'no', { status: 422 }),
     })
     const errApp = errK.createApp({ modules: [{ bad }] })
@@ -110,7 +110,7 @@ describe('request logging', () => {
       method: 'GET',
       path: '/missing',
       input: {},
-      output: z.object({ ok: z.boolean() }),
+      output: { 200: z.object({ ok: z.boolean() }) },
       handler: (c) => c.error('not_found', 'gone', { status: 404 }),
     })
     await k.createApp({ modules: [{ route }] }).request('/missing')

@@ -1,4 +1,4 @@
-# ADR-0016: Split `context.ts` into context / pipeline / response
+# ADR-0021: Split `context.ts` into context / pipeline / response
 
 - **Status:** Accepted
 - **Date:** 2026-06-22
@@ -180,4 +180,4 @@ imports from `errors.ts`, not the reverse.
 ## Companion rules
 
 None. This ADR records an internal module-boundary decision with no new
-mechanical constraint to enforce, so there is no `0016.rules.ts`.
+mechanical constraint to enforce, so there is no `0021.rules.ts`.

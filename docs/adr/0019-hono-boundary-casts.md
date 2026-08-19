@@ -1,4 +1,4 @@
-# ADR-0016: Hono Type Boundary Casts
+# ADR-0019: Hono Type Boundary Casts
 
 - **Status:** Accepted
 - **Date:** 2026-06-20

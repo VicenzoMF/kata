@@ -24,6 +24,8 @@ const CONTEXT_PARAM = 'c'
 
 export const contextKeyNotRegistered = {
   name: NAME,
+  description: "c.get('key') is a registered context key",
+  adr: 'ADR-0004',
   check(project) {
     const registry = project.registryKeys
     if (registry === null) return []

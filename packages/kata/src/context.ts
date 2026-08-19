@@ -3,8 +3,8 @@ import { Hono as HonoApp } from 'hono'
 import type { z } from 'zod'
 
 import type { ErrorExtra, FieldIssue } from './errors'
-import { buildErrorBody, formatZodIssues } from './errors'
-import { type Logger, logRequest, resolveLogger } from './logger'
+import { buildErrorBody, formatZodIssues, serializeError } from './errors'
+import { type Logger, logFrameworkError, logRequest, resolveLogger } from './logger'
 import { type OutputValidationMode, resolveOutputValidationMode } from './output-validation'
 import { REQUEST_ID_HEADER, resolveRequestId } from './request-id'
 import type { KataApp } from './rpc'
@@ -140,32 +140,92 @@ export type RouteContext<R extends Registry, I extends InputSchemas> = {
   requestId: string
 }
 
-/** A response-body schema keyed by HTTP status code (ADR-0011). */
-export type OutputMap = { readonly [status: number]: z.ZodTypeAny }
+/**
+ * A non-JSON response contract for one `output` entry (ADR-0022): the body is
+ * validated as **text** against `schema` instead of JSON, and the response's
+ * `content-type` header must match `contentType` (parameters like
+ * `; charset=utf-8` are ignored). Build one with {@link raw}.
+ */
+export type RawOutput<T extends z.ZodTypeAny = z.ZodTypeAny> = {
+  readonly __kata: 'raw'
+  readonly contentType: string
+  readonly schema: T
+}
 
 /**
- * A route's `output` contract (ADR-0011): either a single Zod schema for the
- * success (200) body — the ADR-0003 form — or a map from HTTP status code to
- * the schema for that status's body (e.g. `{ 200: UserSchema, 404: ErrorBodySchema }`).
+ * Declare a non-JSON response contract (ADR-0022) for an `output` entry: the
+ * body is validated as text against `schema`, and the response's
+ * `content-type` must match `contentType`. Use it wherever a route serves
+ * something other than JSON — CSV, plain text, a file download:
+ *
+ * ```ts
+ * output: { 200: raw('text/csv', z.string()) }
+ * ```
+ *
+ * A `raw` entry has no plain-value equivalent, so it can only be satisfied by
+ * a `Response` the handler builds itself — `RouteHandlerReturn` enforces this
+ * at compile time, and `hc<typeof app>` types the endpoint's client response
+ * with `.text()` instead of `.json()` (ADR-0022).
  */
-export type OutputSpec = z.ZodTypeAny | OutputMap
+export function raw<T extends z.ZodTypeAny>(contentType: string, schema: T): RawOutput<T> {
+  return { __kata: 'raw', contentType, schema }
+}
+
+/** One `output` entry: a JSON body schema, or a non-JSON contract (ADR-0022). */
+export type OutputEntry = z.ZodTypeAny | RawOutput
+
+/** A response-body contract keyed by HTTP status code (ADR-0011, ADR-0022). */
+export type OutputMap = { readonly [status: number]: OutputEntry }
+
+/**
+ * A route's `output` contract: a single entry for the success (200) body —
+ * the ADR-0003 form, widened by ADR-0022 to also accept {@link raw} — or a
+ * map from HTTP status code to the entry for that status (ADR-0011), e.g.
+ * `{ 200: UserSchema, 404: ErrorBodySchema }`.
+ */
+export type OutputSpec = OutputEntry | OutputMap
 
 /**
  * The body a handler may return as a *plain value* (not via `c.json` / `c.error`).
  * It is always the 200 body: `z.infer` of the single schema, or of `output[200]`
- * for a map. A map without a `200` entry yields `never` — such a route must
- * return a `Response` (e.g. `c.json(body, 201)`), since a plain return cannot
- * express a non-200 status (ADR-0011).
+ * for a map. `never` when the success entry is a {@link RawOutput} — it has no
+ * plain-value equivalent (ADR-0022) — or when a map has no `200` entry; either
+ * way the route must return a `Response` (e.g. `c.json(body, 201)`), since a
+ * plain return cannot express a non-200 status (ADR-0011).
  */
-export type SuccessOutput<O extends OutputSpec> = O extends z.ZodTypeAny
-  ? z.infer<O>
-  : O extends OutputMap
-    ? 200 extends keyof O
-      ? z.infer<O[200]>
+export type SuccessOutput<O extends OutputSpec> = O extends RawOutput
+  ? never
+  : O extends z.ZodTypeAny
+    ? z.infer<O>
+    : O extends OutputMap
+      ? 200 extends keyof O
+        ? O[200] extends RawOutput
+          ? never
+          : O[200] extends z.ZodTypeAny
+            ? z.infer<O[200]>
+            : never
+        : never
       : never
-    : never
 
-export type RouteHandlerReturn<O extends OutputSpec> = SuccessOutput<O> | Response
+/**
+ * What a handler may return for a given `output` declaration (ADR-0011,
+ * ADR-0022):
+ * - a single {@link RawOutput} entry — only a `Response` satisfies it.
+ * - a single plain Zod schema — only the plain value. A bare `Response` no
+ *   longer bypasses validation here: that escape hatch is what let a
+ *   declared `output` lie about a non-JSON body (ADR-0022). A route that
+ *   needs `c.error`/`c.json(body, status)` for another status declares the
+ *   map form instead — the same migration ADR-0011 already established.
+ * - a status→schema map — a plain value for `output[200]` (if declared and
+ *   not raw), or a `Response` for any status, exactly as ADR-0011 already
+ *   allowed (`c.error`/`c.json(body, status)` remain how a non-200 status,
+ *   including a declared `raw` one, is set).
+ */
+export type RouteHandlerReturn<O extends OutputSpec> = O extends RawOutput
+  ? Response
+  : O extends z.ZodTypeAny
+    ? SuccessOutput<O>
+    : SuccessOutput<O> | Response
 
 export type Route<
   R extends Registry,
@@ -367,9 +427,13 @@ function resolveRuntimeOptions<R extends Registry>(
 function buildHonoApp<R extends Registry>(registry: R, config: AppConfig<R>): Hono {
   const app = new HonoApp()
   const options = resolveRuntimeOptions(registry, config)
+  // path → declared methods (issue #209): built once here as every route
+  // registers, so `notFound` can answer 404 vs 405 with a single Map lookup
+  // instead of walking `config.modules` per unmatched request.
+  const pathMethods = new Map<string, Set<HttpMethod>>()
   for (const mod of config.modules) {
     for (const route of Object.values(mod)) {
-      registerRoute(app, registry, route, options)
+      registerRoute(app, registry, route, options, pathMethods)
     }
   }
   // Global fallback (#62): anything that escapes the route pipeline — a raw
@@ -377,16 +441,19 @@ function buildHonoApp<R extends Registry>(registry: R, config: AppConfig<R>): Ho
   // still serialises through the unified envelope instead of Hono's default
   // text/HTML 500.
   app.onError((err, c) => {
-    const msg = 'kata: unhandled error escaped the route pipeline'
-    if (options.logger?.error) {
-      options.logger.error(msg, { err })
-    } else {
-      console.error(msg, err)
-    }
+    logFrameworkError(options.logger, 'kata: unhandled error escaped the route pipeline', {
+      err: serializeError(err),
+    })
     return errorResponse(c, 'internal_error', 'Internal server error', { status: 500 })
   })
+  // No route matched at all (issue #209): otherwise Hono's default handler
+  // leaks a text/plain 404 that escapes the ADR-0008 envelope entirely.
+  app.notFound(buildNotFoundHandler(app, registry, pathMethods, options))
   return app
 }
+
+/** The closed set of methods a route can declare — see {@link HttpMethod}. */
+const HTTP_METHODS: readonly HttpMethod[] = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE']
 
 const SCOPED_STORE = Symbol('kata.scoped-store')
 
@@ -399,6 +466,43 @@ function getScopedStore(c: import('hono').Context): Map<string, unknown> {
     c.set(SCOPED_STORE as never, store as never)
   }
   return store
+}
+
+const CONTEXT_HEADERS_TOUCHED = Symbol('kata.context-headers-touched')
+
+/**
+ * Marks that a Hono middleware wrapped by `fromHono` ran and may have set
+ * headers on `c.res` (`secureHeaders()`, `cors()`, …) — the header half of the
+ * ADR-0020 response seam (issue #207). Called from `from-hono.ts`, checked by
+ * `applyResponseHeaders` before it reads `c.res`: that getter *materialises* a
+ * Response, so a request with no app-level middleware must not pay for it.
+ */
+export function markContextHeadersTouched(c: import('hono').Context): void {
+  // kata-allow: hono-boundary
+  c.set(CONTEXT_HEADERS_TOUCHED as never, true as never)
+}
+
+function contextHeadersTouched(c: import('hono').Context): boolean {
+  // kata-allow: hono-boundary
+  return c.get(CONTEXT_HEADERS_TOUCHED as never) === true
+}
+
+/**
+ * Merge `source` (headers a Hono middleware set on `c.res`) onto `target` (the
+ * response kata is about to send) — additive only, per ADR-0020 / issue #207:
+ * a header the handler already set on its own `Response` wins, and
+ * `set-cookie` is appended rather than replaced since it is legitimately
+ * multi-valued — a middleware cookie and a handler cookie must both survive.
+ */
+function mergeContextHeaders(target: Headers, source: Headers): void {
+  for (const [key, value] of source) {
+    if (key === 'set-cookie') continue
+    if (!target.has(key)) target.set(key, value)
+  }
+  const existingCookies = new Set(target.getSetCookie())
+  for (const cookie of source.getSetCookie()) {
+    if (!existingCookies.has(cookie)) target.append('set-cookie', cookie)
+  }
 }
 
 /**
@@ -491,16 +595,16 @@ async function readInputs<I extends InputSchemas>(
   | { ok: false; issues: Record<string, FieldIssue[]> }
   | { ok: false; response: Response }
 > {
-  const raw: Record<string, unknown> = {}
-  if (input.params) raw['params'] = c.req.param()
-  if (input.query) raw['query'] = c.req.query()
+  const rawInputs: Record<string, unknown> = {}
+  if (input.params) rawInputs['params'] = c.req.param()
+  if (input.query) rawInputs['query'] = c.req.query()
   if (input.body) {
     const text = await c.req.text()
     if (!text) {
-      raw['body'] = undefined
+      rawInputs['body'] = undefined
     } else {
       try {
-        raw['body'] = JSON.parse(text)
+        rawInputs['body'] = JSON.parse(text)
       } catch {
         return {
           ok: false,
@@ -520,7 +624,7 @@ async function readInputs<I extends InputSchemas>(
     // fields in lowercase (e.g. `authorization`, not `Authorization`).
     const all: Record<string, string> = {}
     for (const [k, v] of Object.entries(c.req.header())) all[k.toLowerCase()] = v
-    raw['headers'] = all
+    rawInputs['headers'] = all
   }
 
   const parsed: Record<string, unknown> = {}
@@ -533,7 +637,7 @@ async function readInputs<I extends InputSchemas>(
       parsed[key] = undefined
       continue
     }
-    const result = schema.safeParse(raw[key])
+    const result = schema.safeParse(rawInputs[key])
     if (!result.success) {
       issues[key] = formatZodIssues(result.error)
       failed = true
@@ -549,21 +653,41 @@ async function readInputs<I extends InputSchemas>(
 /** The status a plain (non-`Response`) handler return maps to (ADR-0011). */
 const SUCCESS_STATUS = 200
 
-/** A route `output` is a single schema (ADR-0003) or a status→schema map (ADR-0011). */
-function isZodSchema(output: OutputSpec): output is z.ZodTypeAny {
-  return typeof (output as { safeParse?: unknown }).safeParse === 'function'
+/** True when `entry` is a {@link RawOutput} built by `raw()` (ADR-0022). */
+function isRawOutput(entry: OutputEntry): entry is RawOutput {
+  return (entry as { __kata?: unknown }).__kata === 'raw'
+}
+
+/** A route `output` is a single entry (ADR-0003/ADR-0022) or a status→entry map (ADR-0011). */
+function isOutputEntry(output: OutputSpec): output is OutputEntry {
+  return (
+    typeof (output as { safeParse?: unknown }).safeParse === 'function' ||
+    isRawOutput(output as OutputEntry)
+  )
+}
+
+/**
+ * The `output` entry declared for `status`, treating a single entry (ADR-0003
+ * schema or ADR-0022 `raw`) as sugar for `{ 200: entry }` (ADR-0011) — the
+ * single-entry and map forms are read through the same lookup, so a
+ * `Response`'s body is validated identically regardless of which form the
+ * route used (ADR-0022 unifies what ADR-0011 left as two disagreeing paths).
+ */
+function entryForStatus(output: OutputSpec, status: number): OutputEntry | undefined {
+  if (isOutputEntry(output)) return status === SUCCESS_STATUS ? output : undefined
+  return output[status]
 }
 
 /**
  * Build + validate the response for whatever the handler returned, honouring the
  * configured mode (ADR-0009) against the route's `output` contract (ADR-0003 single
- * schema or ADR-0011 status→schema map):
- * - a **plain value** is the 200 body — validated against the single schema or
- *   `output[200]`.
- * - a **`Response`** carries its own status; in the map form its body is validated
- *   against `output[status]` when that status is declared. The single-schema form
- *   and undeclared statuses pass the `Response` through unvalidated (back-compat:
- *   a `Response` has always short-circuited output validation).
+ * entry, ADR-0011 status→entry map, ADR-0022 non-JSON `raw` entries):
+ * - a **plain value** is the 200 body — validated against the success entry.
+ * - a **`Response`** carries its own status; its body is validated against
+ *   `entryForStatus(output, response.status)` when that status is declared,
+ *   as JSON (`validateResponseBody`) or, for a `raw` entry, as text against
+ *   its content-type + schema (`validateRawResponseBody`). An undeclared
+ *   status passes through unvalidated, exactly as ADR-0011 already allowed.
  */
 async function buildResponse<R extends Registry>(
   c: import('hono').Context,
@@ -573,13 +697,15 @@ async function buildResponse<R extends Registry>(
 ): Promise<Response> {
   const output = route.output
   if (result instanceof Response) {
-    if (options.outputValidation !== 'off' && !isZodSchema(output)) {
-      const schema = output[result.status]
-      if (schema) return validateResponseBody(c, route, result, schema, options)
-    }
-    return result
+    if (options.outputValidation === 'off') return result
+    const entry = entryForStatus(output, result.status)
+    if (!entry) return result
+    return isRawOutput(entry)
+      ? validateRawResponseBody(c, route, result, entry, options)
+      : validateResponseBody(c, route, result, entry, options)
   }
-  const successSchema = isZodSchema(output) ? output : output[SUCCESS_STATUS]
+  const successEntry = entryForStatus(output, SUCCESS_STATUS)
+  const successSchema = successEntry && !isRawOutput(successEntry) ? successEntry : undefined
   return buildOutputResponse(c, route, result, successSchema, options)
 }
 
@@ -617,11 +743,14 @@ function buildOutputResponse<R extends Registry>(
 }
 
 /**
- * Validate a handler-returned `Response`'s body against the schema declared for
- * its status (ADR-0011), as a shape check. The original `Response` is forwarded
- * verbatim on success — Kata never re-serialises a response the handler built, so
- * a custom header or content type the handler set is preserved. Reached only in
- * the map form, for a declared status, when the mode is not `off`.
+ * Validate a handler-returned `Response`'s JSON body against the schema
+ * declared for its status (ADR-0011), as a shape check. The original
+ * `Response` is forwarded verbatim on success — Kata never re-serialises a
+ * response the handler built, so a custom header or content type the handler
+ * set is preserved; `finalizeResponse` merges in app-level headers afterwards
+ * (ADR-0020, issue #207), which is not this function's concern. Reached for
+ * any declared status — single entry or map, unified by `entryForStatus`
+ * (ADR-0022) — when the mode is not `off`.
  */
 async function validateResponseBody<R extends Registry>(
   c: import('hono').Context,
@@ -649,6 +778,43 @@ async function validateResponseBody<R extends Registry>(
   return response
 }
 
+/**
+ * Validate a handler-returned `Response`'s body against a declared `raw`
+ * entry (ADR-0022):
+ * - the `content-type` header must match `entry.contentType` — cheap (a
+ *   header read), so it runs whenever the mode is not `off`.
+ * - the **text** body must match `entry.schema` — needs `clone().text()`,
+ *   which buffers the whole response, so it runs only in `strict` mode. A
+ *   route serving a large download must never pay that cost in `log`
+ *   (production); `registerRoute` warns once at startup when a route's body
+ *   will go unchecked for this reason, instead of staying silent about it.
+ */
+async function validateRawResponseBody<R extends Registry>(
+  c: import('hono').Context,
+  route: Route<R>,
+  response: Response,
+  entry: RawOutput,
+  options: RuntimeOptions<R>,
+): Promise<Response> {
+  const actual = mediaType(response.headers.get('content-type'))
+  const declared = mediaType(entry.contentType)
+  if (actual !== declared) {
+    logOutputContentTypeMismatch(route, response.status, declared, actual, options)
+    return options.outputValidation === 'strict' ? outputMismatchResponse(c) : response
+  }
+  if (options.outputValidation !== 'strict') return response
+  const text = await response.clone().text()
+  const parsed = entry.schema.safeParse(text)
+  if (parsed.success) return response
+  logOutputMismatch(route, response.status, parsed.error.issues, options)
+  return outputMismatchResponse(c)
+}
+
+/** The media type of a `content-type` header, ignoring parameters (`; charset=…`). */
+function mediaType(contentType: string | null | undefined): string {
+  return (contentType ?? '').split(';', 1)[0]!.trim().toLowerCase()
+}
+
 /** Server-side diagnostic for an output-schema mismatch — the same line `strict` has always emitted. */
 function logOutputMismatch<R extends Registry>(
   route: Route<R>,
@@ -657,11 +823,19 @@ function logOutputMismatch<R extends Registry>(
   options: RuntimeOptions<R>,
 ): void {
   const msg = `kata: output schema mismatch in ${route.method} ${route.path} (status ${status})`
-  if (options.logger?.error) {
-    options.logger.error(msg, { issues })
-  } else {
-    console.error(msg, issues)
-  }
+  logFrameworkError(options.logger, msg, { issues })
+}
+
+/** Server-side diagnostic for a `raw` output content-type mismatch (ADR-0022). */
+function logOutputContentTypeMismatch<R extends Registry>(
+  route: Route<R>,
+  status: number,
+  declared: string,
+  actual: string,
+  options: RuntimeOptions<R>,
+): void {
+  const msg = `kata: output content-type mismatch in ${route.method} ${route.path} (status ${status}): declared '${declared}', got '${actual || '(none)'}'`
+  logFrameworkError(options.logger, msg, {})
 }
 
 /** The 500 envelope (ADR-0008) `strict` returns when a response violates its declared output schema. */
@@ -675,27 +849,57 @@ function outputMismatchResponse(c: import('hono').Context): Response {
 }
 
 /**
- * Final step of every request (issue #63): echo the correlation id on the
- * response header and emit the per-request log line. Runs for every outcome —
- * success, validation failure, middleware short-circuit, or the 5xx boundary.
+ * Merge app-level response headers (ADR-0020, issue #207) and echo the
+ * correlation id (issue #63) onto the outgoing response. Both writes share one
+ * `Headers` object, so an immutable one — `Response.redirect()`, or a
+ * `Response` handed back straight from `fetch()` — is handled once: rebuild a
+ * fresh `Response` carrying the merged headers rather than silently drop them.
+ * `response.body` is passed through to the rebuild, never buffered, so a
+ * streamed download is unaffected.
+ */
+function applyResponseHeaders(
+  c: import('hono').Context,
+  response: Response,
+  requestId: string,
+): Response {
+  const touched = contextHeadersTouched(c)
+  const apply = (headers: Headers): void => {
+    if (touched) mergeContextHeaders(headers, c.res.headers)
+    headers.set(REQUEST_ID_HEADER, requestId)
+  }
+  try {
+    apply(response.headers)
+    return response
+  } catch {
+    const headers = new Headers(response.headers)
+    apply(headers)
+    return new Response(response.body, {
+      status: response.status,
+      statusText: response.statusText,
+      headers,
+    })
+  }
+}
+
+/**
+ * Final step of every request (issue #63): merge app-level response headers
+ * (ADR-0020, issue #207), echo the correlation id, and emit the per-request
+ * log line. Runs for every outcome — success, validation failure, middleware
+ * short-circuit, the 5xx boundary, or an unmatched route (issue #209) — so no
+ * response path is left behind. `route` is widened to a bare descriptor (not
+ * `Route<R>`) so `notFound`, which has no route to point at, can share this
+ * same funnel with `registerRoute`.
  */
 function finalizeResponse<R extends Registry>(
-  route: Route<R>,
+  c: import('hono').Context,
+  route: { method: string; path: string },
   requestId: string,
   startedAt: number,
   response: Response | undefined,
   options: RuntimeOptions<R>,
 ): Response | undefined {
   if (response) {
-    // kata returns a response detached from `c.res` (see middlewares/from-hono.ts),
-    // so the header is set on this object directly. Some responses — e.g. one
-    // returned straight from `fetch` — have immutable headers; skip rather than
-    // throw if so.
-    try {
-      response.headers.set(REQUEST_ID_HEADER, requestId)
-    } catch {
-      // immutable headers — leave the response untouched
-    }
+    response = applyResponseHeaders(c, response, requestId)
   }
   if (options.requestLogging && options.logger) {
     logRequest(options.logger, {
@@ -709,11 +913,81 @@ function finalizeResponse<R extends Registry>(
   return response
 }
 
+/**
+ * Run a middleware chain to completion, short-circuiting on the first
+ * `Response` a handler returns without calling `next()` (issue #209 factors
+ * this out of `registerRoute` so `notFound` can run the same ADR-0012 global
+ * chain — no route `use:`, since there is no route — before it ever builds a
+ * 404/405; this is also why the CORS preflight responder ADR-0020 documents,
+ * once declared as a global, answers `OPTIONS` itself instead of falling into
+ * the 405 path below). `onComplete` runs once every entry has called `next()`
+ * through to the end, and supplies whatever response follows — a route's
+ * input+handler+output pipeline for `registerRoute`, or nothing for a bare
+ * global-only chain.
+ */
+async function runMiddlewareChain<R extends Registry>(
+  chain: readonly Middleware<R>[],
+  registry: R,
+  c: import('hono').Context,
+  requestId: string,
+  onComplete: () => Promise<Response | undefined>,
+): Promise<Response | undefined> {
+  let i = 0
+  let shortCircuit: Response | undefined
+  const step = async (): Promise<void> => {
+    if (i >= chain.length) {
+      shortCircuit = await onComplete()
+      return
+    }
+    const mw = chain[i++]!
+    const mwCtx = makeMiddlewareContext(registry, c, requestId)
+    const result = await mw.handler(mwCtx, step)
+    if (result instanceof Response) {
+      shortCircuit = result
+    }
+  }
+  await step()
+  return shortCircuit
+}
+
+/**
+ * One-time startup diagnostic (ADR-0022): when a route declares a `raw`
+ * output entry and the resolved mode is `log`, its body will never be
+ * buffered to check it — say so once at registration instead of staying
+ * silent about an unvalidated contract. `strict` needs no warning (the body
+ * is checked); `off` needs a different one, since it skips the content-type
+ * check too — not worth a separate message for an explicit, documented
+ * opt-out (ADR-0009).
+ */
+function warnUnvalidatedRawBodies<R extends Registry>(
+  route: Route<R>,
+  options: RuntimeOptions<R>,
+): void {
+  if (options.outputValidation !== 'log') return
+  const statuses = rawStatusesOf(route.output)
+  if (statuses.length === 0) return
+  const msg = `kata: ${route.method} ${route.path} declares raw() output for status ${statuses.join(', ')} — the body is only validated in 'strict' outputValidation mode (current: 'log'); only its content-type is checked`
+  if (options.logger?.warn) {
+    options.logger.warn(msg)
+  } else {
+    console.warn(msg)
+  }
+}
+
+/** Every status a route's `output` declares as a `raw` entry (ADR-0022). */
+function rawStatusesOf(output: OutputSpec): number[] {
+  if (isOutputEntry(output)) return isRawOutput(output) ? [SUCCESS_STATUS] : []
+  return Object.entries(output)
+    .filter(([, entry]) => isRawOutput(entry))
+    .map(([status]) => Number(status))
+}
+
 function registerRoute<R extends Registry>(
   app: Hono,
   registry: R,
   route: Route<R>,
   options: RuntimeOptions<R>,
+  pathMethods: Map<string, Set<HttpMethod>>,
 ): void {
   const method = route.method.toLowerCase() as Lowercase<HttpMethod>
   // Hono router: app.get(path, ...handlers)
@@ -727,6 +1001,15 @@ function registerRoute<R extends Registry>(
   // typed `defineRoute` API. The guard only fires for an untyped/raw construction;
   // it is unreachable through the public surface, hence left untested by design.
   if (!register) throw new Error(`kata: Hono does not support method '${route.method}'`)
+  // path → declared methods (issue #209), fed once per registration so
+  // `notFound` can tell a wrong-method request from a truly unknown path.
+  const methods = pathMethods.get(route.path)
+  if (methods) {
+    methods.add(route.method)
+  } else {
+    pathMethods.set(route.path, new Set([route.method]))
+  }
+  warnUnvalidatedRawBodies(route, options)
   // Effective chain (ADR-0012): app-level middleware runs before the route's own
   // `use:`, each in declared order, the global chain outermost. Built once here at
   // registration — a global is just an earlier entry in the same array, so the
@@ -736,57 +1019,127 @@ function registerRoute<R extends Registry>(
   register.call(app, route.path, async (c: import('hono').Context) => {
     const requestId = resolveRequestId(c.req.header(REQUEST_ID_HEADER))
     const startedAt = performance.now()
-    // 1. Run the effective middleware chain manually (Hono's native middleware
-    //    would also work, but threading the kata context is cleaner this way).
-    let i = 0
     let shortCircuit: Response | undefined
-    const runChain = async (): Promise<void> => {
-      if (i >= chain.length) {
-        // 2. Validate input
-        const inputResult = await readInputs(route.input, c)
-        if (!inputResult.ok) {
-          if ('response' in inputResult) {
-            shortCircuit = inputResult.response
-            return
-          }
-          shortCircuit = errorResponse(c, 'validation_failed', 'Request input validation failed', {
-            status: 422,
-            issues: inputResult.issues,
-          })
-          return
-        }
-        // 3. Run handler
-        const handlerCtx = makeRouteContext(registry, c, inputResult.value, requestId)
-        const result = await route.handler(handlerCtx)
-        // 4. Build + validate the response against the route's output contract —
-        //    single schema (ADR-0003) or status→schema map (ADR-0011) — per the
-        //    configured mode (ADR-0009).
-        shortCircuit = await buildResponse(c, route, result, options)
-        return
-      }
-      const mw = chain[i++]!
-      const mwCtx = makeMiddlewareContext(registry, c, requestId)
-      const result = await mw.handler(mwCtx, runChain)
-      if (result instanceof Response) {
-        shortCircuit = result
-      }
-    }
     // Route-pipeline boundary (#62): a throw from any middleware, the handler,
     // or output validation is funnelled into the unified 5xx envelope. The raw
     // error is logged server-side with route context; the client never sees
     // internal detail (ADR-0008, Alt. D).
     try {
-      await runChain()
+      // 1. Run the effective middleware chain (Hono's native middleware would
+      //    also work, but threading the kata context is cleaner this way),
+      //    then 2. validate input, 3. run the handler, and 4. build +
+      //    validate the response against the route's output contract — single
+      //    schema (ADR-0003) or status→schema map (ADR-0011) — per the
+      //    configured mode (ADR-0009).
+      shortCircuit = await runMiddlewareChain(chain, registry, c, requestId, async () => {
+        const inputResult = await readInputs(route.input, c)
+        if (!inputResult.ok) {
+          if ('response' in inputResult) return inputResult.response
+          return errorResponse(c, 'validation_failed', 'Request input validation failed', {
+            status: 422,
+            issues: inputResult.issues,
+          })
+        }
+        const handlerCtx = makeRouteContext(registry, c, inputResult.value, requestId)
+        const result = await route.handler(handlerCtx)
+        return buildResponse(c, route, result, options)
+      })
     } catch (err) {
-      const msg = `kata: unhandled error in ${route.method} ${route.path}`
-      if (options.logger?.error) {
-        options.logger.error(msg, { err })
-      } else {
-        console.error(msg, err)
-      }
+      logFrameworkError(options.logger, `kata: unhandled error in ${route.method} ${route.path}`, {
+        err: serializeError(err),
+      })
       shortCircuit = errorResponse(c, 'internal_error', 'Internal server error', { status: 500 })
     }
-    // 5. Echo the correlation id and emit the per-request log line (issue #63).
-    return finalizeResponse(route, requestId, startedAt, shortCircuit, options)
+    // 5. Merge app-level headers, echo the correlation id, and log (#63, #207).
+    return finalizeResponse(c, route, requestId, startedAt, shortCircuit, options)
   })
+}
+
+/**
+ * Handler installed via `app.notFound()` (issue #209). Runs the ADR-0012
+ * global middleware chain first — with no per-route `use:`, since there is no
+ * matched route — so `cors()` declared as a global still answers an `OPTIONS`
+ * preflight itself (Hono's `cors` middleware short-circuits it with a 204)
+ * before this ever reaches the 404/405 decision below. Whatever the outcome,
+ * it funnels through `finalizeResponse` like every other response.
+ */
+function buildNotFoundHandler<R extends Registry>(
+  app: Hono,
+  registry: R,
+  pathMethods: Map<string, Set<HttpMethod>>,
+  options: RuntimeOptions<R>,
+): (c: import('hono').Context) => Promise<Response> {
+  return async (c) => {
+    const requestId = resolveRequestId(c.req.header(REQUEST_ID_HEADER))
+    const startedAt = performance.now()
+    const method = c.req.method
+    const path = c.req.path
+    let response: Response | undefined
+    try {
+      response = await runMiddlewareChain(
+        options.middlewares,
+        registry,
+        c,
+        requestId,
+        async () => undefined,
+      )
+    } catch (err) {
+      logFrameworkError(
+        options.logger,
+        `kata: unhandled error in global middleware for ${method} ${path}`,
+        {
+          err: serializeError(err),
+        },
+      )
+      response = errorResponse(c, 'internal_error', 'Internal server error', { status: 500 })
+    }
+    response ??= buildNotFoundResponse(c, app, pathMethods, path)
+    return (
+      finalizeResponse(c, { method, path }, requestId, startedAt, response, options) ?? response
+    )
+  }
+}
+
+/**
+ * 404 vs 405 (issue #209). A wrong method on a path some route *does* declare
+ * answers 405 with a correct `Allow`; a path nothing declares answers 404 —
+ * both through the ADR-0008 envelope. `matchAllowedMethods` does the pattern
+ * matching (`:id`, wildcards, …) via Hono's own router rather than
+ * string-comparing paths ourselves.
+ */
+function buildNotFoundResponse(
+  c: import('hono').Context,
+  app: Hono,
+  pathMethods: Map<string, Set<HttpMethod>>,
+  path: string,
+): Response {
+  const allowed = matchAllowedMethods(app, pathMethods, path)
+  if (!allowed || allowed.size === 0) {
+    return errorResponse(c, 'not_found', 'Route not found', { status: 404 })
+  }
+  const response = errorResponse(c, 'method_not_allowed', 'Method not allowed', { status: 405 })
+  response.headers.set('Allow', HTTP_METHODS.filter((m) => allowed.has(m)).join(', '))
+  return response
+}
+
+/**
+ * Finds the registered route pattern (if any) matching `path` for *some*
+ * method, by asking Hono's own router — the same matcher that resolves a
+ * real request, so `:id` segments and wildcards behave identically — then
+ * looks up that pattern's full method set with a single `Map.get` (the index
+ * `registerRoute` built at registration). At most `HTTP_METHODS.length`
+ * router probes, a constant independent of how many routes are registered —
+ * not a scan over `config.modules`.
+ */
+function matchAllowedMethods(
+  app: Hono,
+  pathMethods: Map<string, Set<HttpMethod>>,
+  path: string,
+): Set<HttpMethod> | undefined {
+  for (const candidate of HTTP_METHODS) {
+    const [matches] = app.router.match(candidate, path)
+    const pattern = matches[0]?.[0]?.[1]?.path
+    if (pattern) return pathMethods.get(pattern)
+  }
+  return undefined
 }

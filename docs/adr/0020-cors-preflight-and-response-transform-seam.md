@@ -1,4 +1,4 @@
-# ADR-0016: CORS preflight synthesis + middleware response-transform seam
+# ADR-0020: CORS preflight synthesis + middleware response-transform seam
 
 - **Status:** Accepted
 - **Date:** 2026-06-22
@@ -108,6 +108,19 @@ must hand-write.
 
 ### (b) `fromHonoTransform()` — response-transform seam
 
+> **Addendum (issue #207):** the *header* half of this seam landed ahead of
+> `fromHonoTransform()` itself. `fromHono` now marks the context "headers
+> touched" after running the wrapped middleware, and `finalizeResponse`
+> (`packages/kata/src/context.ts`) merges `c.res`'s headers onto whatever
+> `Response` the route pipeline produced — additive, handler wins on conflict,
+> `set-cookie` appended — before the correlation-id echo. This closes the gap
+> where a handler-returned `Response` (a non-JSON body, the case
+> `fromHonoTransform` itself exists for) silently dropped `secureHeaders()` /
+> `cors()` / any app-level header. `fromHonoTransform`, once implemented, must
+> land its *body* transform through this same `finalizeResponse` seam rather
+> than a second header-merge path — see the merge helper `mergeContextHeaders`
+> there for the semantics to reuse.
+
 We add a second, **opt-in** adapter alongside `fromHono`, for the narrow class of
 Hono middleware that must transform the final response body:
 
@@ -192,15 +205,19 @@ but as a redirect *to* `fromHonoTransform`, not as a dead end.
   method aggregation, and synthetic `OPTIONS` registration in `buildHonoApp`,
   with unit + Hurl coverage (preflight 204, headers, auth-free path, explicit
   `OPTIONS` wins, non-CORS path still 404s).
-- Implement (b): `fromHonoTransform` and tests asserting `compress()`/`etag()`
-  observe and replace the final body, and that status/headers survive.
+- ~~Implement the header-merge half of (b)~~ — done (issue #207): see the
+  addendum above.
+- Implement the rest of (b): `fromHonoTransform` and tests asserting
+  `compress()`/`etag()` observe and replace the final body, and that
+  status/headers survive — reusing `finalizeResponse`'s header merge rather
+  than adding a parallel one.
 - Companion `kata verify` rules below.
 - Migrate docs/examples: show `cors()` answering preflight, and `compress()` via
   `fromHonoTransform`.
 
 ## Companion rules
 
-Mechanical enforcement of this ADR will live in `0016.rules.ts` (archgate
+Mechanical enforcement of this ADR will live in `0020.rules.ts` (archgate
 pattern), implemented with the `kata verify` rule engine. Rule IDs introduced:
 
 - `kata/transform-via-from-hono` — a known response-transformer (`compress`,

@@ -94,3 +94,49 @@ function pathToDotNotation(path: ReadonlyArray<string | number>): string {
   }
   return out
 }
+
+/**
+ * Plain-data mirror of an `Error`, safe to hand to any logger (issue #210). A
+ * naive `JSON.stringify`-based logger loses `message` and `stack` on a raw
+ * `Error` — they are non-enumerable — so the framework never logs one directly.
+ */
+export type SerializedError = {
+  name: string
+  message: string
+  stack?: string
+  cause?: SerializedError
+  /** Present when the source was an `AggregateError`. */
+  errors?: SerializedError[]
+}
+
+/** How deep into a `cause` chain {@link serializeError} will recurse. */
+const MAX_CAUSE_DEPTH = 5
+
+/**
+ * Flatten an unhandled throw into a {@link SerializedError} the logger can
+ * render as-is, whatever it turns out to be. `cause` chains are walked up to
+ * {@link MAX_CAUSE_DEPTH} deep, guarding against a cycle (`a.cause === a`, or
+ * a longer loop) by never re-entering an `Error` already on the current walk.
+ * A non-`Error` throw (`throw 'boom'`, `throw { code: 1 }`) never crashes the
+ * logger — it degrades to `{ name: typeof value, message: String(value) }`.
+ */
+export function serializeError(value: unknown): SerializedError {
+  return serializeErrorAt(value, new Set(), 0)
+}
+
+function serializeErrorAt(value: unknown, seen: Set<unknown>, depth: number): SerializedError {
+  if (!(value instanceof Error)) {
+    return { name: typeof value, message: String(value) }
+  }
+  const out: SerializedError = { name: value.name, message: value.message }
+  if (value.stack) out.stack = value.stack
+  if (depth >= MAX_CAUSE_DEPTH || seen.has(value)) return out
+  seen.add(value)
+  if (value.cause !== undefined) {
+    out.cause = serializeErrorAt(value.cause, seen, depth + 1)
+  }
+  if (value instanceof AggregateError) {
+    out.errors = value.errors.map((e) => serializeErrorAt(e, seen, depth + 1))
+  }
+  return out
+}

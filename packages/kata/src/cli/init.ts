@@ -15,7 +15,6 @@
 
 import { access, mkdir, writeFile } from 'node:fs/promises'
 import { basename, dirname, join, resolve } from 'node:path'
-
 import {
   renderAgentsHooks,
   renderAgentsMd,
@@ -23,8 +22,11 @@ import {
   renderClaudeMd,
   renderClaudeSettings,
   renderCodexHooks,
+  renderExampleAdrReadme,
+  renderExampleAdrTemplate,
   renderExampleApp,
   renderExampleContext,
+  renderExampleEnvExample,
   renderExampleGitignore,
   renderExampleGreetingsHurl,
   renderExampleGreetingsRoute,
@@ -45,6 +47,7 @@ import {
   renderMcpJson,
   renderOxlintrc,
 } from './generators'
+import { detectPackageManager, type PackageManager } from './package-manager'
 
 export type InitOptions = {
   /** Base directory the target is resolved against. Defaults to `process.cwd()`. */
@@ -61,6 +64,9 @@ export type InitOptions = {
   /** Also write `.mcp.json`, registering the `@kata/docs-mcp` docs-search
    *  server (ADR-0023). Opt-in: most projects don't run an MCP client. */
   docsMcp?: boolean
+  /** Env to detect the invoking package manager from (issue #214). Defaults
+   *  to `process.env`; overridable for tests. */
+  env?: Readonly<Record<string, string | undefined>>
 }
 
 export type FileStatus = 'created' | 'overwritten' | 'skipped'
@@ -82,6 +88,8 @@ export type InitResult = {
   /** Whether `.mcp.json` was written (`--with-docs-mcp`). */
   docsMcp: boolean
   files: readonly GeneratedFile[]
+  /** The package manager the printed next steps target (issue #214). */
+  packageManager: PackageManager
 }
 
 type Target = {
@@ -149,7 +157,12 @@ function appTargets(name: string): readonly Target[] {
     { path: 'package.json', render: () => renderExamplePackageJson(name), onlyIfAbsent: true },
     { path: 'tsconfig.json', render: renderExampleTsconfig, onlyIfAbsent: true },
     { path: '.gitignore', render: renderExampleGitignore, onlyIfAbsent: true },
+    { path: '.env.example', render: renderExampleEnvExample, onlyIfAbsent: true },
     { path: 'README.md', render: () => renderExampleReadme(name), onlyIfAbsent: true },
+    // This app's own ADRs (issue #213), separate from Kata's framework ADRs
+    // (linked from AGENTS.md instead of duplicated here).
+    { path: 'docs/adr/_template.md', render: renderExampleAdrTemplate, onlyIfAbsent: true },
+    { path: 'docs/adr/README.md', render: renderExampleAdrReadme, onlyIfAbsent: true },
   ]
 }
 
@@ -206,5 +219,13 @@ export async function init(options: InitOptions = {}): Promise<InitResult> {
     ...(options.docsMcp ? [DOCS_MCP_TARGET] : []),
   ]
   const files = await Promise.all(targets.map((target) => writeTarget(cwd, force, target)))
-  return { cwd, dir: options.dir ?? '.', minimal, docsMcp: options.docsMcp ?? false, files }
+  const packageManager = detectPackageManager(cwd, options.env ?? process.env)
+  return {
+    cwd,
+    dir: options.dir ?? '.',
+    minimal,
+    docsMcp: options.docsMcp ?? false,
+    files,
+    packageManager,
+  }
 }

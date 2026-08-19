@@ -1,6 +1,6 @@
 import type { MiddlewareHandler } from 'hono'
-
 import type { Middleware } from '../context'
+import { markContextHeadersTouched } from '../context'
 import type { Registry } from '../types'
 
 /**
@@ -21,10 +21,16 @@ import type { Registry } from '../types'
  * This runs the wrapped middleware's post-`next` logic BEFORE the downstream
  * handler, so it is correct for middleware that only set response headers or
  * reject a request — not for response-transformers (compression, ETag) that
- * must observe the final body. For those, ADR-0016 introduces an opt-in
+ * must observe the final body. For those, ADR-0020 introduces an opt-in
  * `fromHonoTransform()` that wires a real `next` and threads Kata's final
  * `Response` back through the wrapped middleware. See
- * `docs/adr/0016-cors-preflight-and-response-transform-seam.md`.
+ * https://github.com/VicenzoMF/kata/blob/v0.1.0/docs/adr/0020-cors-preflight-and-response-transform-seam.md.
+ *
+ * Headers the wrapped middleware set land on `c.res` here, not on the
+ * `Response` the route pipeline eventually builds — those are merged onto it
+ * by `finalizeResponse` (issue #207). We mark the context as "touched" right
+ * after running the middleware, whichever way it exits, so that merge step
+ * knows to look.
  */
 export function fromHono<R extends Registry>(mw: MiddlewareHandler): Middleware<R>['handler'] {
   return async (c, next) => {
@@ -33,6 +39,7 @@ export function fromHono<R extends Registry>(mw: MiddlewareHandler): Middleware<
       proceeded = true
     }
     const short = await mw(c.raw, inert)
+    markContextHeadersTouched(c.raw)
     if (short instanceof Response) return short
     if (!proceeded) return
     await next()

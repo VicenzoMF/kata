@@ -2,6 +2,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { z } from 'zod'
 
 import { defineContext, scoped, singleton } from './context'
+import { cors } from './middlewares/cors'
+import { secureHeaders } from './middlewares/secure-headers'
 import type { Singleton } from './types'
 
 describe('singleton()', () => {
@@ -85,11 +87,14 @@ describe('c.error() helper (ADR-0008)', () => {
   const k = defineContext({})
 
   it('serialises the unified envelope with the status carried in extra', async () => {
+    // Map form (ADR-0011): a bare Response against a plain Zod output no
+    // longer bypasses validation (ADR-0022), so a route that returns
+    // `c.error` for a status other than its 200 declares that status here.
     const route = k.defineRoute({
       method: 'GET',
       path: '/missing',
       input: {},
-      output: z.object({ ok: z.boolean() }),
+      output: { 200: z.object({ ok: z.boolean() }) },
       handler: (c) => c.error('not_found', 'User not found', { status: 404 }),
     })
     const app = k.createApp({ modules: [{ route }] })
@@ -105,7 +110,7 @@ describe('c.error() helper (ADR-0008)', () => {
       method: 'GET',
       path: '/bad',
       input: {},
-      output: z.object({ ok: z.boolean() }),
+      output: { 200: z.object({ ok: z.boolean() }) },
       handler: (c) => c.error('bad_request', 'Nope'),
     })
     const app = k.createApp({ modules: [{ route }] })
@@ -196,9 +201,9 @@ describe('global error boundary (#62)', () => {
 
     expect(JSON.stringify(await res.json())).not.toContain('hunter2')
     expect(errSpy).toHaveBeenCalled()
-    const loggedTheRealError = errSpy.mock.calls
-      .flat()
-      .some((arg) => arg instanceof Error && arg.message.includes('hunter2'))
+    const loggedTheRealError = errSpy.mock.calls.some(([, extra]) =>
+      (extra as { err?: { message?: string } } | undefined)?.err?.message?.includes('hunter2'),
+    )
     expect(loggedTheRealError).toBe(true)
   })
 })
@@ -208,10 +213,13 @@ describe('scoped slot access errors', () => {
     vi.restoreAllMocks()
   })
 
-  // The thrown error is funnelled into the 5xx envelope and the original is
-  // logged server-side; assert on the logged Error to check the thrown message.
-  const thrownError = (errSpy: { mock: { calls: unknown[][] } }): Error | undefined =>
-    errSpy.mock.calls.flat().find((arg): arg is Error => arg instanceof Error)
+  // The thrown error is funnelled into the 5xx envelope and logged server-side
+  // as a serialised `{ err }` (issue #210), never a raw `Error` instance; read
+  // the flattened `err.message` to check the thrown message.
+  const thrownError = (errSpy: { mock: { calls: unknown[][] } }): { message: string } | undefined =>
+    errSpy.mock.calls
+      .map(([, extra]) => (extra as { err?: { message: string } } | undefined)?.err)
+      .find((err): err is { message: string } => err !== undefined)
 
   it('throws "read before being set" when a route reads a scoped slot never provided', async () => {
     const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
@@ -286,26 +294,282 @@ describe('scoped slot access errors', () => {
   })
 })
 
-describe('finalizeResponse with an immutable Response', () => {
-  it('skips the x-request-id echo instead of throwing when headers are immutable', async () => {
+describe('unhandled errors reach the logger pre-flattened (issue #210)', () => {
+  // The exact failure mode issue #210 reports: `JSON.stringify(new Error(...))`
+  // is `"{}"` because `message`/`stack` are non-enumerable, so a logger this
+  // naive is the regression test — if the framework ever hands it a raw
+  // `Error` again, the log line silently loses everything but comes back.
+  function naiveJsonLogger() {
+    const lines: string[] = []
+    const write = (message: string, extra?: object) => {
+      lines.push(JSON.stringify({ message, ...extra }))
+    }
+    return { lines, logger: { info: write, warn: write, error: write } }
+  }
+
+  it('a route that throws logs name, message and stack under a naive JSON.stringify logger', async () => {
+    const { lines, logger } = naiveJsonLogger()
+    const k = defineContext({ logger: singleton(logger) })
+    const route = k.defineRoute({
+      method: 'GET',
+      path: '/boom',
+      input: {},
+      output: z.object({ ok: z.boolean() }),
+      handler: () => {
+        throw new Error('handler exploded')
+      },
+    })
+    const app = k.createApp({ modules: [{ route }] })
+    const res = await app.request('/boom')
+
+    expect(res.status).toBe(500)
+    const errorLine = lines.map((line) => JSON.parse(line)).find((line) => line.err)
+    expect(errorLine.err).toMatchObject({ name: 'Error', message: 'handler exploded' })
+    expect(typeof errorLine.err.stack).toBe('string')
+  })
+
+  it('serialises a `cause` chain and an AggregateError without crashing the logger', async () => {
+    const { lines, logger } = naiveJsonLogger()
+    const k = defineContext({ logger: singleton(logger) })
+    const route = k.defineRoute({
+      method: 'GET',
+      path: '/boom',
+      input: {},
+      output: z.object({ ok: z.boolean() }),
+      handler: () => {
+        throw new AggregateError(
+          [new Error('leaf one'), new Error('leaf two', { cause: new Error('root') })],
+          'multiple failures',
+        )
+      },
+    })
+    const app = k.createApp({ modules: [{ route }] })
+    const res = await app.request('/boom')
+
+    expect(res.status).toBe(500)
+    const errorLine = lines.map((line) => JSON.parse(line)).find((line) => line.err)
+    expect(errorLine.err.errors).toHaveLength(2)
+    expect(errorLine.err.errors[0]).toMatchObject({ name: 'Error', message: 'leaf one' })
+    expect(errorLine.err.errors[1].cause).toMatchObject({ name: 'Error', message: 'root' })
+  })
+
+  it('a non-Error throw does not crash the logger', async () => {
+    const { lines, logger } = naiveJsonLogger()
+    const k = defineContext({ logger: singleton(logger) })
+    const route = k.defineRoute({
+      method: 'GET',
+      path: '/boom',
+      input: {},
+      output: z.object({ ok: z.boolean() }),
+      handler: () => {
+        throw 'a string, not an Error'
+      },
+    })
+    const app = k.createApp({ modules: [{ route }] })
+    const res = await app.request('/boom')
+
+    expect(res.status).toBe(500)
+    const errorLine = lines.map((line) => JSON.parse(line)).find((line) => line.err)
+    expect(errorLine.err).toEqual({ name: 'string', message: 'a string, not an Error' })
+  })
+})
+
+describe('finalizeResponse with an immutable Response (issue #207)', () => {
+  it('rebuilds rather than skips the x-request-id echo when headers are immutable', async () => {
     const k = defineContext({})
     const route = k.defineRoute({
       method: 'GET',
       path: '/frozen',
       input: {},
-      output: z.object({ ok: z.boolean() }),
+      // Map form (ADR-0011): 302 isn't declared, so a bare Response is still
+      // allowed here (ADR-0022 only tightens the plain 200 schema).
+      output: { 200: z.object({ ok: z.boolean() }) },
       // `Response.redirect()` yields immutable headers — like a Response handed
-      // back straight from `fetch()`. finalizeResponse must not throw trying to
-      // set the correlation-id header on it.
+      // back straight from `fetch()`. finalizeResponse must rebuild rather than
+      // throw or silently drop the correlation-id header.
       handler: () => Response.redirect('https://example.test/elsewhere', 302),
     })
     const app = k.createApp({ modules: [{ route }] })
     const res = await app.request('/frozen')
 
-    // No throw into the 5xx funnel: the original redirect passes through, and
-    // the header was skipped (immutable) rather than set.
     expect(res.status).toBe(302)
-    expect(res.headers.get('x-request-id')).toBeNull()
+    expect(res.headers.get('x-request-id')).toMatch(
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/,
+    )
     expect(res.headers.get('location')).toBe('https://example.test/elsewhere')
+  })
+
+  it('streams the body through the rebuild rather than buffering it', async () => {
+    // A stream that stalls (enqueues nothing) until `released` flips. A
+    // `ReadableStream` calls `pull` once on its own right after construction
+    // to try to fill its queue — that alone must not be mistaken for a read,
+    // so the first pull staying a no-op is expected, not a bug. What proves
+    // "not buffered" is that `app.request()` below resolves while still
+    // stalled: `await response.text()` would hang forever waiting for the
+    // stream to close, so the request finishing means kata never called it.
+    let released = false
+    const body = new ReadableStream<Uint8Array>({
+      pull(controller) {
+        if (!released) return
+        controller.enqueue(new TextEncoder().encode('chunk'))
+        controller.close()
+      },
+    })
+    // A minimal Headers-shaped object (not a real `Headers` — wrapping a real
+    // one in a Proxy breaks undici's private-field internals) whose mutators
+    // throw `TypeError`, the way genuinely immutable headers do (e.g. `fetch()`
+    // responses on Cloudflare Workers). Reads stay real so the rebuild's
+    // `new Headers(response.headers)` copy can iterate it.
+    const store = new Map([['content-type', 'application/octet-stream']])
+    const throwImmutable = (): never => {
+      throw new TypeError('immutable headers')
+    }
+    const frozenHeaders = {
+      set: throwImmutable,
+      append: throwImmutable,
+      delete: throwImmutable,
+      has: (name: string) => store.has(name.toLowerCase()),
+      get: (name: string) => store.get(name.toLowerCase()) ?? null,
+      getSetCookie: () => [] as string[],
+      [Symbol.iterator]: () => store.entries(),
+    } as unknown as Headers
+    const immutable = new Response(body, { status: 200 })
+    Object.defineProperty(immutable, 'headers', { get: () => frozenHeaders })
+
+    const k = defineContext({})
+    const route = k.defineRoute({
+      method: 'GET',
+      path: '/stream',
+      input: {},
+      output: z.object({ ok: z.boolean() }),
+      handler: () => immutable,
+    })
+    // Output validation is unrelated to what this test exercises (the header
+    // merge/rebuild seam), and would itself buffer the body to check it
+    // (ADR-0022) — turned off so only the rebuild path under test touches the
+    // stream. `{ ok: boolean }` also happens to structurally overlap `Response`
+    // (which has a real `ok` property), a known structural-typing caveat
+    // (ADR-0022) that lets a bare Response through a plain schema undetected.
+    const app = k.createApp({ modules: [{ route }], outputValidation: 'off' })
+    // Resolves without ever releasing the stall — proof the rebuild passed
+    // `response.body` through untouched instead of awaiting it to completion.
+    const res = await app.request('/stream')
+
+    expect(res.headers.get('x-request-id')).toMatch(
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/,
+    )
+
+    released = true
+    expect(await res.text()).toBe('chunk')
+  })
+})
+
+describe('notFound / unmatched routes (issue #209)', () => {
+  const k = defineContext({})
+
+  function makeApp(middlewares?: Parameters<typeof k.createApp>[0]['middlewares']) {
+    const route = k.defineRoute({
+      method: 'GET',
+      path: '/orgs/:id',
+      input: {},
+      output: z.object({ id: z.string() }),
+      handler: (c) => ({ id: c.raw.req.param('id') ?? '' }),
+    })
+    const other = k.defineRoute({
+      method: 'POST',
+      path: '/orgs/:id',
+      input: {},
+      output: z.object({ ok: z.boolean() }),
+      handler: () => ({ ok: true }),
+    })
+    return k.createApp({ modules: [{ route, other }], middlewares })
+  }
+
+  it('a genuinely unmatched path answers the ADR-0008 404 envelope with x-request-id', async () => {
+    const app = makeApp()
+    const res = await app.request('/does-not-exist')
+
+    expect(res.status).toBe(404)
+    expect(res.headers.get('content-type')).toContain('application/json')
+    expect(await res.json()).toEqual({ error: 'not_found', message: 'Route not found' })
+    expect(res.headers.get('x-request-id')).toMatch(
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/,
+    )
+  })
+
+  it('a wrong method on a registered path answers 405 with a correct Allow header', async () => {
+    const app = makeApp()
+    const res = await app.request('/orgs/5', { method: 'DELETE' })
+
+    expect(res.status).toBe(405)
+    expect(res.headers.get('allow')).toBe('GET, POST')
+    expect(await res.json()).toEqual({ error: 'method_not_allowed', message: 'Method not allowed' })
+  })
+
+  it('matches the registered path *pattern*, not the literal string — a param path still 405s correctly', async () => {
+    const app = makeApp()
+    const res = await app.request('/orgs/abc-123', { method: 'PATCH' })
+
+    expect(res.status).toBe(405)
+    expect(res.headers.get('allow')).toBe('GET, POST')
+  })
+
+  it('a registered method on the registered path is unaffected', async () => {
+    const app = makeApp()
+    const res = await app.request('/orgs/5')
+
+    expect(res.status).toBe(200)
+    expect(await res.json()).toEqual({ id: '5' })
+  })
+
+  it('emits a request log line for an unmatched path', async () => {
+    const lines: unknown[] = []
+    const logger = {
+      info: () => {},
+      warn: (msg: string, meta?: object) => lines.push({ msg, ...meta }),
+      error: () => {},
+    }
+    const withLogger = defineContext({ logger: singleton(logger) })
+    const route = withLogger.defineRoute({
+      method: 'GET',
+      path: '/x',
+      input: {},
+      output: z.object({ ok: z.boolean() }),
+      handler: () => ({ ok: true }),
+    })
+    const app = withLogger.createApp({ modules: [{ route }] })
+    await app.request('/nope')
+
+    expect(lines).toEqual([expect.objectContaining({ method: 'GET', path: '/nope', status: 404 })])
+  })
+
+  it('carries the app-level security headers declared as an ADR-0012 global', async () => {
+    const app = makeApp([secureHeaders()])
+    const res = await app.request('/does-not-exist')
+
+    expect(res.status).toBe(404)
+    expect(res.headers.get('x-content-type-options')).toBe('nosniff')
+  })
+
+  it('an ADR-0012 global cors() answers an OPTIONS preflight itself, before the 405 path', async () => {
+    const app = makeApp([cors({ origin: 'https://example.com' })])
+    const res = await app.request('/orgs/5', {
+      method: 'OPTIONS',
+      headers: {
+        Origin: 'https://example.com',
+        'Access-Control-Request-Method': 'GET',
+      },
+    })
+
+    expect(res.status).toBe(204)
+    expect(res.headers.get('access-control-allow-origin')).toBe('https://example.com')
+  })
+
+  it('OPTIONS on a known path still 405s when no CORS middleware is configured', async () => {
+    const app = makeApp()
+    const res = await app.request('/orgs/5', { method: 'OPTIONS' })
+
+    expect(res.status).toBe(405)
+    expect(res.headers.get('allow')).toBe('GET, POST')
   })
 })

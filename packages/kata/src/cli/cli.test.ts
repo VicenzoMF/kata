@@ -1,4 +1,4 @@
-import { mkdtemp, rm, stat } from 'node:fs/promises'
+import { mkdtemp, readFile, rm, stat } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
@@ -177,6 +177,36 @@ describe('run() — new', () => {
     expect(result.stdout).toContain('ping.hurl')
     expect(await exists(join(dir, 'src/modules/ping/ping.route.ts'))).toBe(true)
   })
+
+  it('wires the module into an existing src/app.ts (issue #214)', async () => {
+    await run(['init', '--cwd', dir])
+    const result = await run(['new', 'orders', '--cwd', dir])
+
+    expect(result.code).toBe(0)
+    expect(result.stdout).toContain('update  src/app.ts')
+    const appSource = await readFile(join(dir, 'src/app.ts'), 'utf8')
+    expect(appSource).toContain("import * as orders from './modules/orders/orders.route'")
+    expect(appSource).toMatch(/modules: \[health, greetings, orders\]/)
+  })
+
+  it('is a no-op on src/app.ts the second time (idempotent)', async () => {
+    await run(['init', '--cwd', dir])
+    await run(['new', 'orders', '--cwd', dir])
+    const before = await readFile(join(dir, 'src/app.ts'), 'utf8')
+
+    const second = await run(['new', 'orders', '--cwd', dir, '--force'])
+
+    expect(second.stdout).toContain('skip  src/app.ts (already wired)')
+    expect(await readFile(join(dir, 'src/app.ts'), 'utf8')).toBe(before)
+  })
+
+  it('prints paste-able lines instead of guessing when there is no src/app.ts', async () => {
+    const result = await run(['new', 'orders', '--cwd', dir])
+
+    expect(result.code).toBe(0)
+    expect(result.stdout).toContain('src/app.ts not found')
+    expect(result.stdout).toContain("import * as orders from './modules/orders/orders.route'")
+  })
 })
 
 describe('run() — verify', () => {
@@ -210,6 +240,7 @@ describe('formatResult()', () => {
       dir: 'my-app',
       minimal: false,
       docsMcp: false,
+      packageManager: 'pnpm',
       files: [
         { path: '.claude/settings.json', status: 'created' },
         { path: 'package.json', status: 'skipped' },
@@ -222,12 +253,28 @@ describe('formatResult()', () => {
     expect(text).toContain('pnpm install')
   })
 
+  it('prints commands matching the detected package manager, not just pnpm', () => {
+    const text = formatResult({
+      cwd: '/proj/my-app',
+      dir: '.',
+      minimal: false,
+      docsMcp: false,
+      packageManager: 'npm',
+      files: [],
+    })
+    expect(text).toContain('npm install')
+    expect(text).toContain('npm run dev')
+    expect(text).toContain('npx kata verify')
+    expect(text).toContain('npm run test')
+  })
+
   it('prints the harness-only guidance for a minimal run', () => {
     const text = formatResult({
       cwd: '/proj',
       dir: '.',
       minimal: true,
       docsMcp: false,
+      packageManager: 'pnpm',
       files: [{ path: '.claude/settings.json', status: 'created' }],
     })
     expect(text).toContain('Harness configs written')
@@ -240,6 +287,7 @@ describe('formatResult()', () => {
       dir: 'my-app',
       minimal: false,
       docsMcp: true,
+      packageManager: 'pnpm',
       files: [{ path: '.mcp.json', status: 'created' }],
     })
     expect(text).toContain('.mcp.json registers @kata/docs-mcp')

@@ -34,6 +34,9 @@ export const BoomResponseSchema = z.object({
   ok: z.literal(true),
 })
 
+/** The CSV export body — a `raw()` output entry, not a JSON shape (ADR-0022). */
+export const UsersCsvSchema = z.string()
+
 export type User = z.infer<typeof UserSchema>
 export type UserClaims = z.infer<typeof UserClaimsSchema>
 export type CreateUserBody = z.infer<typeof CreateUserBodySchema>

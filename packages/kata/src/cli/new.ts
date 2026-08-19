@@ -8,6 +8,7 @@ import {
   renderModuleService,
   renderModuleTest,
 } from './generators'
+import { type WireOutcome, wireAppModule } from './wire-app'
 
 export type NewOptions = {
   /** Domain name for the new module. */
@@ -32,6 +33,8 @@ export type NewResult = {
   /** The domain that was generated. */
   domain: string
   files: readonly GeneratedFile[]
+  /** What happened when wiring the module into `src/app.ts` (issue #214). */
+  appWiring: WireOutcome
 }
 
 type Target = {
@@ -78,5 +81,6 @@ export async function createModule(options: NewOptions): Promise<NewResult> {
   ]
 
   const files = await Promise.all(targets.map((target) => writeTarget(cwd, force, target)))
-  return { cwd, domain, files }
+  const appWiring = await wireAppModule(cwd, domain)
+  return { cwd, domain, files, appWiring }
 }
