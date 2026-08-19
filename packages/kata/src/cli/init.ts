@@ -15,7 +15,6 @@
 
 import { access, mkdir, writeFile } from 'node:fs/promises'
 import { basename, dirname, join, resolve } from 'node:path'
-
 import {
   renderAgentsHooks,
   renderAgentsMd,
@@ -44,6 +43,7 @@ import {
   renderLefthookYml,
   renderOxlintrc,
 } from './generators'
+import { detectPackageManager, type PackageManager } from './package-manager'
 
 export type InitOptions = {
   /** Base directory the target is resolved against. Defaults to `process.cwd()`. */
@@ -57,6 +57,9 @@ export type InitOptions = {
   /** Write only the harness configs — no runnable app. For adding Kata to an
    *  existing project (the pre-#200 default). */
   minimal?: boolean
+  /** Env to detect the invoking package manager from (issue #214). Defaults
+   *  to `process.env`; overridable for tests. */
+  env?: Readonly<Record<string, string | undefined>>
 }
 
 export type FileStatus = 'created' | 'overwritten' | 'skipped'
@@ -76,6 +79,8 @@ export type InitResult = {
   /** Whether this was a harness-only (`--minimal`) run. */
   minimal: boolean
   files: readonly GeneratedFile[]
+  /** The package manager the printed next steps target (issue #214). */
+  packageManager: PackageManager
 }
 
 type Target = {
@@ -190,5 +195,6 @@ export async function init(options: InitOptions = {}): Promise<InitResult> {
     ? HARNESS_TARGETS
     : [...HARNESS_TARGETS, ...appTargets(appNameFromDir(cwd))]
   const files = await Promise.all(targets.map((target) => writeTarget(cwd, force, target)))
-  return { cwd, dir: options.dir ?? '.', minimal, files }
+  const packageManager = detectPackageManager(cwd, options.env ?? process.env)
+  return { cwd, dir: options.dir ?? '.', minimal, files, packageManager }
 }

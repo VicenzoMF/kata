@@ -64,9 +64,17 @@ Next steps:
   cd my-app
   pnpm install
   pnpm dev          # → http://localhost:3000/health
-  kata verify       # fast deterministic checks
+  pnpm exec kata verify       # fast deterministic checks
   pnpm test         # unit tests
 ```
+
+The printed commands match whichever package manager ran `kata init` —
+detected from `npm_config_user_agent` (set by npm/pnpm/yarn/bun when they run a
+script or `dlx`/`npx`/`exec`), falling back to a lockfile already in the target
+directory, then `npm`. On npm this block reads `npm install` / `npm run dev` /
+`npx kata verify` / `npm run test` — `kata`'s bin is never on `PATH` after a
+local install, so `kata verify` alone would fail verbatim for anyone not on
+pnpm.
 
 ### The harness files
 
@@ -255,7 +263,8 @@ export const app = createApp({
 ```
 
 Grow the app by adding modules under `src/modules/<domain>/` and listing them in
-`createApp({ modules: [...] })`. The next section's `kata new` does the boilerplate.
+`createApp({ modules: [...] })`. The next section's `kata new` does the boilerplate
+— including wiring the module in, so it's live the moment the command returns.
 
 ## `kata new`
 
@@ -272,12 +281,24 @@ kata new orders → /path/to/project
   create  src/modules/orders/orders.schema.ts
   create  src/modules/orders/orders.test.ts
   create  src/modules/orders/orders.hurl
+  update  src/app.ts
 ```
 
 It writes the five-file module skeleton — route / service / schema / test / hurl —
-into `src/modules/<domain>/`. Register it in `src/app.ts` by importing the route
-module and adding it to `createApp({ modules: [...] })`. Like `kata init`, it
-skips existing files unless you pass `--force`, and honours `--cwd`.
+into `src/modules/<domain>/`, mirroring the `greetings` example's shape: a `POST
+/orders` that validates a body and a `GET /orders/:id` that validates a path param
+and 404s on a miss, so the generated module is a working create/read pair, not a
+one-line stub.
+
+It also wires the module into `src/app.ts` for you: it inserts `import * as orders
+from './modules/orders/orders.route'` in sorted position and appends `orders` to
+`createApp({ modules: [...] })`, so the route is live immediately — no manual edit,
+and running `kata new orders` again is a no-op on `app.ts` (it detects the existing
+entry). If `app.ts` doesn't match the expected `createApp({ modules: [...] })`
+shape, it bails rather than guessing and prints the two lines to paste in yourself.
+
+Like `kata init`, it skips existing files unless you pass `--force`, and honours
+`--cwd`.
 
 ## `kata verify`
 
