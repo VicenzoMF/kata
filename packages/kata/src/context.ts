@@ -367,9 +367,13 @@ function resolveRuntimeOptions<R extends Registry>(
 function buildHonoApp<R extends Registry>(registry: R, config: AppConfig<R>): Hono {
   const app = new HonoApp()
   const options = resolveRuntimeOptions(registry, config)
+  // path → declared methods (issue #209): built once here as every route
+  // registers, so `notFound` can answer 404 vs 405 with a single Map lookup
+  // instead of walking `config.modules` per unmatched request.
+  const pathMethods = new Map<string, Set<HttpMethod>>()
   for (const mod of config.modules) {
     for (const route of Object.values(mod)) {
-      registerRoute(app, registry, route, options)
+      registerRoute(app, registry, route, options, pathMethods)
     }
   }
   // Global fallback (#62): anything that escapes the route pipeline — a raw
@@ -382,8 +386,14 @@ function buildHonoApp<R extends Registry>(registry: R, config: AppConfig<R>): Ho
     })
     return errorResponse(c, 'internal_error', 'Internal server error', { status: 500 })
   })
+  // No route matched at all (issue #209): otherwise Hono's default handler
+  // leaks a text/plain 404 that escapes the ADR-0008 envelope entirely.
+  app.notFound(buildNotFoundHandler(app, registry, pathMethods, options))
   return app
 }
+
+/** The closed set of methods a route can declare — see {@link HttpMethod}. */
+const HTTP_METHODS: readonly HttpMethod[] = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE']
 
 const SCOPED_STORE = Symbol('kata.scoped-store')
 
@@ -743,11 +753,14 @@ function applyResponseHeaders(
  * Final step of every request (issue #63): merge app-level response headers
  * (ADR-0016, issue #207), echo the correlation id, and emit the per-request
  * log line. Runs for every outcome — success, validation failure, middleware
- * short-circuit, or the 5xx boundary — so no response path is left behind.
+ * short-circuit, the 5xx boundary, or an unmatched route (issue #209) — so no
+ * response path is left behind. `route` is widened to a bare descriptor (not
+ * `Route<R>`) so `notFound`, which has no route to point at, can share this
+ * same funnel with `registerRoute`.
  */
 function finalizeResponse<R extends Registry>(
   c: import('hono').Context,
-  route: Route<R>,
+  route: { method: string; path: string },
   requestId: string,
   startedAt: number,
   response: Response | undefined,
@@ -768,11 +781,49 @@ function finalizeResponse<R extends Registry>(
   return response
 }
 
+/**
+ * Run a middleware chain to completion, short-circuiting on the first
+ * `Response` a handler returns without calling `next()` (issue #209 factors
+ * this out of `registerRoute` so `notFound` can run the same ADR-0012 global
+ * chain — no route `use:`, since there is no route — before it ever builds a
+ * 404/405; this is also why the CORS preflight responder ADR-0016 documents,
+ * once declared as a global, answers `OPTIONS` itself instead of falling into
+ * the 405 path below). `onComplete` runs once every entry has called `next()`
+ * through to the end, and supplies whatever response follows — a route's
+ * input+handler+output pipeline for `registerRoute`, or nothing for a bare
+ * global-only chain.
+ */
+async function runMiddlewareChain<R extends Registry>(
+  chain: readonly Middleware<R>[],
+  registry: R,
+  c: import('hono').Context,
+  requestId: string,
+  onComplete: () => Promise<Response | undefined>,
+): Promise<Response | undefined> {
+  let i = 0
+  let shortCircuit: Response | undefined
+  const step = async (): Promise<void> => {
+    if (i >= chain.length) {
+      shortCircuit = await onComplete()
+      return
+    }
+    const mw = chain[i++]!
+    const mwCtx = makeMiddlewareContext(registry, c, requestId)
+    const result = await mw.handler(mwCtx, step)
+    if (result instanceof Response) {
+      shortCircuit = result
+    }
+  }
+  await step()
+  return shortCircuit
+}
+
 function registerRoute<R extends Registry>(
   app: Hono,
   registry: R,
   route: Route<R>,
   options: RuntimeOptions<R>,
+  pathMethods: Map<string, Set<HttpMethod>>,
 ): void {
   const method = route.method.toLowerCase() as Lowercase<HttpMethod>
   // Hono router: app.get(path, ...handlers)
@@ -786,6 +837,14 @@ function registerRoute<R extends Registry>(
   // typed `defineRoute` API. The guard only fires for an untyped/raw construction;
   // it is unreachable through the public surface, hence left untested by design.
   if (!register) throw new Error(`kata: Hono does not support method '${route.method}'`)
+  // path → declared methods (issue #209), fed once per registration so
+  // `notFound` can tell a wrong-method request from a truly unknown path.
+  const methods = pathMethods.get(route.path)
+  if (methods) {
+    methods.add(route.method)
+  } else {
+    pathMethods.set(route.path, new Set([route.method]))
+  }
   // Effective chain (ADR-0012): app-level middleware runs before the route's own
   // `use:`, each in declared order, the global chain outermost. Built once here at
   // registration — a global is just an earlier entry in the same array, so the
@@ -795,47 +854,31 @@ function registerRoute<R extends Registry>(
   register.call(app, route.path, async (c: import('hono').Context) => {
     const requestId = resolveRequestId(c.req.header(REQUEST_ID_HEADER))
     const startedAt = performance.now()
-    // 1. Run the effective middleware chain manually (Hono's native middleware
-    //    would also work, but threading the kata context is cleaner this way).
-    let i = 0
     let shortCircuit: Response | undefined
-    const runChain = async (): Promise<void> => {
-      if (i >= chain.length) {
-        // 2. Validate input
-        const inputResult = await readInputs(route.input, c)
-        if (!inputResult.ok) {
-          if ('response' in inputResult) {
-            shortCircuit = inputResult.response
-            return
-          }
-          shortCircuit = errorResponse(c, 'validation_failed', 'Request input validation failed', {
-            status: 422,
-            issues: inputResult.issues,
-          })
-          return
-        }
-        // 3. Run handler
-        const handlerCtx = makeRouteContext(registry, c, inputResult.value, requestId)
-        const result = await route.handler(handlerCtx)
-        // 4. Build + validate the response against the route's output contract —
-        //    single schema (ADR-0003) or status→schema map (ADR-0011) — per the
-        //    configured mode (ADR-0009).
-        shortCircuit = await buildResponse(c, route, result, options)
-        return
-      }
-      const mw = chain[i++]!
-      const mwCtx = makeMiddlewareContext(registry, c, requestId)
-      const result = await mw.handler(mwCtx, runChain)
-      if (result instanceof Response) {
-        shortCircuit = result
-      }
-    }
     // Route-pipeline boundary (#62): a throw from any middleware, the handler,
     // or output validation is funnelled into the unified 5xx envelope. The raw
     // error is logged server-side with route context; the client never sees
     // internal detail (ADR-0008, Alt. D).
     try {
-      await runChain()
+      // 1. Run the effective middleware chain (Hono's native middleware would
+      //    also work, but threading the kata context is cleaner this way),
+      //    then 2. validate input, 3. run the handler, and 4. build +
+      //    validate the response against the route's output contract — single
+      //    schema (ADR-0003) or status→schema map (ADR-0011) — per the
+      //    configured mode (ADR-0009).
+      shortCircuit = await runMiddlewareChain(chain, registry, c, requestId, async () => {
+        const inputResult = await readInputs(route.input, c)
+        if (!inputResult.ok) {
+          if ('response' in inputResult) return inputResult.response
+          return errorResponse(c, 'validation_failed', 'Request input validation failed', {
+            status: 422,
+            issues: inputResult.issues,
+          })
+        }
+        const handlerCtx = makeRouteContext(registry, c, inputResult.value, requestId)
+        const result = await route.handler(handlerCtx)
+        return buildResponse(c, route, result, options)
+      })
     } catch (err) {
       logFrameworkError(options.logger, `kata: unhandled error in ${route.method} ${route.path}`, {
         err: serializeError(err),
@@ -845,4 +888,93 @@ function registerRoute<R extends Registry>(
     // 5. Merge app-level headers, echo the correlation id, and log (#63, #207).
     return finalizeResponse(c, route, requestId, startedAt, shortCircuit, options)
   })
+}
+
+/**
+ * Handler installed via `app.notFound()` (issue #209). Runs the ADR-0012
+ * global middleware chain first — with no per-route `use:`, since there is no
+ * matched route — so `cors()` declared as a global still answers an `OPTIONS`
+ * preflight itself (Hono's `cors` middleware short-circuits it with a 204)
+ * before this ever reaches the 404/405 decision below. Whatever the outcome,
+ * it funnels through `finalizeResponse` like every other response.
+ */
+function buildNotFoundHandler<R extends Registry>(
+  app: Hono,
+  registry: R,
+  pathMethods: Map<string, Set<HttpMethod>>,
+  options: RuntimeOptions<R>,
+): (c: import('hono').Context) => Promise<Response> {
+  return async (c) => {
+    const requestId = resolveRequestId(c.req.header(REQUEST_ID_HEADER))
+    const startedAt = performance.now()
+    const method = c.req.method
+    const path = c.req.path
+    let response: Response | undefined
+    try {
+      response = await runMiddlewareChain(
+        options.middlewares,
+        registry,
+        c,
+        requestId,
+        async () => undefined,
+      )
+    } catch (err) {
+      logFrameworkError(
+        options.logger,
+        `kata: unhandled error in global middleware for ${method} ${path}`,
+        {
+          err: serializeError(err),
+        },
+      )
+      response = errorResponse(c, 'internal_error', 'Internal server error', { status: 500 })
+    }
+    response ??= buildNotFoundResponse(c, app, pathMethods, path)
+    return (
+      finalizeResponse(c, { method, path }, requestId, startedAt, response, options) ?? response
+    )
+  }
+}
+
+/**
+ * 404 vs 405 (issue #209). A wrong method on a path some route *does* declare
+ * answers 405 with a correct `Allow`; a path nothing declares answers 404 —
+ * both through the ADR-0008 envelope. `matchAllowedMethods` does the pattern
+ * matching (`:id`, wildcards, …) via Hono's own router rather than
+ * string-comparing paths ourselves.
+ */
+function buildNotFoundResponse(
+  c: import('hono').Context,
+  app: Hono,
+  pathMethods: Map<string, Set<HttpMethod>>,
+  path: string,
+): Response {
+  const allowed = matchAllowedMethods(app, pathMethods, path)
+  if (!allowed || allowed.size === 0) {
+    return errorResponse(c, 'not_found', 'Route not found', { status: 404 })
+  }
+  const response = errorResponse(c, 'method_not_allowed', 'Method not allowed', { status: 405 })
+  response.headers.set('Allow', HTTP_METHODS.filter((m) => allowed.has(m)).join(', '))
+  return response
+}
+
+/**
+ * Finds the registered route pattern (if any) matching `path` for *some*
+ * method, by asking Hono's own router — the same matcher that resolves a
+ * real request, so `:id` segments and wildcards behave identically — then
+ * looks up that pattern's full method set with a single `Map.get` (the index
+ * `registerRoute` built at registration). At most `HTTP_METHODS.length`
+ * router probes, a constant independent of how many routes are registered —
+ * not a scan over `config.modules`.
+ */
+function matchAllowedMethods(
+  app: Hono,
+  pathMethods: Map<string, Set<HttpMethod>>,
+  path: string,
+): Set<HttpMethod> | undefined {
+  for (const candidate of HTTP_METHODS) {
+    const [matches] = app.router.match(candidate, path)
+    const pattern = matches[0]?.[0]?.[1]?.path
+    if (pattern) return pathMethods.get(pattern)
+  }
+  return undefined
 }
