@@ -19,6 +19,9 @@ export type ParsedArgs = {
   help: boolean
   /** `--minimal`: write only the harness configs, no runnable app. */
   minimal: boolean
+  /** `--with-docs-mcp`: also write `.mcp.json`, registering the
+   *  `@kata/docs-mcp` docs-search server (ADR-0023). */
+  docsMcp: boolean
 }
 
 export type RunResult = {
@@ -37,6 +40,7 @@ Usage:
 Options:
   -C, --cwd <dir>     Base directory to resolve [dir] against (default: cwd)
       --minimal       Write only the harness configs — no app (for existing projects)
+      --with-docs-mcp Also write .mcp.json, registering the @kata/docs-mcp docs-search server
   -f, --force         Overwrite existing source files (never the manifests/configs)
   -h, --help          Show this help
 
@@ -63,6 +67,7 @@ export function parseArgs(argv: readonly string[]): ParsedArgs {
   let force = false
   let help = false
   let minimal = false
+  let docsMcp = false
 
   for (let i = 0; i < argv.length; i += 1) {
     const arg = argv[i]
@@ -74,6 +79,8 @@ export function parseArgs(argv: readonly string[]): ParsedArgs {
       force = true
     } else if (arg === '--minimal') {
       minimal = true
+    } else if (arg === '--with-docs-mcp') {
+      docsMcp = true
     } else if (arg === '-C' || arg === '--cwd') {
       i += 1
       const next = argv[i]
@@ -94,7 +101,7 @@ export function parseArgs(argv: readonly string[]): ParsedArgs {
     }
   }
 
-  return { command, domain, dir, cwd, force, help, minimal }
+  return { command, domain, dir, cwd, force, help, minimal, docsMcp }
 }
 
 const STATUS_MARK: Record<InitResult['files'][number]['status'], string> = {
@@ -122,6 +129,11 @@ function nextSteps(result: InitResult): string[] {
   steps.push(`  ${pm.run('dev')}          # → http://localhost:3000/health`)
   steps.push(`  ${pm.exec('kata verify')}       # fast deterministic checks`)
   steps.push(`  ${pm.run('test')}         # unit tests`)
+  if (result.docsMcp) {
+    steps.push('')
+    steps.push('.mcp.json registers @kata/docs-mcp via `npx` — requires it to be')
+    steps.push('published to npm first (see the Kata repo for current status).')
+  }
   return steps
 }
 
@@ -252,6 +264,7 @@ export async function run(
     dir: args.dir,
     force: args.force,
     minimal: args.minimal,
+    docsMcp: args.docsMcp,
   })
   return { code: 0, stdout: formatResult(result), stderr: '' }
 }

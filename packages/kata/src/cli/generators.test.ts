@@ -29,6 +29,7 @@ import {
   renderExampleRequestLogger,
   renderExampleTsconfig,
   renderLefthookYml,
+  renderMcpJson,
   renderModuleHurl,
   renderModuleRoute,
   renderModuleSchema,
@@ -219,6 +220,14 @@ describe('renderLefthookYml() — issue #130', () => {
     expect(yml).toContain('pnpm exec kata verify')
     expect(yml).toContain('pnpm exec biome check')
     expect(yml).toContain('pnpm exec oxlint')
+  })
+})
+
+describe('renderMcpJson() — ADR-0023 (--with-docs-mcp)', () => {
+  it('registers @kata/docs-mcp as a local stdio server via npx', () => {
+    const json = JSON.parse(renderMcpJson())
+    expect(json.mcpServers['kata-docs'].command).toBe('npx')
+    expect(json.mcpServers['kata-docs'].args).toEqual(['-y', '@kata/docs-mcp'])
   })
 })
 

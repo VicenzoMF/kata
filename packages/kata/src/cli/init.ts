@@ -44,6 +44,7 @@ import {
   renderExampleRequestLogger,
   renderExampleTsconfig,
   renderLefthookYml,
+  renderMcpJson,
   renderOxlintrc,
 } from './generators'
 import { detectPackageManager, type PackageManager } from './package-manager'
@@ -60,6 +61,9 @@ export type InitOptions = {
   /** Write only the harness configs — no runnable app. For adding Kata to an
    *  existing project (the pre-#200 default). */
   minimal?: boolean
+  /** Also write `.mcp.json`, registering the `@kata/docs-mcp` docs-search
+   *  server (ADR-0023). Opt-in: most projects don't run an MCP client. */
+  docsMcp?: boolean
   /** Env to detect the invoking package manager from (issue #214). Defaults
    *  to `process.env`; overridable for tests. */
   env?: Readonly<Record<string, string | undefined>>
@@ -81,6 +85,8 @@ export type InitResult = {
   dir: string
   /** Whether this was a harness-only (`--minimal`) run. */
   minimal: boolean
+  /** Whether `.mcp.json` was written (`--with-docs-mcp`). */
+  docsMcp: boolean
   files: readonly GeneratedFile[]
   /** The package manager the printed next steps target (issue #214). */
   packageManager: PackageManager
@@ -110,6 +116,15 @@ const HARNESS_TARGETS: readonly Target[] = [
   { path: 'CLAUDE.md', render: renderClaudeMd },
   { path: 'lefthook.yml', render: renderLefthookYml },
 ]
+
+/** `.mcp.json`, registering the docs-search MCP server (ADR-0023). Written
+ *  only with `--with-docs-mcp`; `onlyIfAbsent` since a real project's
+ *  `.mcp.json` likely already registers other servers this must not clobber. */
+const DOCS_MCP_TARGET: Target = {
+  path: '.mcp.json',
+  render: renderMcpJson,
+  onlyIfAbsent: true,
+}
 
 /** The runnable app a full `kata init` writes on top of the harness (issue #200):
  *  the canonical `src/` layout plus the manifests/configs that make it boot,
@@ -199,10 +214,18 @@ export async function init(options: InitOptions = {}): Promise<InitResult> {
   const cwd = resolve(options.cwd ?? process.cwd(), options.dir ?? '.')
   const force = options.force ?? false
   const minimal = options.minimal ?? false
-  const targets = minimal
-    ? HARNESS_TARGETS
-    : [...HARNESS_TARGETS, ...appTargets(appNameFromDir(cwd))]
+  const targets = [
+    ...(minimal ? HARNESS_TARGETS : [...HARNESS_TARGETS, ...appTargets(appNameFromDir(cwd))]),
+    ...(options.docsMcp ? [DOCS_MCP_TARGET] : []),
+  ]
   const files = await Promise.all(targets.map((target) => writeTarget(cwd, force, target)))
   const packageManager = detectPackageManager(cwd, options.env ?? process.env)
-  return { cwd, dir: options.dir ?? '.', minimal, files, packageManager }
+  return {
+    cwd,
+    dir: options.dir ?? '.',
+    minimal,
+    docsMcp: options.docsMcp ?? false,
+    files,
+    packageManager,
+  }
 }
