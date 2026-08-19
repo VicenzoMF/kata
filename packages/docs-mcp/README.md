@@ -10,12 +10,15 @@ three tools over stdio.
 ## Usage
 
 ```sh
-pnpm --filter=@kata/docs-mcp start   # stdio MCP server (tsx, no build step)
+pnpm --filter=@kata/docs-mcp start   # dev: copies docs/ then runs via tsx
 ```
 
-Register it with an MCP client (e.g. Claude Code) pointing at that command;
-the server resolves `docs/` relative to its own location in the monorepo, so
-it works regardless of the client's working directory.
+Once published, `kata init --with-docs-mcp` writes a `.mcp.json` registering
+it via `npx -y @kata/docs-mcp` — no local checkout needed
+([ADR-0023](../../docs/adr/0023-docs-mcp-npm-distribution.md)). `scripts/copy-docs.mjs`
+bundles `docs/{guide,cookbook,reference,adr}` into `data/docs/` before both
+`start` and `build`, and `main.ts` resolves it relative to itself — the same
+path works run via `tsx src/main.ts` (dev) or the published `dist/main.js`.
 
 ## Tools
 

@@ -29,6 +29,7 @@ import {
   exampleTsconfigSource,
 } from './templates/example'
 import { lefthookYmlTemplate } from './templates/lefthook-yml'
+import { mcpJsonTemplate } from './templates/mcp-json'
 import { oxlintrcJson } from './templates/oxlintrc-json'
 
 /** Serialise a template to its on-disk form: 2-space JSON + trailing newline,
@@ -63,6 +64,12 @@ export function renderAgentsMd(): string {
 /** Render `CLAUDE.md` — the Claude entrypoint that imports AGENTS.md (#31). */
 export function renderClaudeMd(): string {
   return claudeMd
+}
+
+/** Render `.mcp.json` — registers the docs-search MCP server (ADR-0023),
+ *  written only with `kata init --with-docs-mcp`. */
+export function renderMcpJson(): string {
+  return serialize(mcpJsonTemplate)
 }
 
 /** Render `lefthook.yml` — the local feedback layer (#130). */

@@ -35,6 +35,7 @@ describe('parseArgs()', () => {
       force: false,
       help: false,
       minimal: false,
+      docsMcp: false,
     })
   })
 
@@ -45,6 +46,11 @@ describe('parseArgs()', () => {
   it('parses --minimal', () => {
     expect(parseArgs(['init', '--minimal']).minimal).toBe(true)
     expect(parseArgs(['init']).minimal).toBe(false)
+  })
+
+  it('parses --with-docs-mcp', () => {
+    expect(parseArgs(['init', '--with-docs-mcp']).docsMcp).toBe(true)
+    expect(parseArgs(['init']).docsMcp).toBe(false)
   })
 
   it('parses --force and -f', () => {
@@ -203,6 +209,7 @@ describe('formatResult()', () => {
       cwd: '/proj/my-app',
       dir: 'my-app',
       minimal: false,
+      docsMcp: false,
       files: [
         { path: '.claude/settings.json', status: 'created' },
         { path: 'package.json', status: 'skipped' },
@@ -220,9 +227,22 @@ describe('formatResult()', () => {
       cwd: '/proj',
       dir: '.',
       minimal: true,
+      docsMcp: false,
       files: [{ path: '.claude/settings.json', status: 'created' }],
     })
     expect(text).toContain('Harness configs written')
     expect(text).not.toContain('pnpm install')
+  })
+
+  it('warns that .mcp.json requires @kata/docs-mcp to be published', () => {
+    const text = formatResult({
+      cwd: '/proj/my-app',
+      dir: 'my-app',
+      minimal: false,
+      docsMcp: true,
+      files: [{ path: '.mcp.json', status: 'created' }],
+    })
+    expect(text).toContain('.mcp.json registers @kata/docs-mcp')
+    expect(text).toContain('published to npm')
   })
 })

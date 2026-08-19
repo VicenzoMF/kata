@@ -37,3 +37,15 @@ export type ClaudeSettings = {
 export type CodexHooks = {
   hooks: HookEvents
 }
+
+/** A single MCP server entry — the subset of the spec Kata's generated
+ *  config actually uses (a local stdio server launched via a command). */
+export type McpServerConfig = {
+  command: string
+  args?: readonly string[]
+}
+
+/** `.mcp.json` (ADR-0023) — written by `kata init --with-docs-mcp`. */
+export type McpConfig = {
+  mcpServers: Record<string, McpServerConfig>
+}

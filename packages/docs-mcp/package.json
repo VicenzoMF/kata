@@ -1,24 +1,48 @@
 {
   "name": "@kata/docs-mcp",
   "version": "0.0.0",
-  "private": true,
+  "description": "Local MCP server exposing lexical search over Kata's documentation (ADR-0022, ADR-0023).",
+  "license": "Apache-2.0",
+  "author": "Vicenzo Frusciante",
+  "homepage": "https://github.com/VicenzoMF/kata#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/VicenzoMF/kata.git",
+    "directory": "packages/docs-mcp"
+  },
+  "bugs": {
+    "url": "https://github.com/VicenzoMF/kata/issues"
+  },
   "type": "module",
-  "main": "./src/index.ts",
-  "types": "./src/index.ts",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
   "exports": {
-    ".": "./src/index.ts"
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./package.json": "./package.json"
   },
   "bin": {
-    "kata-docs-mcp": "./src/main.ts"
+    "kata-docs-mcp": "./dist/main.js"
   },
   "files": [
-    "src",
+    "dist",
+    "data",
     "README.md"
   ],
+  "engines": {
+    "node": ">=20"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
   "scripts": {
-    "build": "tsc -p tsconfig.json",
+    "copy-docs": "node scripts/copy-docs.mjs",
+    "build": "pnpm run copy-docs && tsup",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "start": "tsx src/main.ts"
+    "start": "pnpm run copy-docs && tsx src/main.ts",
+    "prepublishOnly": "pnpm run build && pnpm run typecheck"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.30.0",
@@ -27,6 +51,7 @@
   },
   "devDependencies": {
     "@types/node": "^20",
+    "tsup": "^8",
     "tsx": "^4.19",
     "typescript": "^5.6"
   }

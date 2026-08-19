@@ -37,6 +37,9 @@ const TSCONFIG_JSON = 'tsconfig.json'
 const GITIGNORE = '.gitignore'
 const README = 'README.md'
 
+// Opt-in file (--with-docs-mcp only).
+const MCP_JSON = '.mcp.json'
+
 let dir = ''
 
 beforeEach(async () => {
@@ -172,6 +175,36 @@ describe('init({ minimal: true }) — harness only', () => {
     expect(statusOf(result, BIOME)).toBeUndefined()
     expect(await exists(join(dir, MAIN_TS))).toBe(false)
     expect(await exists(join(dir, PACKAGE_JSON))).toBe(false)
+  })
+})
+
+describe('init({ docsMcp: true }) — .mcp.json opt-in', () => {
+  it('writes .mcp.json registering @kata/docs-mcp via npx', async () => {
+    const result = await init({ cwd: dir, docsMcp: true })
+
+    expect(result.docsMcp).toBe(true)
+    expect(statusOf(result, MCP_JSON)).toBe('created')
+    const content = JSON.parse(await readFile(join(dir, MCP_JSON), 'utf8'))
+    expect(content.mcpServers['kata-docs'].command).toBe('npx')
+    expect(content.mcpServers['kata-docs'].args).toContain('@kata/docs-mcp')
+  })
+
+  it('does not write .mcp.json when the flag is omitted', async () => {
+    const result = await init({ cwd: dir })
+
+    expect(result.docsMcp).toBe(false)
+    expect(statusOf(result, MCP_JSON)).toBeUndefined()
+    expect(await exists(join(dir, MCP_JSON))).toBe(false)
+  })
+
+  it('never overwrites an existing .mcp.json (onlyIfAbsent)', async () => {
+    await seed(MCP_JSON, '{"mcpServers":{"other":{"command":"whatever"}}}')
+
+    const result = await init({ cwd: dir, docsMcp: true, force: true })
+
+    expect(statusOf(result, MCP_JSON)).toBe('skipped')
+    const content = await readFile(join(dir, MCP_JSON), 'utf8')
+    expect(content).toContain('other')
   })
 })
 
