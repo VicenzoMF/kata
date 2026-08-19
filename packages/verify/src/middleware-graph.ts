@@ -24,6 +24,13 @@
  * resolved the answer is `null` ("unknown"), never a guess. The caller turns
  * `null` into a reported {@link Suppression}, which is what makes the gap
  * visible instead of silent.
+ *
+ * Issue #211: `handler:` is not always a function literal — `kata/jwt`'s
+ * `guard` / `requireRole` / `requireClaim` return a bare handler, so
+ * `handler: guard({ slot, authorize })` is a call expression, not something
+ * {@link collectSlotReads} can walk into. `guardCallRead` reads that call's
+ * `slot` argument directly, so the slot it reads is not invisible to the chain
+ * walk the way it was before.
  */
 import ts from 'typescript'
 
@@ -318,11 +325,8 @@ export function createMiddlewareResolver(project: Project): MiddlewareResolver {
 
   function fromDefineMiddleware(call: ts.CallExpression, file: SourceFile): ResolvedMiddleware {
     const config = call.arguments[0]
-    const handler =
-      config && ts.isObjectLiteralExpression(config)
-        ? functionProperty(config, 'handler')
-        : undefined
-    return { provides: providesOf(call), reads: handler ? collectReads(handler, file) : [] }
+    const object = config && ts.isObjectLiteralExpression(config) ? config : undefined
+    return { provides: providesOf(call), reads: handlerReads(object, file) }
   }
 
   /**
@@ -336,11 +340,83 @@ export function createMiddlewareResolver(project: Project): MiddlewareResolver {
   ): ResolvedMiddleware | null {
     if (!isMiddlewareLiteral(object)) return null
     if (hasSpread(object)) return { provides: null, reads: [] }
+    return { provides: literalProvides(object), reads: handlerReads(object, file) }
+  }
+
+  /**
+   * The scoped reads visible in a `handler:` property — a function literal walked
+   * whole (the common case), or, failing that, a direct `guard(...)` /
+   * `requireRole(...)` / `requireClaim(...)` call (`kata/jwt`'s handlers, which
+   * `defineMiddleware` never wraps in a function literal of its own). Anything
+   * else contributes no reads, same as before #211: a false negative here only
+   * costs a missed ordering error, never a false positive.
+   */
+  function handlerReads(object: ts.ObjectLiteralExpression | undefined, file: SourceFile) {
+    if (!object) return []
     const handler = functionProperty(object, 'handler')
-    return {
-      provides: literalProvides(object),
-      reads: handler ? collectReads(handler, file) : [],
+    if (handler) return collectReads(handler, file)
+    const read = guardCallRead(handlerInitializer(object), file)
+    return read ? [read] : []
+  }
+
+  /** The default `slot` `guard` / `requireRole` / `requireClaim` read when the caller omits it. */
+  const GUARD_DEFAULT_SLOT = 'currentUser'
+
+  /**
+   * The scoped read a `guard(...)` / `requireRole(...)` / `requireClaim(...)`
+   * call performs, when it is used directly as a `handler:` value (ADR-0013
+   * §3b) — these `kata/jwt` helpers return a bare handler function, not a
+   * `{ __kata: 'middleware', ... }` literal, so they never reach
+   * `fromDefineMiddleware` / `fromObjectLiteral`'s function-literal walk at all.
+   * Name-matched, exactly like the rest of this resolver (`defineMiddleware`,
+   * `defineRoute`, `createApp` are also name-, not import-, matched): the
+   * `slot` each takes is the second argument for `guard`, the second for
+   * `requireRole`, the third for `requireClaim`. A dynamic `slot` (not a string
+   * literal) or a non-literal options object (could hide `slot` behind a spread
+   * or a variable) yields no read rather than a guess.
+   */
+  function guardCallRead(expr: ts.Expression | undefined, file: SourceFile): SlotRead | undefined {
+    if (!expr) return undefined
+    const call = unwrapExpression(expr)
+    if (!ts.isCallExpression(call)) return undefined
+
+    const callee = call.expression
+    const name = ts.isIdentifier(callee)
+      ? callee.text
+      : ts.isPropertyAccessExpression(callee)
+        ? callee.name.text
+        : undefined
+    const optionsIndex =
+      name === 'guard' ? 0 : name === 'requireRole' ? 1 : name === 'requireClaim' ? 2 : undefined
+    if (optionsIndex === undefined) return undefined
+
+    const options = call.arguments[optionsIndex]
+    let key = GUARD_DEFAULT_SLOT
+    let site: ts.Node = call
+    if (options !== undefined) {
+      if (!ts.isObjectLiteralExpression(options)) return undefined
+      const slotProperty = options.properties.find((m) => propertyName(m) === 'slot')
+      if (slotProperty) {
+        if (!ts.isPropertyAssignment(slotProperty)) return undefined
+        const value = unwrapExpression(slotProperty.initializer)
+        if (!ts.isStringLiteralLike(value)) return undefined
+        key = value.text
+        site = value
+      }
     }
+
+    const { line, column } = positionOf(project.ast(file), site)
+    return { key, file: file.relPath, line, column, afterNext: false }
+  }
+
+  /** The `handler:` property's raw value, when it is present and not a function literal. */
+  function handlerInitializer(object: ts.ObjectLiteralExpression): ts.Expression | undefined {
+    for (const member of object.properties) {
+      if (!ts.isPropertyAssignment(member) || propertyName(member) !== 'handler') continue
+      const value = unwrapExpression(member.initializer)
+      return ts.isArrowFunction(value) || ts.isFunctionExpression(value) ? undefined : value
+    }
+    return undefined
   }
 
   function fromManifestEntry(entry: ManifestEntry): ResolvedMiddleware {

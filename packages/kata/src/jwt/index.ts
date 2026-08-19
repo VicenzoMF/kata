@@ -14,7 +14,7 @@ import type { z } from 'zod'
 import type { Middleware, MiddlewareContext } from '../context'
 import type { FieldIssue } from '../errors'
 import { formatZodIssues } from '../errors'
-import type { Registry } from '../types'
+import type { Registry, ScopedKeys, SlotValue } from '../types'
 
 /** Algorithms supported by the underlying `hono/jwt` (HS / RS / PS / ES + EdDSA). */
 export type JwtAlgorithm =
@@ -312,11 +312,26 @@ const DEFAULT_FORBIDDEN_CODE = 'forbidden'
 /** 403 envelope message `guard` uses when `message` is omitted. */
 const DEFAULT_FORBIDDEN_MESSAGE = 'Insufficient permissions'
 
-export type GuardOptions<R extends Registry, C = unknown> = {
+/**
+ * `guard` / `requireRole` / `requireClaim`'s default `slot`, when the caller
+ * omits it: the literal `'currentUser'` when that is really one of `R`'s scoped
+ * slots, otherwise `ScopedKeys<R>` itself. That fallback exists only so this
+ * compiles for every `R` — including the fully generic `R extends Registry` this
+ * type is checked against at declaration time, where `ScopedKeys<R>` is `never`
+ * and `'currentUser'` cannot be assumed a member. For a concrete app registry
+ * with no `'currentUser'` scoped slot, it still forces callers who omit `slot` to
+ * reconcile `authorize`'s inferred claims type against every scoped slot in the
+ * app — nudging them to pass `slot` explicitly instead of silently typing
+ * `claims` as `never`.
+ */
+type DefaultGuardSlot<R extends Registry> =
+  'currentUser' extends ScopedKeys<R> ? 'currentUser' : ScopedKeys<R>
+
+export type GuardOptions<R extends Registry, S extends ScopedKeys<R> = DefaultGuardSlot<R>> = {
   /** Slot the guard reads (must be provided earlier in the chain). Default `'currentUser'`. */
-  slot?: string
+  slot?: S
   /** Predicate over the slot value; return false to reject with 403. */
-  authorize: (claims: C, c: MiddlewareContext<R>) => boolean | Promise<boolean>
+  authorize: (claims: SlotValue<R, S>, c: MiddlewareContext<R>) => boolean | Promise<boolean>
   /** 403 envelope `error` code. Default `'forbidden'`. */
   code?: string
   /** 403 envelope message. Default `'Insufficient permissions'`. */
@@ -330,20 +345,24 @@ export type GuardOptions<R extends Registry, C = unknown> = {
  * `provides: [] as const` AFTER the auth middleware in the route's `use:` array,
  * so the slot it reads has already been set.
  *
- * `R` is opaque here, so — exactly as `jwtAuth` widens `c.set` (ADR-0013 §4) — we
- * widen `c.get` to its string-keyed form to read the runtime `slot` string. That
- * the slot is a real `ScopedKeys<R>` is guaranteed at the call site (`provides` +
- * lint), not by this signature; `C` is the caller's assertion of the slot's type.
+ * `slot` is generic over `R` (`S extends ScopedKeys<R>`, default `'currentUser'`),
+ * so `authorize`'s `claims` parameter is inferred as that slot's real value type —
+ * `guard({ slot: 'currentOrg', authorize: (org) => org.role === 'owner' })` is now
+ * a `tsc` error when `currentOrg` holds an `Org` with no `role`, instead of a
+ * silent 403 on every request. We still widen `c.get` to its string-keyed form to
+ * read the runtime `slot` string (exactly as `jwtAuth` widens `c.set`, ADR-0013
+ * §4) — but the *type* of what it reads is no longer an unchecked caller
+ * assertion, it is projected off `R` itself.
  */
-export function guard<R extends Registry, C = unknown>(
-  options: GuardOptions<R, C>,
+export function guard<R extends Registry, const S extends ScopedKeys<R> = DefaultGuardSlot<R>>(
+  options: GuardOptions<R, S>,
 ): Middleware<R>['handler'] {
-  const slot = options.slot ?? DEFAULT_SLOT
+  const slot = (options.slot ?? DEFAULT_SLOT) as string
   const code = options.code ?? DEFAULT_FORBIDDEN_CODE
   const message = options.message ?? DEFAULT_FORBIDDEN_MESSAGE
   return async (c, next) => {
     // kata-allow: hono-boundary
-    const getSlot = c.get as unknown as (key: string) => C
+    const getSlot = c.get as unknown as (key: string) => SlotValue<R, S>
     const allowed = await options.authorize(getSlot(slot), c)
     if (!allowed) {
       return c.error(code, message, { status: 403 })
@@ -354,18 +373,22 @@ export function guard<R extends Registry, C = unknown>(
 
 /**
  * Sugar over {@link guard}: allow only when the slot value's `role` is (one of)
- * `role`. Reads the default `currentUser` slot (override via `options.slot`) and
- * rejects with the default 403 `forbidden` envelope.
+ * `role`. Reads the default `currentUser` slot (override via `options.slot`,
+ * type-checked against `R` the same way {@link guard} is) and rejects with the
+ * default 403 `forbidden` envelope. The slot value's shape is not known beyond
+ * "some `R`-registered scoped slot", so reading `role` off it is a boundary cast,
+ * same as `jwtAuth`'s `c.set`.
  */
-export function requireRole<R extends Registry>(
-  role: string | readonly string[],
-  options?: { slot?: string },
-): Middleware<R>['handler'] {
+export function requireRole<
+  R extends Registry,
+  const S extends ScopedKeys<R> = DefaultGuardSlot<R>,
+>(role: string | readonly string[], options?: { slot?: S }): Middleware<R>['handler'] {
   const allowed = typeof role === 'string' ? [role] : role
-  return guard<R, Record<string, unknown>>({
+  return guard<R, S>({
     slot: options?.slot,
     authorize: (claims) => {
-      const value = claims['role']
+      // kata-allow: hono-boundary
+      const value = (claims as unknown as Record<string, unknown>)['role']
       return typeof value === 'string' && allowed.includes(value)
     },
   })
@@ -375,22 +398,27 @@ export function requireRole<R extends Registry>(
  * Sugar over {@link guard}: allow only when the slot value's claim at `key`
  * matches `expected` — by strict equality, or, when `expected` is a function, by
  * that predicate. Reads the default `currentUser` slot (override via
- * `options.slot`) and rejects with the default 403 `forbidden` envelope.
+ * `options.slot`, type-checked against `R` the same way {@link guard} is) and
+ * rejects with the default 403 `forbidden` envelope.
  */
 export function requireClaim<
   R extends Registry,
-  C extends Record<string, unknown> = Record<string, unknown>,
+  const S extends ScopedKeys<R> = DefaultGuardSlot<R>,
 >(
   key: string,
   expected: unknown | ((value: unknown) => boolean),
-  options?: { slot?: string },
+  options?: { slot?: S },
 ): Middleware<R>['handler'] {
   const matches: (value: unknown) => boolean =
     typeof expected === 'function'
       ? (expected as (value: unknown) => boolean)
       : (value) => value === expected
-  return guard<R, C>({
+  return guard<R, S>({
     slot: options?.slot,
-    authorize: (claims) => matches(claims[key]),
+    authorize: (claims) => {
+      // kata-allow: hono-boundary
+      const record = claims as unknown as Record<string, unknown>
+      return matches(record[key])
+    },
   })
 }

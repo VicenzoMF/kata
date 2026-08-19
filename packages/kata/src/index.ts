@@ -36,4 +36,5 @@ export type {
   Singleton,
   SingletonKeys,
   Slot,
+  SlotValue,
 } from './types'
