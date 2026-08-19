@@ -39,3 +39,37 @@ header "X-Frame-Options" == "SAMEORIGIN"
 header "Strict-Transport-Security" == "max-age=15552000; includeSubDomains"
 header "Access-Control-Allow-Origin" == "*"
 body == "id,name\n1,Ada Lovelace\n2,Grace Hopper\n"
+
+
+# 4. GET /nope — no route matches at all (issue #209): Hono's default
+#    text/plain 404 must not escape — this still comes back as the ADR-0008
+#    JSON envelope, carrying the same x-request-id and security headers as
+#    every other response, plus a request log line (asserted in unit tests).
+GET http://localhost:3000/nope
+HTTP 404
+[Asserts]
+header "Content-Type" contains "application/json"
+jsonpath "$.error" == "not_found"
+jsonpath "$.message" == "Route not found"
+header "X-Request-Id" matches "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+header "X-Content-Type-Options" == "nosniff"
+
+
+# 5. DELETE /request-id — the path exists (GET-only): a wrong method answers
+#    405, not 404, with a correct Allow header naming the registered method.
+DELETE http://localhost:3000/request-id
+HTTP 405
+[Asserts]
+header "Allow" == "GET"
+jsonpath "$.error" == "method_not_allowed"
+
+
+# 6. OPTIONS /request-id — a browser CORS preflight. main.ts's global `cors()`
+#    (ADR-0012) answers it itself before the 404/405 decision ever runs, so
+#    preflight keeps working with no per-path OPTIONS route to hand-write.
+OPTIONS http://localhost:3000/request-id
+Origin: https://example.com
+Access-Control-Request-Method: GET
+HTTP 204
+[Asserts]
+header "Access-Control-Allow-Origin" == "*"

@@ -2,6 +2,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { z } from 'zod'
 
 import { defineContext, scoped, singleton } from './context'
+import { cors } from './middlewares/cors'
+import { secureHeaders } from './middlewares/secure-headers'
 import type { Singleton } from './types'
 
 describe('singleton()', () => {
@@ -448,5 +450,115 @@ describe('finalizeResponse with an immutable Response (issue #207)', () => {
 
     released = true
     expect(await res.text()).toBe('chunk')
+  })
+})
+
+describe('notFound / unmatched routes (issue #209)', () => {
+  const k = defineContext({})
+
+  function makeApp(middlewares?: Parameters<typeof k.createApp>[0]['middlewares']) {
+    const route = k.defineRoute({
+      method: 'GET',
+      path: '/orgs/:id',
+      input: {},
+      output: z.object({ id: z.string() }),
+      handler: (c) => ({ id: c.raw.req.param('id') ?? '' }),
+    })
+    const other = k.defineRoute({
+      method: 'POST',
+      path: '/orgs/:id',
+      input: {},
+      output: z.object({ ok: z.boolean() }),
+      handler: () => ({ ok: true }),
+    })
+    return k.createApp({ modules: [{ route, other }], middlewares })
+  }
+
+  it('a genuinely unmatched path answers the ADR-0008 404 envelope with x-request-id', async () => {
+    const app = makeApp()
+    const res = await app.request('/does-not-exist')
+
+    expect(res.status).toBe(404)
+    expect(res.headers.get('content-type')).toContain('application/json')
+    expect(await res.json()).toEqual({ error: 'not_found', message: 'Route not found' })
+    expect(res.headers.get('x-request-id')).toMatch(
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/,
+    )
+  })
+
+  it('a wrong method on a registered path answers 405 with a correct Allow header', async () => {
+    const app = makeApp()
+    const res = await app.request('/orgs/5', { method: 'DELETE' })
+
+    expect(res.status).toBe(405)
+    expect(res.headers.get('allow')).toBe('GET, POST')
+    expect(await res.json()).toEqual({ error: 'method_not_allowed', message: 'Method not allowed' })
+  })
+
+  it('matches the registered path *pattern*, not the literal string — a param path still 405s correctly', async () => {
+    const app = makeApp()
+    const res = await app.request('/orgs/abc-123', { method: 'PATCH' })
+
+    expect(res.status).toBe(405)
+    expect(res.headers.get('allow')).toBe('GET, POST')
+  })
+
+  it('a registered method on the registered path is unaffected', async () => {
+    const app = makeApp()
+    const res = await app.request('/orgs/5')
+
+    expect(res.status).toBe(200)
+    expect(await res.json()).toEqual({ id: '5' })
+  })
+
+  it('emits a request log line for an unmatched path', async () => {
+    const lines: unknown[] = []
+    const logger = {
+      info: () => {},
+      warn: (msg: string, meta?: object) => lines.push({ msg, ...meta }),
+      error: () => {},
+    }
+    const withLogger = defineContext({ logger: singleton(logger) })
+    const route = withLogger.defineRoute({
+      method: 'GET',
+      path: '/x',
+      input: {},
+      output: z.object({ ok: z.boolean() }),
+      handler: () => ({ ok: true }),
+    })
+    const app = withLogger.createApp({ modules: [{ route }] })
+    await app.request('/nope')
+
+    expect(lines).toEqual([expect.objectContaining({ method: 'GET', path: '/nope', status: 404 })])
+  })
+
+  it('carries the app-level security headers declared as an ADR-0012 global', async () => {
+    const app = makeApp([secureHeaders()])
+    const res = await app.request('/does-not-exist')
+
+    expect(res.status).toBe(404)
+    expect(res.headers.get('x-content-type-options')).toBe('nosniff')
+  })
+
+  it('an ADR-0012 global cors() answers an OPTIONS preflight itself, before the 405 path', async () => {
+    const app = makeApp([cors({ origin: 'https://example.com' })])
+    const res = await app.request('/orgs/5', {
+      method: 'OPTIONS',
+      headers: {
+        Origin: 'https://example.com',
+        'Access-Control-Request-Method': 'GET',
+      },
+    })
+
+    expect(res.status).toBe(204)
+    expect(res.headers.get('access-control-allow-origin')).toBe('https://example.com')
+  })
+
+  it('OPTIONS on a known path still 405s when no CORS middleware is configured', async () => {
+    const app = makeApp()
+    const res = await app.request('/orgs/5', { method: 'OPTIONS' })
+
+    expect(res.status).toBe(405)
+    expect(res.headers.get('allow')).toBe('GET, POST')
   })
 })
