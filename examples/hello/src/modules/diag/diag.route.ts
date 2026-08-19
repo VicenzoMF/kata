@@ -1,3 +1,5 @@
+import { raw } from 'katajs'
+
 import { defineRoute } from '../../context'
 
 import { ExportCsvOutputSchema, RequestIdResponseSchema } from './diag.schema'
@@ -22,12 +24,19 @@ export const requestIdRoute = defineRoute({
  * drop every app-level response header — `main.ts`'s `[cors(), secureHeaders(),
  * bodyLimit()]` chain never reached it. Demonstrates that it now does, plus
  * the correlation id and a handler-set `content-type` surviving alongside it.
+ *
+ * `output` declares `raw('text/csv', ...)` (ADR-0022, issue #208) instead of a
+ * plain schema: a plain `output: ExportCsvOutputSchema` would make the
+ * `Response` return below a `tsc` error, and — before ADR-0022 — silently
+ * skipped validating it entirely, exactly the bug issue #208 fixed. Under
+ * `strict` (the default outside production), the content-type and body are
+ * now genuinely checked against this declaration.
  */
 export const exportCsvRoute = defineRoute({
   method: 'GET',
   path: '/export.csv',
   input: {},
-  output: ExportCsvOutputSchema,
+  output: raw('text/csv', ExportCsvOutputSchema),
   handler: () =>
     new Response('id,name\n1,Ada Lovelace\n2,Grace Hopper\n', {
       headers: {
