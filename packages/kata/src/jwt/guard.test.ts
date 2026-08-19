@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { z } from 'zod'
 
 import type { Middleware } from '../context'
@@ -53,7 +53,7 @@ describe('guard() — allow / deny', () => {
   it('calls next() (200) when authorize returns true', async () => {
     const res = await mount(
       ADMIN,
-      guard<typeof k.registry, User>({ authorize: (u) => u.role === 'admin' }),
+      guard<typeof k.registry>({ authorize: (u) => u.role === 'admin' }),
     )
 
     expect(res.status).toBe(200)
@@ -63,7 +63,7 @@ describe('guard() — allow / deny', () => {
   it('rejects with the default 403 forbidden envelope when authorize returns false', async () => {
     const res = await mount(
       MEMBER,
-      guard<typeof k.registry, User>({ authorize: (u) => u.role === 'admin' }),
+      guard<typeof k.registry>({ authorize: (u) => u.role === 'admin' }),
     )
 
     expect(res.status).toBe(403)
@@ -73,7 +73,7 @@ describe('guard() — allow / deny', () => {
   it('honours a custom code and message', async () => {
     const res = await mount(
       MEMBER,
-      guard<typeof k.registry, User>({
+      guard<typeof k.registry>({
         authorize: () => false,
         code: 'not_admin',
         message: 'Admins only',
@@ -87,14 +87,14 @@ describe('guard() — allow / deny', () => {
   it('awaits an async authorize predicate', async () => {
     const res = await mount(
       ADMIN,
-      guard<typeof k.registry, User>({ authorize: (u) => Promise.resolve(u.role === 'admin') }),
+      guard<typeof k.registry>({ authorize: (u) => Promise.resolve(u.role === 'admin') }),
     )
 
     expect(res.status).toBe(200)
   })
 
   it('passes the middleware context to authorize', async () => {
-    const handler = guard<typeof k.registry, User>({
+    const handler = guard<typeof k.registry>({
       authorize: (_user, c) => c.header('x-allow') === 'yes',
     })
 
@@ -113,7 +113,7 @@ describe('guard() — allow / deny', () => {
     })
     const guarded = k2.defineMiddleware({
       provides: [] as const,
-      handler: guard<typeof k2.registry, User>({
+      handler: guard<typeof k2.registry>({
         slot: 'viewer',
         authorize: (u) => u.role === 'admin',
       }),
@@ -129,6 +129,44 @@ describe('guard() — allow / deny', () => {
     const app = k2.createApp({ modules: [{ route }] })
 
     expect((await app.request('/v', { method: 'GET' })).status).toBe(200)
+  })
+
+  describe('runtime backstop for a slot name that bypasses the type check (#211)', () => {
+    afterEach(() => {
+      vi.restoreAllMocks()
+    })
+
+    it('throws a Kata-prefixed error naming the slot, instead of handing `undefined` to authorize', async () => {
+      const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+      const guarded = k.defineMiddleware({
+        provides: [] as const,
+        handler: guard<typeof k.registry>({
+          // Only reachable by a caller that bypasses `slot`'s `ScopedKeys<R>`
+          // constraint (plain JS, or an explicit escape hatch like this one) —
+          // `tsc` itself now refuses a slot name absent from the registry.
+          slot: 'bogus' as never,
+          authorize: () => true,
+        }),
+      })
+      const route = k.defineRoute({
+        method: 'GET',
+        path: '/bogus-slot',
+        use: [guarded],
+        input: {},
+        output: z.object({ ok: z.literal(true) }),
+        handler: () => ({ ok: true as const }),
+      })
+      const app = k.createApp({ modules: [{ route }] })
+
+      const res = await app.request('/bogus-slot', { method: 'GET' })
+
+      // The unhandled throw collapses to the generic 500 envelope (ADR-0008) —
+      // never a 403, which would mean `authorize` silently ran on `undefined`.
+      expect(res.status).toBe(500)
+      expect(errSpy).toHaveBeenCalledTimes(1)
+      const logged = errSpy.mock.calls[0]?.[1] as { err?: { message?: string } } | undefined
+      expect(logged?.err?.message).toContain("kata: key 'bogus' not registered in defineContext")
+    })
   })
 })
 

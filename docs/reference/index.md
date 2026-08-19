@@ -90,6 +90,7 @@ Types:
 | `SingletonKeys` | The singleton keys of a registry. |
 | `ScopedKeys` | The scoped keys of a registry — the only keys a middleware may `provides`/`set`. |
 | `ResolvedValue` | The value type a slot resolves to via `c.get`. |
+| `SlotValue<R, K>` | `ResolvedValue<R[K]>` for a scoped key `K` — the same projection `c.get` uses, and what `katajs/jwt`'s `guard` derives `authorize`'s parameter from. |
 | `Logger` | The structured logger shape a `logger` singleton may satisfy for per-request logging. `extra.err` arrives pre-flattened as a `SerializedError`, never a raw `Error`. |
 | `SerializedError` | The plain-data mirror of an `Error` — `{ name, message, stack?, cause?, errors? }` — that `logger.error` receives under `extra.err`. |
 | `LogExtra` | The `extra` payload type of every `Logger` method: open (`Record<string, unknown>`), with the reserved `err` key typed as `SerializedError`. |

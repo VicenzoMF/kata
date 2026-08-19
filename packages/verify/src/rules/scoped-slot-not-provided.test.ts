@@ -701,4 +701,173 @@ const app = k.createApp({ modules: [], middlewares: [auth] })`,
     expect(issuesOf(p)).toHaveLength(1)
     expect(suppressionsOf(p)).toEqual([])
   })
+
+  // ── kata/jwt guards as a handler: value (issue #211) ───────────────────────
+  // `guard` / `requireRole` / `requireClaim` return a bare handler function, so
+  // `handler: guard({ … })` is never a function literal the walker can step
+  // into — before #211 this read was invisible to the rule entirely.
+
+  /** Provides `tenantId` without reading anything else — keeps these fixtures to one slot. */
+  const TENANT_MW = {
+    relPath: 'src/middlewares/tenant.ts',
+    text: `export const tenant = defineMiddleware({
+      provides: ['tenantId'] as const,
+      handler: (c, next) => { c.set('tenantId', 1); return next() },
+    })`,
+  }
+  const IMPORT_TENANT = "import { tenant } from '../../middlewares/tenant'\n"
+
+  it('flags a guard() middleware reading its slot before the provider runs', () => {
+    const guardMw = {
+      relPath: 'src/middlewares/require-tenant-owner.ts',
+      text: `import { guard } from 'katajs/jwt'
+export const requireTenantOwner = defineMiddleware({
+  provides: [] as const,
+  handler: guard({ slot: 'tenantId', authorize: (id) => id === 1 }),
+})`,
+    }
+    const p = project(
+      [
+        TENANT_MW,
+        guardMw,
+        route(
+          `  method: 'GET', path: '/me', use: [requireTenantOwner, tenant], input: {}, output: U,
+  handler: (c) => c.get('tenantId'),`,
+          `import { requireTenantOwner } from '../../middlewares/require-tenant-owner'\n${IMPORT_TENANT}`,
+        ),
+      ],
+      SCOPED,
+    )
+    const issues = issuesOf(p)
+    expect(issues).toHaveLength(1)
+    expect(issues[0]?.message).toContain('requireTenantOwner')
+    expect(issues[0]?.message).toContain("c.get('tenantId')")
+  })
+
+  it('passes a guard() middleware whose slot is provided earlier in the chain', () => {
+    const guardMw = {
+      relPath: 'src/middlewares/require-tenant-owner.ts',
+      text: `import { guard } from 'katajs/jwt'
+export const requireTenantOwner = defineMiddleware({
+  provides: [] as const,
+  handler: guard({ slot: 'tenantId', authorize: (id) => id === 1 }),
+})`,
+    }
+    const p = project(
+      [
+        TENANT_MW,
+        guardMw,
+        route(
+          `  method: 'GET', path: '/me', use: [tenant, requireTenantOwner], input: {}, output: U,
+  handler: (c) => c.get('tenantId'),`,
+          `import { requireTenantOwner } from '../../middlewares/require-tenant-owner'\n${IMPORT_TENANT}`,
+        ),
+      ],
+      SCOPED,
+    )
+    expect(issuesOf(p)).toEqual([])
+  })
+
+  it('defaults an unslotted guard() to reading `currentUser`', () => {
+    const guardMw = {
+      relPath: 'src/middlewares/require-admin.ts',
+      text: `import { guard } from 'katajs/jwt'
+export const requireAdmin = defineMiddleware({
+  provides: [] as const,
+  handler: guard({ authorize: (u) => u.role === 'admin' }),
+})`,
+    }
+    const p = project(
+      [
+        AUTH_MW,
+        guardMw,
+        route(
+          `  method: 'GET', path: '/me', use: [requireAdmin, auth], input: {}, output: U,
+  handler: (c) => c.get('currentUser'),`,
+          `import { requireAdmin } from '../../middlewares/require-admin'\n${IMPORT_AUTH}`,
+        ),
+      ],
+      SCOPED,
+    )
+    const issues = issuesOf(p)
+    expect(issues).toHaveLength(1)
+    expect(issues[0]?.message).toContain('requireAdmin')
+    expect(issues[0]?.message).toContain("c.get('currentUser')")
+  })
+
+  it('flags requireRole() placed before its provider — the slot is its 2nd argument', () => {
+    const requireRoleMw = {
+      relPath: 'src/middlewares/admin-only.ts',
+      text: `import { requireRole } from 'katajs/jwt'
+export const adminOnly = defineMiddleware({
+  provides: [] as const,
+  handler: requireRole('admin'),
+})`,
+    }
+    const p = project(
+      [
+        AUTH_MW,
+        requireRoleMw,
+        route(
+          `  method: 'GET', path: '/me', use: [adminOnly, auth], input: {}, output: U,
+  handler: (c) => c.get('currentUser'),`,
+          `import { adminOnly } from '../../middlewares/admin-only'\n${IMPORT_AUTH}`,
+        ),
+      ],
+      SCOPED,
+    )
+    expect(issuesOf(p)).toHaveLength(1)
+  })
+
+  it('flags requireClaim() reading its explicit slot — the 3rd argument', () => {
+    const requireClaimMw = {
+      relPath: 'src/middlewares/owner-only.ts',
+      text: `import { requireClaim } from 'katajs/jwt'
+export const ownerOnly = defineMiddleware({
+  provides: [] as const,
+  handler: requireClaim('id', 1, { slot: 'tenantId' }),
+})`,
+    }
+    const p = project(
+      [
+        TENANT_MW,
+        requireClaimMw,
+        route(
+          `  method: 'GET', path: '/me', use: [ownerOnly, tenant], input: {}, output: U,
+  handler: (c) => c.get('tenantId'),`,
+          `import { ownerOnly } from '../../middlewares/owner-only'\n${IMPORT_TENANT}`,
+        ),
+      ],
+      SCOPED,
+    )
+    const issues = issuesOf(p)
+    expect(issues).toHaveLength(1)
+    expect(issues[0]?.message).toContain('ownerOnly')
+    expect(issues[0]?.message).toContain("c.get('tenantId')")
+  })
+
+  it('does not flag a guard() whose slot is a dynamic value (best-effort — a missed read, not a suppression)', () => {
+    const guardMw = {
+      relPath: 'src/middlewares/dynamic-guard.ts',
+      text: `import { guard } from 'katajs/jwt'
+const SLOT = 'tenantId'
+export const dynamicGuard = defineMiddleware({
+  provides: [] as const,
+  handler: guard({ slot: SLOT, authorize: (id) => id === 1 }),
+})`,
+    }
+    const p = project(
+      [
+        guardMw,
+        route(
+          `  method: 'GET', path: '/me', use: [dynamicGuard], input: {}, output: U,
+  handler: (c) => 1,`,
+          `import { dynamicGuard } from '../../middlewares/dynamic-guard'\n`,
+        ),
+      ],
+      SCOPED,
+    )
+    expect(issuesOf(p)).toEqual([])
+    expect(suppressionsOf(p)).toEqual([])
+  })
 })
