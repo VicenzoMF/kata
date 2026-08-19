@@ -6,14 +6,16 @@ export type {
   Middleware,
   MiddlewareContext,
   Module,
+  OutputEntry,
   OutputMap,
   OutputSpec,
+  RawOutput,
   Route,
   RouteContext,
   RouteHandlerReturn,
   SuccessOutput,
 } from './context'
-export { defineContext, scoped, singleton } from './context'
+export { defineContext, raw, scoped, singleton } from './context'
 export type { ErrorBody, ErrorExtra, FieldIssue, FieldIssues, SerializedError } from './errors'
 export {
   buildErrorBody,

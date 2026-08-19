@@ -140,32 +140,92 @@ export type RouteContext<R extends Registry, I extends InputSchemas> = {
   requestId: string
 }
 
-/** A response-body schema keyed by HTTP status code (ADR-0011). */
-export type OutputMap = { readonly [status: number]: z.ZodTypeAny }
+/**
+ * A non-JSON response contract for one `output` entry (ADR-0022): the body is
+ * validated as **text** against `schema` instead of JSON, and the response's
+ * `content-type` header must match `contentType` (parameters like
+ * `; charset=utf-8` are ignored). Build one with {@link raw}.
+ */
+export type RawOutput<T extends z.ZodTypeAny = z.ZodTypeAny> = {
+  readonly __kata: 'raw'
+  readonly contentType: string
+  readonly schema: T
+}
 
 /**
- * A route's `output` contract (ADR-0011): either a single Zod schema for the
- * success (200) body — the ADR-0003 form — or a map from HTTP status code to
- * the schema for that status's body (e.g. `{ 200: UserSchema, 404: ErrorBodySchema }`).
+ * Declare a non-JSON response contract (ADR-0022) for an `output` entry: the
+ * body is validated as text against `schema`, and the response's
+ * `content-type` must match `contentType`. Use it wherever a route serves
+ * something other than JSON — CSV, plain text, a file download:
+ *
+ * ```ts
+ * output: { 200: raw('text/csv', z.string()) }
+ * ```
+ *
+ * A `raw` entry has no plain-value equivalent, so it can only be satisfied by
+ * a `Response` the handler builds itself — `RouteHandlerReturn` enforces this
+ * at compile time, and `hc<typeof app>` types the endpoint's client response
+ * with `.text()` instead of `.json()` (ADR-0022).
  */
-export type OutputSpec = z.ZodTypeAny | OutputMap
+export function raw<T extends z.ZodTypeAny>(contentType: string, schema: T): RawOutput<T> {
+  return { __kata: 'raw', contentType, schema }
+}
+
+/** One `output` entry: a JSON body schema, or a non-JSON contract (ADR-0022). */
+export type OutputEntry = z.ZodTypeAny | RawOutput
+
+/** A response-body contract keyed by HTTP status code (ADR-0011, ADR-0022). */
+export type OutputMap = { readonly [status: number]: OutputEntry }
+
+/**
+ * A route's `output` contract: a single entry for the success (200) body —
+ * the ADR-0003 form, widened by ADR-0022 to also accept {@link raw} — or a
+ * map from HTTP status code to the entry for that status (ADR-0011), e.g.
+ * `{ 200: UserSchema, 404: ErrorBodySchema }`.
+ */
+export type OutputSpec = OutputEntry | OutputMap
 
 /**
  * The body a handler may return as a *plain value* (not via `c.json` / `c.error`).
  * It is always the 200 body: `z.infer` of the single schema, or of `output[200]`
- * for a map. A map without a `200` entry yields `never` — such a route must
- * return a `Response` (e.g. `c.json(body, 201)`), since a plain return cannot
- * express a non-200 status (ADR-0011).
+ * for a map. `never` when the success entry is a {@link RawOutput} — it has no
+ * plain-value equivalent (ADR-0022) — or when a map has no `200` entry; either
+ * way the route must return a `Response` (e.g. `c.json(body, 201)`), since a
+ * plain return cannot express a non-200 status (ADR-0011).
  */
-export type SuccessOutput<O extends OutputSpec> = O extends z.ZodTypeAny
-  ? z.infer<O>
-  : O extends OutputMap
-    ? 200 extends keyof O
-      ? z.infer<O[200]>
+export type SuccessOutput<O extends OutputSpec> = O extends RawOutput
+  ? never
+  : O extends z.ZodTypeAny
+    ? z.infer<O>
+    : O extends OutputMap
+      ? 200 extends keyof O
+        ? O[200] extends RawOutput
+          ? never
+          : O[200] extends z.ZodTypeAny
+            ? z.infer<O[200]>
+            : never
+        : never
       : never
-    : never
 
-export type RouteHandlerReturn<O extends OutputSpec> = SuccessOutput<O> | Response
+/**
+ * What a handler may return for a given `output` declaration (ADR-0011,
+ * ADR-0022):
+ * - a single {@link RawOutput} entry — only a `Response` satisfies it.
+ * - a single plain Zod schema — only the plain value. A bare `Response` no
+ *   longer bypasses validation here: that escape hatch is what let a
+ *   declared `output` lie about a non-JSON body (ADR-0022). A route that
+ *   needs `c.error`/`c.json(body, status)` for another status declares the
+ *   map form instead — the same migration ADR-0011 already established.
+ * - a status→schema map — a plain value for `output[200]` (if declared and
+ *   not raw), or a `Response` for any status, exactly as ADR-0011 already
+ *   allowed (`c.error`/`c.json(body, status)` remain how a non-200 status,
+ *   including a declared `raw` one, is set).
+ */
+export type RouteHandlerReturn<O extends OutputSpec> = O extends RawOutput
+  ? Response
+  : O extends z.ZodTypeAny
+    ? SuccessOutput<O>
+    : SuccessOutput<O> | Response
 
 export type Route<
   R extends Registry,
@@ -535,16 +595,16 @@ async function readInputs<I extends InputSchemas>(
   | { ok: false; issues: Record<string, FieldIssue[]> }
   | { ok: false; response: Response }
 > {
-  const raw: Record<string, unknown> = {}
-  if (input.params) raw['params'] = c.req.param()
-  if (input.query) raw['query'] = c.req.query()
+  const rawInputs: Record<string, unknown> = {}
+  if (input.params) rawInputs['params'] = c.req.param()
+  if (input.query) rawInputs['query'] = c.req.query()
   if (input.body) {
     const text = await c.req.text()
     if (!text) {
-      raw['body'] = undefined
+      rawInputs['body'] = undefined
     } else {
       try {
-        raw['body'] = JSON.parse(text)
+        rawInputs['body'] = JSON.parse(text)
       } catch {
         return {
           ok: false,
@@ -564,7 +624,7 @@ async function readInputs<I extends InputSchemas>(
     // fields in lowercase (e.g. `authorization`, not `Authorization`).
     const all: Record<string, string> = {}
     for (const [k, v] of Object.entries(c.req.header())) all[k.toLowerCase()] = v
-    raw['headers'] = all
+    rawInputs['headers'] = all
   }
 
   const parsed: Record<string, unknown> = {}
@@ -577,7 +637,7 @@ async function readInputs<I extends InputSchemas>(
       parsed[key] = undefined
       continue
     }
-    const result = schema.safeParse(raw[key])
+    const result = schema.safeParse(rawInputs[key])
     if (!result.success) {
       issues[key] = formatZodIssues(result.error)
       failed = true
@@ -593,21 +653,41 @@ async function readInputs<I extends InputSchemas>(
 /** The status a plain (non-`Response`) handler return maps to (ADR-0011). */
 const SUCCESS_STATUS = 200
 
-/** A route `output` is a single schema (ADR-0003) or a status→schema map (ADR-0011). */
-function isZodSchema(output: OutputSpec): output is z.ZodTypeAny {
-  return typeof (output as { safeParse?: unknown }).safeParse === 'function'
+/** True when `entry` is a {@link RawOutput} built by `raw()` (ADR-0022). */
+function isRawOutput(entry: OutputEntry): entry is RawOutput {
+  return (entry as { __kata?: unknown }).__kata === 'raw'
+}
+
+/** A route `output` is a single entry (ADR-0003/ADR-0022) or a status→entry map (ADR-0011). */
+function isOutputEntry(output: OutputSpec): output is OutputEntry {
+  return (
+    typeof (output as { safeParse?: unknown }).safeParse === 'function' ||
+    isRawOutput(output as OutputEntry)
+  )
+}
+
+/**
+ * The `output` entry declared for `status`, treating a single entry (ADR-0003
+ * schema or ADR-0022 `raw`) as sugar for `{ 200: entry }` (ADR-0011) — the
+ * single-entry and map forms are read through the same lookup, so a
+ * `Response`'s body is validated identically regardless of which form the
+ * route used (ADR-0022 unifies what ADR-0011 left as two disagreeing paths).
+ */
+function entryForStatus(output: OutputSpec, status: number): OutputEntry | undefined {
+  if (isOutputEntry(output)) return status === SUCCESS_STATUS ? output : undefined
+  return output[status]
 }
 
 /**
  * Build + validate the response for whatever the handler returned, honouring the
  * configured mode (ADR-0009) against the route's `output` contract (ADR-0003 single
- * schema or ADR-0011 status→schema map):
- * - a **plain value** is the 200 body — validated against the single schema or
- *   `output[200]`.
- * - a **`Response`** carries its own status; in the map form its body is validated
- *   against `output[status]` when that status is declared. The single-schema form
- *   and undeclared statuses pass the `Response` through unvalidated (back-compat:
- *   a `Response` has always short-circuited output validation).
+ * entry, ADR-0011 status→entry map, ADR-0022 non-JSON `raw` entries):
+ * - a **plain value** is the 200 body — validated against the success entry.
+ * - a **`Response`** carries its own status; its body is validated against
+ *   `entryForStatus(output, response.status)` when that status is declared,
+ *   as JSON (`validateResponseBody`) or, for a `raw` entry, as text against
+ *   its content-type + schema (`validateRawResponseBody`). An undeclared
+ *   status passes through unvalidated, exactly as ADR-0011 already allowed.
  */
 async function buildResponse<R extends Registry>(
   c: import('hono').Context,
@@ -617,13 +697,15 @@ async function buildResponse<R extends Registry>(
 ): Promise<Response> {
   const output = route.output
   if (result instanceof Response) {
-    if (options.outputValidation !== 'off' && !isZodSchema(output)) {
-      const schema = output[result.status]
-      if (schema) return validateResponseBody(c, route, result, schema, options)
-    }
-    return result
+    if (options.outputValidation === 'off') return result
+    const entry = entryForStatus(output, result.status)
+    if (!entry) return result
+    return isRawOutput(entry)
+      ? validateRawResponseBody(c, route, result, entry, options)
+      : validateResponseBody(c, route, result, entry, options)
   }
-  const successSchema = isZodSchema(output) ? output : output[SUCCESS_STATUS]
+  const successEntry = entryForStatus(output, SUCCESS_STATUS)
+  const successSchema = successEntry && !isRawOutput(successEntry) ? successEntry : undefined
   return buildOutputResponse(c, route, result, successSchema, options)
 }
 
@@ -661,13 +743,14 @@ function buildOutputResponse<R extends Registry>(
 }
 
 /**
- * Validate a handler-returned `Response`'s body against the schema declared for
- * its status (ADR-0011), as a shape check. The original `Response` is forwarded
- * verbatim on success — Kata never re-serialises a response the handler built, so
- * a custom header or content type the handler set is preserved. `finalizeResponse`
- * merges in app-level headers afterwards (ADR-0020, issue #207); it is not this
- * function's concern. Reached only in the map form, for a declared status, when
- * the mode is not `off`.
+ * Validate a handler-returned `Response`'s JSON body against the schema
+ * declared for its status (ADR-0011), as a shape check. The original
+ * `Response` is forwarded verbatim on success — Kata never re-serialises a
+ * response the handler built, so a custom header or content type the handler
+ * set is preserved; `finalizeResponse` merges in app-level headers afterwards
+ * (ADR-0020, issue #207), which is not this function's concern. Reached for
+ * any declared status — single entry or map, unified by `entryForStatus`
+ * (ADR-0022) — when the mode is not `off`.
  */
 async function validateResponseBody<R extends Registry>(
   c: import('hono').Context,
@@ -695,6 +778,43 @@ async function validateResponseBody<R extends Registry>(
   return response
 }
 
+/**
+ * Validate a handler-returned `Response`'s body against a declared `raw`
+ * entry (ADR-0022):
+ * - the `content-type` header must match `entry.contentType` — cheap (a
+ *   header read), so it runs whenever the mode is not `off`.
+ * - the **text** body must match `entry.schema` — needs `clone().text()`,
+ *   which buffers the whole response, so it runs only in `strict` mode. A
+ *   route serving a large download must never pay that cost in `log`
+ *   (production); `registerRoute` warns once at startup when a route's body
+ *   will go unchecked for this reason, instead of staying silent about it.
+ */
+async function validateRawResponseBody<R extends Registry>(
+  c: import('hono').Context,
+  route: Route<R>,
+  response: Response,
+  entry: RawOutput,
+  options: RuntimeOptions<R>,
+): Promise<Response> {
+  const actual = mediaType(response.headers.get('content-type'))
+  const declared = mediaType(entry.contentType)
+  if (actual !== declared) {
+    logOutputContentTypeMismatch(route, response.status, declared, actual, options)
+    return options.outputValidation === 'strict' ? outputMismatchResponse(c) : response
+  }
+  if (options.outputValidation !== 'strict') return response
+  const text = await response.clone().text()
+  const parsed = entry.schema.safeParse(text)
+  if (parsed.success) return response
+  logOutputMismatch(route, response.status, parsed.error.issues, options)
+  return outputMismatchResponse(c)
+}
+
+/** The media type of a `content-type` header, ignoring parameters (`; charset=…`). */
+function mediaType(contentType: string | null | undefined): string {
+  return (contentType ?? '').split(';', 1)[0]!.trim().toLowerCase()
+}
+
 /** Server-side diagnostic for an output-schema mismatch — the same line `strict` has always emitted. */
 function logOutputMismatch<R extends Registry>(
   route: Route<R>,
@@ -704,6 +824,18 @@ function logOutputMismatch<R extends Registry>(
 ): void {
   const msg = `kata: output schema mismatch in ${route.method} ${route.path} (status ${status})`
   logFrameworkError(options.logger, msg, { issues })
+}
+
+/** Server-side diagnostic for a `raw` output content-type mismatch (ADR-0022). */
+function logOutputContentTypeMismatch<R extends Registry>(
+  route: Route<R>,
+  status: number,
+  declared: string,
+  actual: string,
+  options: RuntimeOptions<R>,
+): void {
+  const msg = `kata: output content-type mismatch in ${route.method} ${route.path} (status ${status}): declared '${declared}', got '${actual || '(none)'}'`
+  logFrameworkError(options.logger, msg, {})
 }
 
 /** The 500 envelope (ADR-0008) `strict` returns when a response violates its declared output schema. */
@@ -818,6 +950,38 @@ async function runMiddlewareChain<R extends Registry>(
   return shortCircuit
 }
 
+/**
+ * One-time startup diagnostic (ADR-0022): when a route declares a `raw`
+ * output entry and the resolved mode is `log`, its body will never be
+ * buffered to check it — say so once at registration instead of staying
+ * silent about an unvalidated contract. `strict` needs no warning (the body
+ * is checked); `off` needs a different one, since it skips the content-type
+ * check too — not worth a separate message for an explicit, documented
+ * opt-out (ADR-0009).
+ */
+function warnUnvalidatedRawBodies<R extends Registry>(
+  route: Route<R>,
+  options: RuntimeOptions<R>,
+): void {
+  if (options.outputValidation !== 'log') return
+  const statuses = rawStatusesOf(route.output)
+  if (statuses.length === 0) return
+  const msg = `kata: ${route.method} ${route.path} declares raw() output for status ${statuses.join(', ')} — the body is only validated in 'strict' outputValidation mode (current: 'log'); only its content-type is checked`
+  if (options.logger?.warn) {
+    options.logger.warn(msg)
+  } else {
+    console.warn(msg)
+  }
+}
+
+/** Every status a route's `output` declares as a `raw` entry (ADR-0022). */
+function rawStatusesOf(output: OutputSpec): number[] {
+  if (isOutputEntry(output)) return isRawOutput(output) ? [SUCCESS_STATUS] : []
+  return Object.entries(output)
+    .filter(([, entry]) => isRawOutput(entry))
+    .map(([status]) => Number(status))
+}
+
 function registerRoute<R extends Registry>(
   app: Hono,
   registry: R,
@@ -845,6 +1009,7 @@ function registerRoute<R extends Registry>(
   } else {
     pathMethods.set(route.path, new Set([route.method]))
   }
+  warnUnvalidatedRawBodies(route, options)
   // Effective chain (ADR-0012): app-level middleware runs before the route's own
   // `use:`, each in declared order, the global chain outermost. Built once here at
   // registration — a global is just an earlier entry in the same array, so the

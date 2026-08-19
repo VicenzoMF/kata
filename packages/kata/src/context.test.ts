@@ -87,11 +87,14 @@ describe('c.error() helper (ADR-0008)', () => {
   const k = defineContext({})
 
   it('serialises the unified envelope with the status carried in extra', async () => {
+    // Map form (ADR-0011): a bare Response against a plain Zod output no
+    // longer bypasses validation (ADR-0022), so a route that returns
+    // `c.error` for a status other than its 200 declares that status here.
     const route = k.defineRoute({
       method: 'GET',
       path: '/missing',
       input: {},
-      output: z.object({ ok: z.boolean() }),
+      output: { 200: z.object({ ok: z.boolean() }) },
       handler: (c) => c.error('not_found', 'User not found', { status: 404 }),
     })
     const app = k.createApp({ modules: [{ route }] })
@@ -107,7 +110,7 @@ describe('c.error() helper (ADR-0008)', () => {
       method: 'GET',
       path: '/bad',
       input: {},
-      output: z.object({ ok: z.boolean() }),
+      output: { 200: z.object({ ok: z.boolean() }) },
       handler: (c) => c.error('bad_request', 'Nope'),
     })
     const app = k.createApp({ modules: [{ route }] })
@@ -378,7 +381,9 @@ describe('finalizeResponse with an immutable Response (issue #207)', () => {
       method: 'GET',
       path: '/frozen',
       input: {},
-      output: z.object({ ok: z.boolean() }),
+      // Map form (ADR-0011): 302 isn't declared, so a bare Response is still
+      // allowed here (ADR-0022 only tightens the plain 200 schema).
+      output: { 200: z.object({ ok: z.boolean() }) },
       // `Response.redirect()` yields immutable headers — like a Response handed
       // back straight from `fetch()`. finalizeResponse must rebuild rather than
       // throw or silently drop the correlation-id header.
@@ -439,7 +444,13 @@ describe('finalizeResponse with an immutable Response (issue #207)', () => {
       output: z.object({ ok: z.boolean() }),
       handler: () => immutable,
     })
-    const app = k.createApp({ modules: [{ route }] })
+    // Output validation is unrelated to what this test exercises (the header
+    // merge/rebuild seam), and would itself buffer the body to check it
+    // (ADR-0022) — turned off so only the rebuild path under test touches the
+    // stream. `{ ok: boolean }` also happens to structurally overlap `Response`
+    // (which has a real `ok` property), a known structural-typing caveat
+    // (ADR-0022) that lets a bare Response through a plain schema undetected.
+    const app = k.createApp({ modules: [{ route }], outputValidation: 'off' })
     // Resolves without ever releasing the stall — proof the rebuild passed
     // `response.body` through untouched instead of awaiting it to completion.
     const res = await app.request('/stream')

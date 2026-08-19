@@ -1,4 +1,4 @@
-import { ErrorBodySchema } from 'katajs'
+import { ErrorBodySchema, raw } from 'katajs'
 
 import { defineRoute } from '../../context'
 import { requireUser } from '../../middlewares/auth'
@@ -8,8 +8,9 @@ import {
   CreateUserBodySchema,
   GetUserParamsSchema,
   UserSchema,
+  UsersCsvSchema,
 } from './users.schema'
-import { createUser, getUser } from './users.service'
+import { createUser, getUser, listUsers, usersToCsv } from './users.service'
 
 /**
  * Multi-status output (ADR-0011): the 200 success body is `UserSchema`; a miss
@@ -35,6 +36,23 @@ export const createUserRoute = defineRoute({
   input: { body: CreateUserBodySchema },
   output: UserSchema,
   handler: async (c) => createUser(c.input.body),
+})
+
+/**
+ * Non-JSON output (ADR-0022): `raw('text/csv', z.string())` declares that this
+ * route serves CSV, not JSON — `output` can no longer lie about a `Response`'s
+ * body the way a plain `z.string()` could (issue #208). `hc<typeof app>` types
+ * the client's `.text()` accordingly instead of `.json()`.
+ */
+export const usersCsvRoute = defineRoute({
+  method: 'GET',
+  path: '/users.csv',
+  input: {},
+  output: raw('text/csv', UsersCsvSchema),
+  handler: async () => {
+    const users = await listUsers()
+    return new Response(usersToCsv(users), { headers: { 'content-type': 'text/csv' } })
+  },
 })
 
 export const meRoute = defineRoute({

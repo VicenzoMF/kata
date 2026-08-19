@@ -28,6 +28,14 @@ const { defineRoute, createApp } = defineContext({
 `createApp`). Every route declares `input` and `output` Zod schemas; dependencies
 are read through the statically-typed `c.get('key')`.
 
+A route that serves something other than JSON — CSV, plain text, a download —
+declares it with `raw(contentType, schema)` instead of a bare schema; only a
+`Response` satisfies it, and the RPC client below types it with `.text()`:
+
+```ts
+output: raw('text/csv', z.string())
+```
+
 ## Typed RPC client
 
 `createApp` returns a parametric Hono app, so Hono's `hc` client infers paths,
