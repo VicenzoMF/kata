@@ -1,3 +1,5 @@
+import { ErrorBodySchema } from 'katajs'
+
 import { defineRoute } from '../../context'
 import { requireAuth } from '../../middlewares/auth'
 
@@ -13,12 +15,18 @@ export const getCartRoute = defineRoute({
   handler: (c) => readCart(c.get('store'), c.get('currentUser').id),
 })
 
+/**
+ * Multi-status output (ADR-0011): the 200 success body is `CartSchema`; a miss
+ * returns the unified error envelope at 404 (ADR-0008). A bare `Response`
+ * against a plain Zod output no longer bypasses validation (ADR-0022), so the
+ * 404 status must be declared here for `c.error` to type-check.
+ */
 export const addCartItemRoute = defineRoute({
   method: 'POST',
   path: '/cart/items',
   use: [requireAuth],
   input: { body: AddCartItemBodySchema },
-  output: CartSchema,
+  output: { 200: CartSchema, 404: ErrorBodySchema },
   handler: (c) => {
     const result = addItem(c.get('store'), c.get('currentUser').id, c.input.body)
     if (!result.ok) return c.error('product_not_found', 'Product not found', { status: 404 })

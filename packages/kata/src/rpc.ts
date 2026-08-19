@@ -14,7 +14,7 @@ import type { Hono } from 'hono'
 import type { BlankEnv, Schema } from 'hono/types'
 import type { z } from 'zod'
 
-import type { HttpMethod, InputSchemas, OutputMap, OutputSpec } from './context'
+import type { HttpMethod, InputSchemas, OutputMap, OutputSpec, RawOutput } from './context'
 
 /**
  * The wire-relevant projection of a route. A real `Route<R, M, P, I, O>` is a
@@ -54,26 +54,43 @@ type KataToHonoInput<I extends InputSchemas> = {
     : never
 }
 
-/** One Hono `Schema` endpoint entry — always JSON; response side uses `z.infer` (post-parse). */
-type HonoEndpoint<I extends InputSchemas, Out, S extends number> = {
+/**
+ * One Hono `Schema` endpoint entry; response side uses `z.infer` (post-parse).
+ * `outputFormat` follows the declared entry (ADR-0022): `'text'` for a
+ * `raw()` entry, so `hc` types `.text()` on the client response instead of
+ * `.json()`; `'json'` for a plain Zod schema, unchanged from ADR-0003.
+ */
+type HonoEndpoint<I extends InputSchemas, Out, S extends number, F extends 'json' | 'text'> = {
   input: KataToHonoInput<I>
   output: Out
-  outputFormat: 'json'
+  outputFormat: F
   status: S
 }
 
+/** The endpoint one map-form `output[S]` entry contributes (ADR-0011, ADR-0022). */
+type MapEntryEndpoint<I extends InputSchemas, E, S extends number> =
+  E extends RawOutput<infer T extends z.ZodTypeAny>
+    ? HonoEndpoint<I, z.infer<T>, S, 'text'>
+    : E extends z.ZodTypeAny
+      ? HonoEndpoint<I, z.infer<E>, S, 'json'>
+      : never
+
 /**
- * The endpoint(s) a Kata `output` contributes. A single schema → one `status: 200`
- * endpoint (ADR-0003, unchanged). A status→schema map → a union of endpoints, one
- * per declared status (ADR-0011) — the exact shape Hono accumulates from chained
+ * The endpoint(s) a Kata `output` contributes. A single entry → one `status: 200`
+ * endpoint (ADR-0003, unchanged; `outputFormat: 'text'` when it is `raw()`,
+ * ADR-0022). A status→entry map → a union of endpoints, one per declared
+ * status (ADR-0011) — the exact shape Hono accumulates from chained
  * `c.json(body, status)` calls, so the client narrows with
  * `InferResponseType<call, Status>`.
  */
-type OutputEndpoints<I extends InputSchemas, O extends OutputSpec> = O extends z.ZodTypeAny
-  ? HonoEndpoint<I, z.infer<O>, 200>
-  : O extends OutputMap
-    ? { [S in keyof O & number]: HonoEndpoint<I, z.infer<O[S]>, S> }[keyof O & number]
-    : never
+type OutputEndpoints<I extends InputSchemas, O extends OutputSpec> =
+  O extends RawOutput<infer T extends z.ZodTypeAny>
+    ? HonoEndpoint<I, z.infer<T>, 200, 'text'>
+    : O extends z.ZodTypeAny
+      ? HonoEndpoint<I, z.infer<O>, 200, 'json'>
+      : O extends OutputMap
+        ? { [S in keyof O & number]: MapEntryEndpoint<I, O[S], S> }[keyof O & number]
+        : never
 
 /**
  * One Kata route → its Hono `Schema` entry. Distributes over a union of routes;

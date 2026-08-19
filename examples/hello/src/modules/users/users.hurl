@@ -44,6 +44,18 @@ jsonpath "$.id" == "{{created_id}}"
 jsonpath "$.name" == "Hurl Tester"
 
 
+# 3b. GET /users.csv — non-JSON output (ADR-0018, issue #208). The route
+#     declares output raw('text/csv', UsersCsvSchema): the response is a real
+#     `text/csv` body, not a JSON string, and the created user above shows up
+#     as a CSV row.
+GET http://localhost:3000/users.csv
+HTTP 200
+[Asserts]
+header "Content-Type" == "text/csv"
+body contains "id,name,email"
+body contains "Hurl Tester,hurl@example.com"
+
+
 # 4. POST /users — invalid body, expect 422 with the normalised issue shape.
 POST http://localhost:3000/users
 Content-Type: application/json

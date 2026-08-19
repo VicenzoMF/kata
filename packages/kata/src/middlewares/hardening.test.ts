@@ -2,7 +2,7 @@ import type { MiddlewareHandler } from 'hono'
 import { describe, expect, it } from 'vitest'
 import { z } from 'zod'
 
-import { defineContext } from '../context'
+import { defineContext, raw } from '../context'
 import { bodyLimit, DEFAULT_MAX_BODY_SIZE } from './body-limit'
 import { cors } from './cors'
 import { fromHono } from './from-hono'
@@ -36,16 +36,21 @@ function post(use: UseChain, body: unknown, headers: Record<string, string> = {}
 
 // A route whose handler returns a raw `Response` — the case that used to drop
 // every app-level header (issue #207) because it never goes through `c.json`.
+// `output` declares a non-JSON `raw()` entry (ADR-0022, issue #208) — it must,
+// since a bare Response no longer type-checks against a plain Zod schema —
+// with output validation off: these tests exercise the header-merge seam, not
+// content-type/body validation, and the fixture's callers pass inconsistent
+// content-types on purpose (see the four call sites below).
 function buildRawApp(use: UseChain, body: string, headers: Record<string, string> = {}) {
-  const raw = defineRoute({
+  const rawRoute = defineRoute({
     method: 'GET',
     path: '/raw',
     use,
     input: {},
-    output: z.string(),
+    output: raw('text/plain', z.string()),
     handler: () => new Response(body, { headers }),
   })
-  return createApp({ modules: [{ raw }] })
+  return createApp({ modules: [{ rawRoute }], outputValidation: 'off' })
 }
 
 // Wraps a plain Hono middleware the same way `cors()`/`secureHeaders()` do, for

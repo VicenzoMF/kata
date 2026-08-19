@@ -56,12 +56,18 @@ export const listOrdersRoute = defineRoute({
   handler: (c) => listOrders(c.get('store'), c.get('currentUser').id),
 })
 
+/**
+ * Multi-status output (ADR-0011): the 200 success body is `OrderSchema`; a miss
+ * returns the unified error envelope at 404 (ADR-0008). A bare `Response`
+ * against a plain Zod output no longer bypasses validation (ADR-0022), so the
+ * 404 status must be declared here for `c.error` to type-check.
+ */
 export const getOrderRoute = defineRoute({
   method: 'GET',
   path: '/orders/:id',
   use: [requireAuth],
   input: { params: GetOrderParamsSchema },
-  output: OrderSchema,
+  output: { 200: OrderSchema, 404: ErrorBodySchema },
   handler: (c) => {
     const order = getOrder(c.get('store'), c.get('currentUser').id, c.input.params.id)
     if (!order) return c.error('not_found', 'Order not found', { status: 404 })

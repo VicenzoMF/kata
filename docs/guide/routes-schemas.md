@@ -1,6 +1,6 @@
 ---
 title: Routes & schemas
-description: Define a route with defineRoute — mandatory input and output Zod schemas, typed handlers, and multi-status responses.
+description: Define a route with defineRoute — mandatory input and output Zod schemas, typed handlers, multi-status responses, and non-JSON bodies with raw().
 ---
 
 # Routes & schemas
@@ -49,7 +49,7 @@ defineRoute({
   method,   // 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE'
   path,     // a Hono path string, e.g. '/users/:id'
   input,    // { params?, query?, body?, headers? } — each a Zod schema
-  output,   // a single Zod schema OR a status→schema map
+  output,   // a single entry (Zod schema or raw()) OR a status→entry map
   use,      // optional: Middleware[] that runs before this route's handler
   handler,  // (c) => value | c.json(...) | c.error(...)
 })
@@ -138,19 +138,22 @@ genuinely has none" can never look the same in the source.
 correlation id — both hang off the same context object `c` introduced in
 [Context & DI](/guide/context-di).)
 
-## `output` — single schema or status map
+## `output` — single entry or status map
 
-`output` describes what the route is allowed to send back. It takes one of two
-forms:
+`output` describes what the route is allowed to send back. Each entry is either a
+Zod schema (a JSON body) or `raw(contentType, schema)` (a non-JSON body — see
+[Non-JSON responses](#non-json-responses-raw) below), and `output` itself is either
+one entry or a map from status code to entry:
 
 ```ts
-type OutputMap = { readonly [status: number]: z.ZodTypeAny }
-type OutputSpec = z.ZodTypeAny | OutputMap
+type OutputEntry = z.ZodTypeAny | RawOutput
+type OutputMap = { readonly [status: number]: OutputEntry }
+type OutputSpec = OutputEntry | OutputMap
 ```
 
-### Single schema
+### Single entry
 
-The single-schema form describes the `200` success body — the common case, for a
+The single-entry form describes the `200` success body — the common case, for a
 route with one happy-path shape:
 
 ```ts
@@ -162,6 +165,12 @@ export const createUserRoute = defineRoute({
   handler: async (c) => createUser(c.input.body),
 })
 ```
+
+A route declared this way answers with **only** that `200` body: the handler
+returns the plain value, Kata validates and serialises it, and that is the whole
+contract. There is no escape hatch to a `Response` here — see
+[Validating a `Response`](#validating-a-response) below for why, and reach for the
+map form the moment you need another status.
 
 ### Status-to-schema map
 
@@ -185,7 +194,7 @@ literal code.
 This is the rule that ties a return value to a status code:
 
 - A **plain return** is *always* the `200` body. Kata validates it against the
-  single schema, or against `output[200]` in a map.
+  single entry, or against `output[200]` in a map.
 - Every **other status** is one you set explicitly, with `c.json(body, status)` or
   `c.error(...)`.
 
@@ -195,8 +204,10 @@ the plain-return type collapses to `never`, and TypeScript forces you to return 
 answers `201`.
 :::
 
-The map form is fully backward compatible: a route written with a single
-`output: Schema` compiles and behaves exactly as before.
+A single-entry route (`output: UserSchema`) behaves exactly like a map with just a
+`200` key (`output: { 200: UserSchema }`) — the two forms are read through the same
+lookup, so there is nothing to relearn moving between them. Reach for the map form
+the moment a route needs a second status.
 
 ## The handler
 
@@ -207,8 +218,9 @@ response:
 - **A plain value** — the success path. Kata validates it against the success
   schema, applies any Zod transforms, and serialises it as a `200` JSON response.
   This is the case you will write most often.
-- **A `Response`** — the explicit path, for any status other than a plain `200`. You
-  build it with `c.json(value, status?)` or `c.error(code, message, extra?)`.
+- **A `Response`** — for any status other than a plain `200`, or for a
+  [non-JSON body](#non-json-responses-raw). You build it with `c.json(value,
+  status?)` or `c.error(code, message, extra?)`.
 
 ```ts
 json<T>(value: T, status?: number): Response
@@ -228,16 +240,86 @@ type ErrorExtra = {
 (`c.json` and `c.error` are the response builders on `c`; the envelope `c.error`
 emits is documented in full under [Errors](/guide/errors).)
 
-Returning a `Response` skips the plain-value success path — so what happens to its
-body depends on which `output` form you used:
+### Validating a `Response`
 
-- **Map form, and the response's status is a declared key** → Kata validates a
-  *clone* of the body against `output[status]`, then forwards your original
-  `Response` unchanged once it passes.
-- **Single-schema form, or any status the map does not declare** → the `Response`
-  passes through unvalidated.
+A route only accepts a `Response` return for a status its `output` declares — a
+single entry declares just `200` (equivalent to `{ 200: entry }`), a map declares
+whatever keys it lists (ADR-0022). For a **declared** status, Kata validates a
+*clone* of the body against that entry before forwarding your original `Response`
+unchanged — a JSON schema reads it as JSON, a `raw()` entry reads it as text (see
+below). For an **undeclared** status — any status a map doesn't list — the
+`Response` passes through unvalidated; that's how `c.error` from an auth middleware,
+or a redirect, reaches the client with no entry describing it.
 
-See [ADR-0011](/adr/0011-multi-status-output-schemas) for the exact semantics.
+This is why a single-entry route has no bare-`Response` escape hatch: every status
+that route can answer with is `200`, and `200` *is* declared, so a `Response` at
+`200` is always checked. A route that wants `c.error`/`c.json(body, status)` for a
+second status declares that status in the map form — the same migration
+[ADR-0011](/adr/0011-multi-status-output-schemas) already established:
+
+```ts
+// Won't compile: output is a bare schema, so only the plain value satisfies it.
+output: UserSchema
+handler: (c) => c.error('not_found', 'User not found', { status: 404 })
+
+// Declare the status the Response actually carries:
+output: { 200: UserSchema, 404: ErrorBodySchema }
+handler: (c) => c.error('not_found', 'User not found', { status: 404 })
+```
+
+See [ADR-0011](/adr/0011-multi-status-output-schemas) for the full status-map
+semantics.
+
+## Non-JSON responses: `raw()`
+
+Every example so far answers with JSON. A route that serves something else — a CSV
+export, a plain-text file, a download — builds a `Response` itself, since a plain
+return only ever produces JSON. Declare that contract with `raw()` instead of a Zod
+schema:
+
+```ts
+import { raw } from 'katajs'
+
+export const usersCsvRoute = defineRoute({
+  method: 'GET',
+  path: '/users.csv',
+  input: {},
+  output: raw('text/csv', UsersCsvSchema), // UsersCsvSchema = z.string()
+  handler: async () => {
+    const users = await listUsers()
+    return new Response(usersToCsv(users), { headers: { 'content-type': 'text/csv' } })
+  },
+})
+```
+
+`raw(contentType, schema)` declares two things: the response's `content-type`, and
+a schema for its **text** body (not JSON — `schema.safeParse` runs against the raw
+string). Only a `Response` can satisfy a `raw` entry — there is no plain-value
+equivalent — so `RouteHandlerReturn` makes returning anything else a `tsc` error.
+
+At runtime, Kata checks the declared status the same way it checks a JSON entry
+([Validating a `Response`](#validating-a-response) above), with one difference in
+what gets checked when:
+
+- The **`content-type` header** is always compared against the declared one
+  (ignoring parameters like `; charset=utf-8`) whenever
+  [output validation](/guide/errors) is not `off` — cheap, just a header read.
+- The **text body** is compared against `schema` only in `strict` mode. Checking it
+  needs `response.clone().text()`, which buffers the whole body into memory — fine
+  for a small dev/CI response, not something Kata will do to a large download in
+  `log` (the production default). A route with a `raw()` entry logs one warning at
+  startup when the resolved mode means its body will go unvalidated, so that
+  trade-off is never silent.
+
+Either way, a mismatch follows the same [output-validation mode](/guide/errors) as
+a JSON mismatch: `strict` replaces the response with the `500
+internal_output_shape_mismatch` envelope, `log` records it and serves the original
+response anyway, `off` skips both checks entirely.
+
+`raw()` also fixes the RPC client: `hc<typeof app>` reads `outputFormat` from the
+declared entry, so a `raw()` endpoint's client response exposes a typed `.text()`
+instead of `.json()` — calling `.json()` on it is a type error, not a runtime
+surprise.
 
 Beyond the response builders, the context hands the handler `c.get(key)` for your
 registered dependencies (see [Context & DI](/guide/context-di)), `c.requestId` for

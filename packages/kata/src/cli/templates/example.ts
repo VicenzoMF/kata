@@ -199,7 +199,9 @@ export function getGreeting(id: string): Greeting | null {
 `
 
 /** `src/modules/greetings/greetings.route.ts` — POST + GET, body + params + 404. */
-export const exampleGreetingsRouteSource = `import { defineRoute } from '../../context'
+export const exampleGreetingsRouteSource = `import { ErrorBodySchema } from 'katajs'
+
+import { defineRoute } from '../../context'
 
 import { CreateGreetingBodySchema, GreetingParamsSchema, GreetingSchema } from './greetings.schema'
 import { createGreeting, getGreeting } from './greetings.service'
@@ -215,12 +217,13 @@ export const createGreetingRoute = defineRoute({
 })
 
 // GET /greetings/:id — validates the path param, then reads the greeting back.
-// A miss returns the unified ADR-0008 error envelope with a 404.
+// A miss returns the unified ADR-0008 error envelope with a 404, declared
+// alongside the 200 body (ADR-0011) so c.error type-checks (ADR-0022).
 export const getGreetingRoute = defineRoute({
   method: 'GET',
   path: '/greetings/:id',
   input: { params: GreetingParamsSchema },
-  output: GreetingSchema,
+  output: { 200: GreetingSchema, 404: ErrorBodySchema },
   handler: (c) => {
     const greeting = getGreeting(c.input.params.id)
     if (!greeting) return c.error('not_found', 'Greeting not found', { status: 404 })

@@ -215,8 +215,8 @@ describe('multi-status output: a Response is validated against output[status]', 
   })
 })
 
-describe('multi-status output: single-schema back-compat', () => {
-  it('a Response return still short-circuits output validation (unchanged from ADR-0003)', async () => {
+describe('multi-status output: single-entry ↔ status 200 are unified (ADR-0022)', () => {
+  it('a Response against a plain Zod output is a tsc error (the escape hatch ADR-0022 closes)', async () => {
     const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
     const k = defineContext({})
     const route = k.defineRoute({
@@ -224,6 +224,34 @@ describe('multi-status output: single-schema back-compat', () => {
       path: '/things',
       input: {},
       output: CreatedSchema, // single schema, not a map
+      // @ts-expect-error — a bare Response against a plain Zod output no longer
+      // compiles (ADR-0022); this line exercises the matching runtime guard,
+      // which now validates a Response at the schema's own status (200)
+      // exactly like a plain return — instead of passing it through unchecked.
+      handler: (c) => c.json({ totally: 'wrong' }, 200),
+    })
+    const app = k.createApp({
+      modules: [{ route }],
+      outputValidation: 'strict',
+      requestLogging: false,
+    })
+    const res = await app.request('/things', { method: 'POST' })
+
+    expect(res.status).toBe(500)
+    expect(errSpy).toHaveBeenCalled()
+  })
+
+  it('a Response at a status the single schema does not describe still passes through unvalidated', async () => {
+    const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const k = defineContext({})
+    // The map form is how a route pairs a 200 success schema with another
+    // status it sets via `c.json`/`c.error` — the single-schema form only
+    // ever describes 200 (ADR-0011, ADR-0022).
+    const route = k.defineRoute({
+      method: 'POST',
+      path: '/things',
+      input: {},
+      output: { 200: CreatedSchema },
       handler: (c) => c.json({ totally: 'wrong' }, 201),
     })
     const app = k.createApp({
@@ -233,7 +261,7 @@ describe('multi-status output: single-schema back-compat', () => {
     })
     const res = await app.request('/things', { method: 'POST' })
 
-    // Single-schema + Response = pass-through, never validated (no 500, nothing logged).
+    // 201 isn't declared, so it passes through unvalidated (no 500, nothing logged).
     expect(res.status).toBe(201)
     expect(await res.json()).toEqual({ totally: 'wrong' })
     expect(errSpy).not.toHaveBeenCalled()
