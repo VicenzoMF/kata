@@ -164,6 +164,53 @@ describe('kata/middleware-provides-mismatch', () => {
     expect(issues[0]?.line).toBe(6)
   })
 
+  it('warns when the handler sets a slot but provides is empty (issue #230)', () => {
+    const p = mwFile(`
+      export const auth = defineMiddleware({
+        provides: [] as const,
+        handler: async (c, next) => {
+          c.set('currentUser', await getUser(c))
+          await next()
+        },
+      })
+    `)
+    const issues = middlewareProvidesMismatch.check(p)
+    expect(issues).toHaveLength(1)
+    expect(issues[0]?.rule).toBe('kata/middleware-provides-mismatch')
+    expect(issues[0]?.severity).toBe('warning')
+    expect(issues[0]?.message).toContain('currentUser')
+    expect(issues[0]?.message).toContain('not listed in its provides')
+  })
+
+  it('warns when the handler sets a slot but provides is omitted entirely (issue #230)', () => {
+    const p = mwFile(`
+      export const auth = defineMiddleware({
+        handler: async (c, next) => {
+          c.set('currentUser', await getUser(c))
+          await next()
+        },
+      })
+    `)
+    const issues = middlewareProvidesMismatch.check(p)
+    expect(issues).toHaveLength(1)
+    expect(issues[0]?.severity).toBe('warning')
+    expect(issues[0]?.message).toContain('currentUser')
+    expect(issues[0]?.message).toContain('not listed in its provides')
+  })
+
+  it('does not warn when provides is not an array literal (cannot be enumerated)', () => {
+    const p = mwFile(`
+      export const auth = defineMiddleware({
+        provides: AUTH_SLOTS,
+        handler: async (c, next) => {
+          c.set('currentUser', await getUser(c))
+          await next()
+        },
+      })
+    `)
+    expect(middlewareProvidesMismatch.check(p)).toEqual([])
+  })
+
   it('reports both a missing-set error and an over-provide warning together', () => {
     const p = mwFile(`
       export const auth = defineMiddleware({
