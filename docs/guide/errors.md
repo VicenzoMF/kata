@@ -41,6 +41,29 @@ A request whose body is non-empty but not valid JSON is rejected before the inpu
 stage with `400` `validation_failed` (`message: "Malformed JSON body"`); an empty or
 absent body instead reads as `undefined` and lets the schema decide.
 
+## Unknown route and wrong method: the built-in `404` / `405`
+
+Two failures happen before any of the stages above — no route matched, so there is
+no `input` schema and no handler of yours to run. Kata answers them itself, through
+the same envelope, with no configuration required.
+
+A request to a path no route declares answers `404`:
+
+```json
+{ "error": "not_found", "message": "Route not found" }
+```
+
+A request with the wrong method on a path some route *does* declare answers `405`,
+with an `Allow` header listing the methods the path accepts:
+
+```json
+{ "error": "method_not_allowed", "message": "Method not allowed" }
+```
+
+Both run the app-level (global) middleware chain first — so a global `cors()` still
+answers an `OPTIONS` preflight itself — and both pass through the same final step as
+every other response, so the `X-Request-Id` correlation header is present here too.
+
 ## The 422 validation envelope
 
 `input` is validated **before** your handler — a `422` is Kata's way of saying "you
@@ -256,6 +279,8 @@ client narrows by status: `InferResponseType<call, 404>`. See
 
 | Situation | Status | Who produces it |
 |---|---|---|
+| No route matches the path | `404` | Kata (automatic) |
+| Path matches, method doesn't | `405` | Kata (automatic) |
 | Input fails its schema | `422` | Kata (automatic) |
 | Handler returns a value matching `output` | `200` | Kata |
 | Handler returns `c.error(...)` / `c.json(body, status)` | your status | you |

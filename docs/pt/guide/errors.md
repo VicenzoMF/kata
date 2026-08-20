@@ -38,6 +38,31 @@ Uma requisição cujo body é não-vazio mas não é JSON válido é rejeitada a
 etapa de input, com `400` `validation_failed` (`message: "Malformed JSON body"`); um
 body vazio ou ausente é lido como `undefined` e deixa o schema decidir.
 
+## Route desconhecida e método errado: os `404` / `405` embutidos
+
+Duas falhas acontecem antes de qualquer um dos estágios acima — nenhuma route
+casou, então não há schema de `input` nem handler seu para rodar. O Kata as
+responde por conta própria, através do mesmo envelope, sem exigir nenhuma
+configuração.
+
+Uma requisição para um path que nenhuma route declara responde `404`:
+
+```json
+{ "error": "not_found", "message": "Route not found" }
+```
+
+Uma requisição com o método errado em um path que alguma route *de fato* declara
+responde `405`, com um header `Allow` listando os métodos que o path aceita:
+
+```json
+{ "error": "method_not_allowed", "message": "Method not allowed" }
+```
+
+Ambas rodam primeiro a cadeia de middleware global (nível de app) — então um
+`cors()` global ainda responde um preflight `OPTIONS` por conta própria — e ambas
+passam pela mesma etapa final de toda resposta, então o header de correlação
+`X-Request-Id` está presente aqui também.
+
 ## O envelope de validação 422
 
 `input` é validado **antes** do seu handler. Em caso de falha o Kata nunca chama
@@ -249,6 +274,8 @@ faz o narrow por status: `InferResponseType<call, 404>`. Veja
 
 | Situação | Status | Quem produz |
 |---|---|---|
+| Nenhuma route casa com o path | `404` | Kata (automático) |
+| O path casa, mas o método não | `405` | Kata (automático) |
 | Input falha em seu schema | `422` | Kata (automático) |
 | Handler retorna um valor que corresponde ao `output` | `200` | Kata |
 | Handler retorna `c.error(...)` / `c.json(body, status)` | seu status | você |
