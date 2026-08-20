@@ -15,8 +15,8 @@ Request correlation (`x-request-id`) is **not** a middleware. It is built into t
 runtime and applies to every response unconditionally. See
 [Request id](#request-id) below.
 
-For where these run, ordering against route `use:`, and the CORS-preflight
-caveat, see [App-level middleware](/guide/app-middleware). This page is the
+For where these run, ordering against route `use:`, and how CORS preflight is
+answered, see [App-level middleware](/guide/app-middleware). This page is the
 signature reference.
 
 ```ts
@@ -59,13 +59,14 @@ const app = createApp({
 Called with no argument, `cors()` passes `undefined` to Hono — Hono's own default
 policy applies (`Access-Control-Allow-Origin: *`).
 
-::: warning Preflight is not answered by a `use:` / global chain
-kata registers a handler only for a route's declared method and has no implicit
-`OPTIONS` route, so a browser preflight (`OPTIONS`) is never matched. `cors()`
-still sets the `Access-Control-Allow-*` headers on the *actual* response, but it
-does not answer the preflight. For full preflight handling, apply CORS as a native
-Hono middleware on the app returned by `createApp` — `app.use('*', honoCors(...))`.
-See [Handling CORS preflight](/guide/app-middleware#handling-cors-preflight).
+::: info Preflight is answered automatically
+A `cors()` in the app-level `middlewares` chain also answers the browser
+preflight: kata has no implicit `OPTIONS` route, so the runtime runs the global
+chain on the unmatched `OPTIONS` request and `cors()` short-circuits it with a
+`204` + the `Access-Control-Allow-*` headers, on an auth-free path
+([ADR-0020](/adr/0020-cors-preflight-and-response-transform-seam)). Do not
+register CORS a second time on the returned app. See
+[CORS preflight](/guide/app-middleware#cors-preflight).
 :::
 
 ## `secureHeaders`
@@ -273,7 +274,7 @@ Everything on this page comes from the `@katajs-framework/core` core entry:
 ## See also
 
 - [App-level middleware](/guide/app-middleware) — the `middlewares` chain,
-  ordering, and the CORS-preflight pattern.
+  ordering, and how CORS preflight is answered.
 - [Middleware](/guide/middleware) — the `Middleware<R>` contract and scoped-slot
   filling for middleware you write.
 - [`defineMiddleware`](/reference/define-middleware) — define your own middleware.

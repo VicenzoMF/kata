@@ -108,12 +108,12 @@ createApp({
 })
 ```
 
-::: warning Preflight is not handled by the global chain
-Kata registers a handler only for a route's declared method and has no implicit
-`OPTIONS` route, so a browser preflight (`OPTIONS`) is never matched. `cors()` in the
-global chain still sets the `Access-Control-Allow-*` headers on the actual response, but
-it does not answer the preflight. For full preflight handling, see
-[Handling CORS preflight](#handling-cors-preflight) below.
+::: tip Preflight is answered automatically
+A `cors()` in the global chain does the whole job: besides setting the
+`Access-Control-Allow-*` headers on actual responses, it answers the browser preflight
+(`OPTIONS`) itself with a `204`, per
+[ADR-0020](/adr/0020-cors-preflight-and-response-transform-seam). Do not register CORS
+a second time. See [CORS preflight](#cors-preflight) below for how it works.
 :::
 
 ### `secureHeaders`
@@ -207,31 +207,45 @@ API key, layering authorization — do not wrap a Hono middleware. Use `defineMi
 and write to the scoped store with `c.set` directly. See [Middleware](/guide/middleware)
 for the slot-filling pattern and [JWT auth](/guide/jwt) for the auth-specific path.
 
-## Handling CORS preflight
+## CORS preflight
 
-`cors()` in the global chain sets CORS headers on real responses but does not answer the
-`OPTIONS` preflight, because Kata has no implicit `OPTIONS` route. `createApp` returns a
-parametric Hono app, so register a native Hono middleware on it for the preflight:
+Before any non-simple cross-origin request, a browser sends a preflight — `OPTIONS` on
+the same path, with `Access-Control-Request-Method`. Kata registers a handler only for a
+route's *declared* method and has no implicit `OPTIONS` route, so a preflight never
+matches a route — and preflight is a property of the path, not of any one method's
+chain, so no per-route middleware could answer it. The runtime closes that gap itself
+([ADR-0020](/adr/0020-cors-preflight-and-response-transform-seam)): an unmatched request
+runs the global `middlewares` chain before the 404/405 decision, and `cors()` in that
+chain recognizes the `OPTIONS` request and short-circuits it with a `204` carrying the
+`Access-Control-Allow-*` headers (and `Access-Control-Max-Age`, if you set `maxAge`).
+
+A single `cors()` in the global chain is therefore the complete CORS story:
 
 ```ts
-import { cors as honoCors } from 'hono/cors'
-
 const app = createApp({
   modules: [users],
-  middlewares: [cors(), secureHeaders()],
+  middlewares: [cors({ origin: 'https://app.example.com', credentials: true })],
 })
-
-// Native Hono middleware on the returned app — answers OPTIONS preflight.
-app.use('*', honoCors({ origin: 'https://app.example.com', credentials: true }))
-
-export type AppType = typeof app
+// OPTIONS /users → 204 + Access-Control-Allow-* — nothing else to register.
 ```
 
-::: tip
-`app.use('*', …)` here is a plain Hono call, not part of Kata's `middlewares` chain — it
-does not see the scoped store and does not flow through Kata's response funnel. Use it
-only for the preflight; keep your request-time concerns in the Kata `middlewares` chain.
-:::
+Three properties follow from *where* the preflight is answered:
+
+- **Auth-free.** No route matched, so no route `use:` chain runs — a JWT guard on a
+  protected route never 401s the credential-less preflight. Within the global chain,
+  only entries declared *before* `cors()` run; its short-circuit skips the rest.
+- **Observable.** The `204` funnels through the same response pipeline as every other
+  outcome: it echoes `x-request-id` and produces the per-request log line.
+- **Opt-in.** With no global `cors()`, `OPTIONS` falls through to the normal
+  unmatched-request decision — `405` with an `Allow` header on a declared path, `404`
+  otherwise.
+
+Note the *global* qualifier: a per-route `use: [cors()]` still only decorates that
+route's actual responses — only a `cors()` in `createApp`'s `middlewares` answers the
+preflight. And do **not** also register Hono's `cors` natively on the returned app
+(`app.use('*', honoCors(...))`) — an earlier version of this guide showed that as a
+workaround, but today it registers CORS twice and splits your edge policy across two
+places for zero gain: the preflight response is identical without it.
 
 ## See also
 
@@ -241,3 +255,5 @@ only for the preflight; keep your request-time concerns in the Kata `middlewares
   and their option types.
 - [ADR-0012](/adr/0012-app-level-middleware) — why the global chain extends the manual
   route chain instead of `app.use`.
+- [ADR-0020](/adr/0020-cors-preflight-and-response-transform-seam) — why the framework
+  answers CORS preflight itself.
