@@ -22,7 +22,9 @@ export const schemaFileNaming = {
         `${domain}.route.ts`,
         `${domain}.service.ts`,
         `${domain}.schema.ts`,
-        // Note: fs-walk excludes .test.ts and .d.ts, so we don't expect them here.
+        // Note: fs-walk excludes .test.ts and .d.ts, and .hurl is not a .ts
+        // file, so <domain>.test.ts and <domain>.hurl never reach this rule —
+        // but they are legal module files, so the message below lists them.
       ]
 
       if (!allowedNames.includes(filename)) {
@@ -32,7 +34,7 @@ export const schemaFileNaming = {
           file: file.relPath,
           line: 1,
           column: 1,
-          message: `File ${filename} violates the naming convention. Expected one of: ${domain}.{route,service,schema}.ts`,
+          message: `File ${filename} violates the naming convention. Expected one of: ${domain}.{route,service,schema,test}.ts or ${domain}.hurl`,
           why: 'ADR-0018: files within a domain module must be named <domain>.<suffix>. Ad-hoc file names dilute findability and introduce cognitive load.',
           fix: `Rename the file to match the ${domain} domain (e.g. ${domain}.schema.ts) or move it out of the domain module.`,
           example: {
