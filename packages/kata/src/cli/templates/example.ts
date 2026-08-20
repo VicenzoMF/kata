@@ -220,7 +220,7 @@ export const createGreetingRoute = defineRoute({
 
 // GET /greetings/:id — validates the path param, then reads the greeting back.
 // A miss returns the unified ADR-0008 error envelope with a 404, declared
-// alongside the 200 body (ADR-0011) so c.error type-checks (ADR-0022).
+// alongside the 200 body so c.error type-checks (ADR-0011).
 export const getGreetingRoute = defineRoute({
   method: 'GET',
   path: '/greetings/:id',
