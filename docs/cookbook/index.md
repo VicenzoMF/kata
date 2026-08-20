@@ -94,6 +94,25 @@ These are enforced project-wide — the snippets obey them so you can paste them
 - **DI goes through `c.get('key')`**, where `'key'` must be registered in
   `defineContext` ([ADR-0004](/adr/0004-di-via-scoped-slots)).
 
+## Planned API referenced in this cookbook
+
+No recipe currently leans on roadmap-only API — every surface shown ships
+today. The one surface previously tracked here, first-class **app-level
+(global) middleware** ([#84](https://github.com/VicenzoMF/kata/issues/84),
+[ADR-0012](/adr/0012-app-level-middleware)), has since shipped as the
+`middlewares` option of [`createApp`](/reference/create-app) — see
+[Non-goals & BYO](/cookbook/non-goals) for how the recipes use it.
+
+> **Also shipped** — documented as available API in these recipes: the unified
+> `c.error` helper + error envelope
+> ([#18](https://github.com/VicenzoMF/kata/issues/18),
+> [ADR-0008](/adr/0008-unified-error-response-envelope)), the global error
+> boundary ([#62](https://github.com/VicenzoMF/kata/issues/62)),
+> output-validation mode ([#17](https://github.com/VicenzoMF/kata/issues/17),
+> [ADR-0009](/adr/0009-output-validation-mode)), and multi-status output
+> schemas ([#19](https://github.com/VicenzoMF/kata/issues/19),
+> [ADR-0011](/adr/0011-multi-status-output-schemas)).
+
 ::: tip Read the reference alongside the recipes
 The cookbook is task-first. For the exhaustive signature of each helper, see the
 [reference](/reference/): [`defineContext`](/reference/define-context),

@@ -94,6 +94,26 @@ Estas são impostas em todo o projeto — os trechos as obedecem para que você 
 - **DI passa por `c.get('key')`**, onde `'key'` precisa estar registrada em
   `defineContext` ([ADR-0004](/adr/0004-di-via-scoped-slots)).
 
+## API planejada referenciada neste cookbook
+
+Nenhuma receita depende hoje de API que exista só no roadmap — toda superfície
+mostrada já está publicada. A única superfície antes rastreada aqui, o
+**middleware de nível de app (global)** de primeira classe
+([#84](https://github.com/VicenzoMF/kata/issues/84),
+[ADR-0012](/adr/0012-app-level-middleware)), foi entregue como a opção
+`middlewares` de [`createApp`](/pt/reference/create-app) — veja
+[Não-objetivos & BYO](/pt/cookbook/non-goals) para como as receitas a usam.
+
+> **Também entregues** — documentadas como API disponível nestas receitas: o
+> helper unificado `c.error` + envelope de erro
+> ([#18](https://github.com/VicenzoMF/kata/issues/18),
+> [ADR-0008](/adr/0008-unified-error-response-envelope)), o error boundary
+> global ([#62](https://github.com/VicenzoMF/kata/issues/62)), o modo de
+> validação de output ([#17](https://github.com/VicenzoMF/kata/issues/17),
+> [ADR-0009](/adr/0009-output-validation-mode)) e os schemas de output
+> multi-status ([#19](https://github.com/VicenzoMF/kata/issues/19),
+> [ADR-0011](/adr/0011-multi-status-output-schemas)).
+
 ::: tip Leia a reference junto com as receitas
 O cookbook é orientado a tarefas. Para a assinatura exaustiva de cada helper, veja a
 [reference](/pt/reference/): [`defineContext`](/pt/reference/define-context),
