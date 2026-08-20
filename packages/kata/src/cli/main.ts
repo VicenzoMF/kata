@@ -8,8 +8,6 @@
 // so it is dispatched here — where process access already lives — rather than
 // through the pure `run()`, exactly as `@katajs-framework/verify`'s own bin does.
 
-import { resolveTarget, watchProject } from '@katajs-framework/verify'
-
 import { run, verifyArgv } from './cli'
 
 const argv = process.argv.slice(2)
@@ -18,6 +16,9 @@ const wantsHelp = verifyArgs?.includes('--help') || verifyArgs?.includes('-h')
 
 if (verifyArgs && verifyArgs.includes('--watch') && !wantsHelp) {
   // Long-running: render now and on every change. Never exits on its own.
+  // Dynamic import keeps `typescript` (an optional peer, so often absent) out of
+  // the CLI's eager module graph — see the note in `cli.ts`.
+  const { resolveTarget, watchProject } = await import('@katajs-framework/verify')
   watchProject(resolveTarget(verifyArgs, process.cwd()))
 } else {
   run(argv, process.cwd())

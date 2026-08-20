@@ -3,10 +3,8 @@
 // whole command is testable without spawning a subprocess. `main.ts` is the
 // only place that talks to `process`.
 
-import { runCli } from '@katajs-framework/verify'
-
 import { type InitResult, init } from './init'
-import { createModule, type NewResult } from './new'
+import type { NewResult } from './new'
 import { pmCommands } from './package-manager'
 
 export type ParsedArgs = {
@@ -203,6 +201,28 @@ export function verifyArgv(argv: readonly string[]): string[] | null {
 }
 
 /** Parse args, dispatch, and return the streams + exit code to emit. */
+/**
+ * Load a module that needs the TypeScript compiler.
+ *
+ * `typescript` is an *optional* peer dependency, so `npm install` does not pull
+ * it in. Without this, the reader gets a raw ESM resolution failure naming an
+ * internal bundle chunk — true, but not actionable. Only the commands that
+ * actually parse TypeScript (`verify`, `new`) can hit this; `init` never does.
+ */
+async function importNeedingTypescript<T>(load: () => Promise<T>, command: string): Promise<T> {
+  try {
+    return await load()
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    if (!message.includes("Cannot find package 'typescript'")) throw error
+    throw new Error(
+      `${command} needs the TypeScript compiler, an optional peer dependency that is not installed.\n` +
+        'Install it with: npm install -D typescript',
+      { cause: error },
+    )
+  }
+}
+
 export async function run(
   argv: readonly string[],
   cwd: string = process.cwd(),
@@ -212,6 +232,16 @@ export async function run(
     // Delegate to @katajs-framework/verify's pure CLI. `--watch` never reaches here — it is
     // long-running and dispatched in main.ts — so runCli only does single-shot
     // (human or --json) runs, which already return an output string + exit code.
+    //
+    // Imported dynamically: the verifier pulls in `typescript`, an *optional*
+    // peer that npm therefore does not install. A static import puts that
+    // `import 'typescript'` at the top of the CLI bundle, so `kata init` — which
+    // never parses TypeScript — would crash with ERR_MODULE_NOT_FOUND before
+    // doing anything. `splitting: true` keeps it in a chunk loaded only here.
+    const { runCli } = await importNeedingTypescript(
+      () => import('@katajs-framework/verify'),
+      'verify',
+    )
     const { output, exitCode } = runCli(verifyArgs, cwd)
     return { code: exitCode, stdout: output, stderr: '' }
   }
@@ -255,6 +285,9 @@ export async function run(
         stderr: `kata new: missing domain name\n\n${HELP_TEXT}`,
       }
     }
+    // Dynamic for the same reason as the verifier above: `./new` wires the new
+    // module into `src/app.ts`, which parses it with `typescript`.
+    const { createModule } = await importNeedingTypescript(() => import('./new'), 'new')
     const result = await createModule({ domain: args.domain, cwd: args.cwd, force: args.force })
     return { code: 0, stdout: formatNewResult(result), stderr: '' }
   }
