@@ -208,14 +208,14 @@ describe('init({ minimal: true }) — harness only', () => {
 })
 
 describe('init({ docsMcp: true }) — .mcp.json opt-in', () => {
-  it('writes .mcp.json registering @katajs/docs-mcp via npx', async () => {
+  it('writes .mcp.json registering @katajs-framework/docs-mcp via npx', async () => {
     const result = await init({ cwd: dir, docsMcp: true })
 
     expect(result.docsMcp).toBe(true)
     expect(statusOf(result, MCP_JSON)).toBe('created')
     const content = JSON.parse(await readFile(join(dir, MCP_JSON), 'utf8'))
     expect(content.mcpServers['kata-docs'].command).toBe('npx')
-    expect(content.mcpServers['kata-docs'].args).toContain('@katajs/docs-mcp')
+    expect(content.mcpServers['kata-docs'].args).toContain('@katajs-framework/docs-mcp')
   })
 
   it('does not write .mcp.json when the flag is omitted', async () => {

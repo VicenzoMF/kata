@@ -1,4 +1,4 @@
-import { raw } from '@katajs/core'
+import { raw } from '@katajs-framework/core'
 
 import { defineRoute } from '../../context'
 

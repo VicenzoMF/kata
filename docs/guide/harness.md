@@ -152,7 +152,7 @@ commit rather than quietly reducing coverage.
 Closing a suppression means making the expression readable:
 
 - **A middleware from an npm package.** The package ships a `provides.json`
-  manifest describing what each exported middleware provides and reads; `@katajs/core`
+  manifest describing what each exported middleware provides and reads; `@katajs-framework/core`
   generates its own at build time, which is why `cors()`, `secureHeaders()` and
   `bodyLimit()` resolve. Third-party middleware authors can ship the same file.
 - **A local factory.** `kata verify` follows a call to its `return`, so

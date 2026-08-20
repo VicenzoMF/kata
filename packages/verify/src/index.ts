@@ -1,4 +1,4 @@
-/** Public API of `@katajs/verify`. */
+/** Public API of `@katajs-framework/verify`. */
 export type { CliResult } from './cli'
 export { resolveTarget, runCli } from './cli'
 export type { FormatOptions } from './format'

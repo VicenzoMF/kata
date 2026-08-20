@@ -1,7 +1,7 @@
 /**
  * Filesystem discovery: collect the `.ts` source files a project exposes to the
  * rules. Intentionally dependency-free (no glob library) — a small recursive
- * walk over `node:fs` keeps `@katajs/verify` lean.
+ * walk over `node:fs` keeps `@katajs-framework/verify` lean.
  */
 import { readdirSync, readFileSync } from 'node:fs'
 import { join, relative } from 'node:path'

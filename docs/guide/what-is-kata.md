@@ -29,7 +29,7 @@ separately built client ([ADR-0001](/adr/0001-use-hono-as-base)). Everything els
 is a plain object you pass to one of those four functions.
 
 ```ts
-import { defineContext, scoped, singleton } from '@katajs/core'
+import { defineContext, scoped, singleton } from '@katajs-framework/core'
 
 export const k = defineContext({
   logger: singleton(console),

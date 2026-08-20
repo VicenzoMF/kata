@@ -1,4 +1,4 @@
-import { defineContext, scoped, singleton } from '@katajs/core'
+import { defineContext, scoped, singleton } from '@katajs-framework/core'
 
 import type { User } from './modules/users/users.schema'
 

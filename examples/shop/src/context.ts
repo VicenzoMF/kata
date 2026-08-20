@@ -1,4 +1,4 @@
-import { defineContext, scoped, singleton } from '@katajs/core'
+import { defineContext, scoped, singleton } from '@katajs-framework/core'
 import type { Store, Transaction } from './store'
 import { createStore } from './store'
 

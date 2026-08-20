@@ -1,4 +1,4 @@
-# @katajs/verify
+# @katajs-framework/verify
 
 Fast, deterministic lint checks for [Kata](../../README.md) projects. `kata
 verify` globs a project's source, AST-matches Kata's conventions, and reports
@@ -24,7 +24,7 @@ apps get it for free). From the workspace:
 
 ```sh
 pnpm exec kata verify examples/hello              # via the kata bin (built)
-pnpm --filter=@katajs/verify run verify -- ../../examples/hello   # via tsx (dev, no build)
+pnpm --filter=@katajs-framework/verify run verify -- ../../examples/hello   # via tsx (dev, no build)
 ```
 
 ## Rules
@@ -64,7 +64,7 @@ Suppressions appear in the human report, in the `--json` payload (as a
 
 Middleware imported from an npm package resolves through the `provides.json`
 **manifest** the package ships — a map of export subpath → exported name →
-`{ provides, reads }`. `@katajs/core` generates its own from source at build time
+`{ provides, reads }`. `@katajs-framework/core` generates its own from source at build time
 (`kata-provides-manifest --entry .=src/index.ts …`), so `cors()` and friends are
 known rather than unknown, and third-party middleware authors can ship the same
 file to become resolvable in every Kata app.

@@ -30,11 +30,11 @@ All three recipes build on one file. Kata centralises dependency injection in a
 single `defineContext({...})` call (ADR-0004), and the
 `defineRoute` / `defineMiddleware` / `createApp` helpers it returns are bound to
 that context. The idiomatic setup re-exports them so the rest of the app imports
-from `./context`, never from `@katajs/core` directly:
+from `./context`, never from `@katajs-framework/core` directly:
 
 ```ts
 // src/context.ts
-import { defineContext, scoped, singleton } from '@katajs/core'
+import { defineContext, scoped, singleton } from '@katajs-framework/core'
 
 import { makeDb } from './db'
 import type { User } from './modules/users/users.schema'

@@ -142,8 +142,8 @@ The generated `package.json` wires the everyday scripts: `pnpm dev` (watch),
 and the server running).
 
 ::: warning Pre-release & package name
-The framework publishes to npm as **`@katajs/core`** (the `kata` name was already taken),
-so the generated `package.json` depends on `@katajs/core`. The CLI/bin stays `kata` — the
+The framework publishes to npm as **`@katajs-framework/core`** (the `kata` name was already taken),
+so the generated `package.json` depends on `@katajs-framework/core`. The CLI/bin stays `kata` — the
 scripts and hooks call `kata verify`. It is not published yet, so `pnpm install`
 cannot resolve the generated `package.json` until it lands; meanwhile, run the
 worked example from the repo (see [Quickstart](/guide/quickstart)).

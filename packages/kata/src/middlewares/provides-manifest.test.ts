@@ -2,11 +2,11 @@ import { existsSync, readFileSync } from 'node:fs'
 import { dirname, isAbsolute, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
-import { generateManifest, serializeManifest } from '@katajs/verify'
+import { generateManifest, serializeManifest } from '@katajs-framework/verify'
 import { describe, expect, it } from 'vitest'
 
 /**
- * The `provides.json` @katajs/core ships is generated from these sources by
+ * The `provides.json` @katajs-framework/core ships is generated from these sources by
  * `pnpm run provides-manifest` (wired into `build`). It is how `kata verify`
  * resolves `cors()` in a downstream app's chain instead of silently disabling
  * `kata/scoped-slot-not-provided` (issue #206) — so a manifest that no longer

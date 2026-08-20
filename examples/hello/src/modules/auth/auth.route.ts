@@ -1,4 +1,4 @@
-import { signJwt } from '@katajs/core/jwt'
+import { signJwt } from '@katajs-framework/core/jwt'
 
 import { JWT_SECRET, TOKEN_TTL_SECONDS } from '../../config'
 import { defineRoute } from '../../context'

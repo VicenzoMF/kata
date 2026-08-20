@@ -14,7 +14,7 @@
  * round-trip against the same routes is exercised in client.test.ts.
  */
 
-import type { KataApp } from '@katajs/core'
+import type { KataApp } from '@katajs-framework/core'
 import type { Hono, InferRequestType, InferResponseType } from 'hono'
 import { hc } from 'hono/client'
 import type { BlankEnv } from 'hono/types'

@@ -15,7 +15,7 @@ sem elas.
 **antes** do `use:` de cada rota.
 
 ```ts
-import { bodyLimit, cors, secureHeaders } from '@katajs/core'
+import { bodyLimit, cors, secureHeaders } from '@katajs-framework/core'
 
 import { createApp } from './context'
 import * as users from './modules/users/users.route'
@@ -71,7 +71,7 @@ O `kata verify` lê essa cadeia do mesmo jeito que o runtime a executa. A regra
 em ordem por rota, então um provedor global satisfaz as leituras de todas as
 rotas, e um middleware global que ele próprio lê um slot que nada à sua frente
 fornece é um erro. Os built-ins abaixo resolvem pelo manifesto `provides.json`
-que o `@katajs/core` publica — `cors()` numa cadeia é uma entrada `provides: []`, não
+que o `@katajs-framework/core` publica — `cors()` numa cadeia é uma entrada `provides: []`, não
 uma incógnita — então declará-los não custa cobertura de verificação. Uma entrada
 que a regra *não* consegue ler é reportada como uma
 [supressão](/pt/guide/harness#quando-uma-regra-nao-consegue-provar-uma-checagem)
@@ -86,7 +86,7 @@ sua responsabilidade. Se uma preocupação for genuinamente específica de uma r
 
 ## Built-ins
 
-Três middlewares de hardening de primeira parte vêm da entrada core do `@katajs/core`. Cada um é
+Três middlewares de hardening de primeira parte vêm da entrada core do `@katajs-framework/core`. Cada um é
 uma factory de `Middleware<R>`, declara `provides: []` e define headers de resposta (ou
 rejeita uma requisição) sem tocar no corpo da resposta.
 
@@ -101,7 +101,7 @@ Um wrapper fino sobre o `cors` do Hono. `CorsOptions` espelha as opções do Hon
 `credentials` — veja a [documentação de CORS do Hono](https://hono.dev/docs/middleware/builtin/cors).
 
 ```ts
-import { cors } from '@katajs/core'
+import { cors } from '@katajs-framework/core'
 
 createApp({
   modules: [users],
@@ -134,7 +134,7 @@ endurecida do Hono — `X-Content-Type-Options: nosniff`,
 [documentação de secure-headers do Hono](https://hono.dev/docs/middleware/builtin/secure-headers).
 
 ```ts
-import { secureHeaders } from '@katajs/core'
+import { secureHeaders } from '@katajs-framework/core'
 
 createApp({
   modules: [users],
@@ -163,7 +163,7 @@ type BodyLimitOptions = {
 ```
 
 `maxSize` tem como padrão `DEFAULT_MAX_BODY_SIZE` — `1024 * 1024` (1 MiB), exportado
-de `@katajs/core`. Quando o limite é excedido, o `onError` padrão retorna HTTP `413`
+de `@katajs-framework/core`. Quando o limite é excedido, o `onError` padrão retorna HTTP `413`
 com o envelope de erro unificado do kata ([ADR-0008](/adr/0008-unified-error-response-envelope)):
 
 ```json
@@ -171,7 +171,7 @@ com o envelope de erro unificado do kata ([ADR-0008](/adr/0008-unified-error-res
 ```
 
 ```ts
-import { bodyLimit } from '@katajs/core'
+import { bodyLimit } from '@katajs-framework/core'
 
 createApp({
   modules: [users],

@@ -12,7 +12,7 @@
   "dependencies": {
     "@hono/node-server": "^1.13",
     "hono": "^4",
-    "@katajs/core": "workspace:*",
+    "@katajs-framework/core": "workspace:*",
     "zod": "^3"
   },
   "devDependencies": {

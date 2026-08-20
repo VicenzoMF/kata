@@ -1,5 +1,5 @@
 import { serve } from '@hono/node-server'
-import { gracefulShutdown } from '@katajs/core/node'
+import { gracefulShutdown } from '@katajs-framework/core/node'
 
 import { createApp, k } from './context'
 import * as cart from './modules/cart/cart.route'
