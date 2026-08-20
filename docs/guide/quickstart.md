@@ -32,9 +32,9 @@ name on npm belongs to an unrelated, dormant package. So you **install and impor
 command (`kata init`, `kata verify`). `npx @katajs-framework/core …` also works, as an alias.
 :::
 
-::: warning Pre-release
-Kata is not yet published to npm. Today the fastest path is to clone the repo
-and run the worked example, which is what the rest of this page walks through.
+::: tip Run the worked example from source
+The finished app this page builds also lives in the repo, so you can skip the
+typing and run it directly:
 
 ```bash
 git clone https://github.com/VicenzoMF/kata.git

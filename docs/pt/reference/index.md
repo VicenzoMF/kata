@@ -1,6 +1,6 @@
 ---
 title: Referência da API
-description: Cada export público de kata, kata/jwt e kata/node, além do bin kata e das dependências peer.
+description: Cada export público de @katajs-framework/core, @katajs-framework/core/jwt e @katajs-framework/core/node, além do bin kata e das dependências peer.
 ---
 
 # Referência da API

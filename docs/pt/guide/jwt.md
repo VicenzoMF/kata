@@ -1,6 +1,6 @@
 ---
 title: Autenticação JWT
-description: Autentique requisições com kata/jwt — assine e verifique tokens, preencha um scoped slot currentUser via jwtAuth e autorize com guards de role e claim.
+description: Autentique requisições com @katajs-framework/core/jwt — assine e verifique tokens, preencha um scoped slot currentUser via jwtAuth e autorize com guards de role e claim.
 ---
 
 # Autenticação JWT

@@ -15,8 +15,9 @@ Every Kata snippet below is grounded in the real framework surface
 runnable [`examples/hello`](https://github.com/VicenzoMF/kata/tree/main/examples/hello) app. If a snippet shows an API,
 that API exists today.
 
-> **Before you start.** Kata is pre-release and not yet on npm. The fastest path
-> is to clone the repo and copy [`examples/hello`](https://github.com/VicenzoMF/kata/tree/main/examples/hello) into
+> **Before you start.** Install Kata with
+> `npm install @katajs-framework/core hono zod @hono/node-server`, or clone the
+> repo and copy [`examples/hello`](https://github.com/VicenzoMF/kata/tree/main/examples/hello) into
 > your `src/` — the [README quickstart](https://github.com/VicenzoMF/kata/blob/main/README.md#quickstart) walks the
 > same six files this guide migrates to.
 

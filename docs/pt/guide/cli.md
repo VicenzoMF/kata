@@ -143,12 +143,10 @@ O `package.json` gerado conecta os scripts do dia a dia: `pnpm dev` (watch),
 (a suíte de E2E de API `.hurl` — precisa do [Hurl](https://hurl.dev) instalado e
 do servidor rodando).
 
-::: warning Pré-lançamento & nome do pacote
+::: info Nome do pacote
 O framework é publicado no npm como **`@katajs-framework/core`** (o nome `kata` já estava em uso),
 então o `package.json` gerado depende de `@katajs-framework/core`. A CLI/bin continua `kata` — os
-scripts e hooks chamam `kata verify`. Ele ainda não foi publicado, então
-`pnpm install` ainda não consegue resolver o `package.json` gerado; enquanto isso,
-rode o exemplo do repositório (veja o [Início rápido](/pt/guide/quickstart)).
+scripts e hooks chamam `kata verify`.
 :::
 
 ### `kata init --minimal`
