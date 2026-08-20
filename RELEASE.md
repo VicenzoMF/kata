@@ -6,8 +6,10 @@ This document covers how the framework is published. The npm package is
 `@katajs-framework/verify` is `private` and is **bundled into the CLI at build time** (it is
 never a runtime dependency and is never published).
 
-The package is *prepared and proven* but **not yet published**: publishing is a
-manual action by the owner. The npm account has 2FA set to `auth-and-writes`
+**Published.** `@katajs-framework/core@0.3.0` went out on 2026-08-20; `0.3.1`
+follows with the `kata init` fix (0.3.0 shipped a CLI bundle that imported
+`typescript` eagerly, so the documented bootstrap crashed — deprecate it).
+Publishing is a manual action by the owner. The npm account has 2FA set to `auth-and-writes`
 via **passkey**, not TOTP — `--otp=<code>` does not apply. `npm publish` prints
 an auth URL to approve in the browser, so it needs a real TTY; a non-interactive
 shell fails with `EOTP` before ever reaching the registry.
@@ -90,7 +92,7 @@ Sourcemaps are intentionally **off** in `tsup.config.ts`: esbuild inlines
 
 ---
 
-## Proof (no real publish performed)
+## Proof (pre-publish tarball checks)
 
 `pnpm --filter=@katajs-framework/core build && cd packages/kata && npm pack --dry-run` →
 **15 files, ~58 kB packed / ~208 kB unpacked**:
@@ -133,10 +135,10 @@ npm pack --dry-run            # confirm contents; expect 0 warnings
 npm publish --access public
 #    Safer first cut: publish under a pre-release tag, promote later:
 #    npm publish --tag next --access public
-#    npm dist-tag add @katajs-framework/core@0.3.0 latest
+#    npm dist-tag add @katajs-framework/core@0.3.1 latest
 
 # 3. Tag the release in git
-git tag katajs-v0.3.0 && git push origin katajs-v0.3.0
+git tag katajs-v0.3.1 && git push origin katajs-v0.3.1
 
 # 4. Verify from the registry in a fresh dir
 cd "$(mktemp -d)" && npm init -y >/dev/null
