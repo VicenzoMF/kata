@@ -192,7 +192,8 @@ erro em runtime, como mostrado acima. Veja [ADR-0004](/adr/0004-di-via-scoped-sl
 ## Exemplo prático
 
 Um context com ambos os tipos de slot, a factory vinculada re-exportada, e um handler
-que lê cada um:
+que lê cada um. O `Store` vem de `src/store.ts` — infraestrutura compartilhada como
+essa fica na [raiz aberta de `src/`](/pt/guide/project-layout#a-raiz-de-src):
 
 ```ts
 // src/context.ts

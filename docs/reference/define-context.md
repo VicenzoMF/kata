@@ -192,7 +192,8 @@ at runtime, as shown above. See [ADR-0004](/adr/0004-di-via-scoped-slots).
 ## Worked example
 
 A context with both slot kinds, the bound factory re-exported, and a handler
-that reads each:
+that reads each. `Store` comes from `src/store.ts` — shared infrastructure like
+this sits at the [open `src/` root](/guide/project-layout#the-src-root):
 
 ```ts
 // src/context.ts
