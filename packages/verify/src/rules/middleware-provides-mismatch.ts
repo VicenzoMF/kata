@@ -17,11 +17,17 @@
  *   • reverse — any *set* literal key absent from `provides` is over-providing,
  *     flagged as a **warning** (an extra populated slot is benign and another
  *     middleware may legitimately declare it, so this never fails the build).
+ *     This pass runs even when `provides` is `[]` or omitted entirely — an
+ *     undeclared populated slot is exactly the under-declared contract it
+ *     exists to surface (issue #230).
  *
  * Bails (no issues) — to keep the false-positive rate at zero — when the config
- * is spread, `provides` is not an array literal, the handler is missing or its
- * context parameter is not a plain identifier, or the handler contains a dynamic
- * `c.set(expr, ...)` whose key cannot be read statically.
+ * is spread, the handler is missing or its context parameter is not a plain
+ * identifier, or the handler contains a dynamic `c.set(expr, ...)` whose key
+ * cannot be read statically. The reverse pass additionally requires `provides`
+ * to be fully enumerable: a non-array expression or a spread/computed element
+ * could name any key, so warning against a partial list would be a false
+ * positive (the forward pass still checks whatever literal keys are visible).
  */
 import ts from 'typescript'
 
@@ -34,6 +40,7 @@ import {
   hasSpread,
   isCalleeNamed,
   positionOf,
+  providesOf,
 } from '../parse'
 import type { Issue, Rule } from '../types'
 
@@ -55,9 +62,6 @@ export const middlewareProvidesMismatch = {
         if (!config || !ts.isObjectLiteralExpression(config)) return
         if (hasSpread(config)) return
 
-        const declared = declaredProvides(config)
-        if (declared.length === 0) return
-
         const handler = functionProperty(config, 'handler')
         if (!handler) return // handler missing / not a function literal → can't see sets
         const ctx = firstParameterName(handler)
@@ -66,9 +70,9 @@ export const middlewareProvidesMismatch = {
         const sets = collectSetKeys(handler, ctx)
         if (sets.dynamic) return // a dynamic key could be any provided slot → bail
 
-        const declaredKeys = new Set(declared.map(({ key }) => key))
-
-        // Forward pass: every declared key must be set (a broken contract → error).
+        // Forward pass: every declared key must be set (a broken contract →
+        // error). Naturally a no-op when `provides` is empty or omitted.
+        const declared = declaredProvides(config)
         for (const { key, node: keyNode } of declared) {
           if (sets.keys.has(key)) continue
           const { line, column } = positionOf(sf, keyNode)
@@ -77,7 +81,13 @@ export const middlewareProvidesMismatch = {
 
         // Reverse pass: a key the handler sets but never declares in `provides`.
         // Benign (an extra populated slot harms nothing, and another middleware
-        // may legitimately declare it), so emit a warning, not an error.
+        // may legitimately declare it), so emit a warning, not an error. Runs
+        // even when `provides` is `[]` or omitted (issue #230) — but only when
+        // `provides` is fully enumerable: `providesOf` collapses a non-array
+        // expression or a spread/computed element to `null`, where warning
+        // against a partial list would be a false positive.
+        const declaredKeys = providesOf(node)
+        if (declaredKeys === null) return
         for (const [key, setNode] of sets.keys) {
           if (declaredKeys.has(key)) continue
           const { line, column } = positionOf(sf, setNode)
