@@ -8,7 +8,7 @@
  * verifier, rots the moment a new middleware ships or a user re-exports one.
  *
  * Generating the manifest from source at build time cannot rot: whatever the
- * package exports is what the manifest describes. `katajs` runs this in its
+ * package exports is what the manifest describes. `@katajs/core` runs this in its
  * `build` script (see `manifest-cli.ts`), and a test asserts the committed file
  * still matches its sources, so a drifted manifest fails CI rather than
  * silently weakening a downstream app's checks.

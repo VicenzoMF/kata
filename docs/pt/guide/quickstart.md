@@ -20,15 +20,15 @@ Kata tem duas peer dependencies — Hono (a base HTTP) e Zod (schemas) — mais
 o adaptador Node do Hono para subir um servidor no Node.
 
 ```bash
-npm install katajs hono zod @hono/node-server
-# ou: pnpm add katajs hono zod @hono/node-server
+npm install @katajs/core hono zod @hono/node-server
+# ou: pnpm add @katajs/core hono zod @hono/node-server
 ```
 
 ::: info Nome do pacote vs. comando
-O framework é o **Kata**, mas seu pacote no npm é **`katajs`** — o nome `kata`
+O framework é o **Kata**, mas seu pacote no npm é **`@katajs/core`** — o nome `kata`
 puro no npm pertence a um pacote sem relação e parado. Então você **instala e
-importa `katajs`** (`import … from 'katajs'`), enquanto a CLI mantém o comando
-curto **`kata`** (`kata init`, `kata verify`). `npx katajs …` também funciona, como alias.
+importa `@katajs/core`** (`import … from '@katajs/core'`), enquanto a CLI mantém o comando
+curto **`kata`** (`kata init`, `kata verify`). `npx @katajs/core …` também funciona, como alias.
 :::
 
 ::: warning Pré-lançamento
@@ -74,7 +74,7 @@ já vinculados ao seu registry. Reexporte-os para que o resto da aplicação her
 os tipos — `c.get('key')` só passa na checagem de tipos para chaves que você registrou aqui.
 
 ```ts
-import { defineContext, scoped, singleton } from 'katajs'
+import { defineContext, scoped, singleton } from '@katajs/core'
 
 import type { User } from './modules/users/users.schema'
 
@@ -160,14 +160,14 @@ Mais sobre a fronteira em [services](/pt/guide/services).
 Um middleware declara quais scoped slots ele `provides`; seu handler os preenche.
 Retornar uma `Response` curto-circuita o request antes do handler rodar.
 
-Kata vem com auth JWT sob `katajs/jwt`. `jwtAuth` lê um token `Authorization: Bearer`,
+Kata vem com auth JWT sob `@katajs/core/jwt`. `jwtAuth` lê um token `Authorization: Bearer`,
 verifica a assinatura e as claims de tempo, faz o parse do payload com seu schema
 Zod e preenche o slot. O hook `resolve()` mapeia as claims validadas para o
 `User` da aplicação. Mantenha o wrapper `defineMiddleware` para que o literal `provides`
 continue greppável e checável pelo lint.
 
 ```ts
-import { jwtAuth } from 'katajs/jwt'
+import { jwtAuth } from '@katajs/core/jwt'
 
 import { JWT_SECRET } from '../config'
 import { defineMiddleware } from '../context'
@@ -216,7 +216,7 @@ para colocar atrás de um status 4xx/5xx. Routes que leem um scoped slot listam 
 middleware provedor em `use:`.
 
 ```ts
-import { ErrorBodySchema } from 'katajs'
+import { ErrorBodySchema } from '@katajs/core'
 
 import { defineRoute } from '../../context'
 import { requireUser } from '../../middlewares/auth'
@@ -271,7 +271,7 @@ uma vez e toda route fica coberta.
 
 ```ts
 import { serve } from '@hono/node-server'
-import { bodyLimit, cors, secureHeaders } from 'katajs'
+import { bodyLimit, cors, secureHeaders } from '@katajs/core'
 
 import { createApp, k } from './context'
 import * as auth from './modules/auth/auth.route'
@@ -300,7 +300,7 @@ JWT com `signJwt` para que você possa exercitar `/me` sem ferramentas externas.
 em quem a chama e **não** é como você autentica usuários reais:
 
 ```ts
-import { signJwt } from 'katajs/jwt'
+import { signJwt } from '@katajs/core/jwt'
 
 import { JWT_SECRET, TOKEN_TTL_SECONDS } from '../../config'
 import { defineRoute } from '../../context'

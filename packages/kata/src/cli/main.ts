@@ -6,9 +6,9 @@
 //
 // The one exception is `kata verify --watch`: it is long-running (never returns)
 // so it is dispatched here — where process access already lives — rather than
-// through the pure `run()`, exactly as `@kata/verify`'s own bin does.
+// through the pure `run()`, exactly as `@katajs/verify`'s own bin does.
 
-import { resolveTarget, watchProject } from '@kata/verify'
+import { resolveTarget, watchProject } from '@katajs/verify'
 
 import { run, verifyArgv } from './cli'
 

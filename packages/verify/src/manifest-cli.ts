@@ -7,9 +7,9 @@
  *
  *   kata-provides-manifest --entry .=src/index.ts --entry ./jwt=src/jwt/index.ts
  *
- * `@kata/verify` ships TypeScript source, so this bin runs under `tsx` (the
+ * `@katajs/verify` ships TypeScript source, so this bin runs under `tsx` (the
  * shebang). pnpm links the bin but not its runtime, so a package calling it must
- * declare `tsx` in its own devDependencies — katajs does.
+ * declare `tsx` in its own devDependencies — @katajs/core does.
  *
  * Flags:
  *   --root <dir>              package root (default: cwd)

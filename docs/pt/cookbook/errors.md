@@ -95,7 +95,7 @@ do Kata, o formatador é exportado. `formatZodIssues(error)` transforma um `ZodE
 em `FieldIssue[]`:
 
 ```ts
-import { formatZodIssues } from 'katajs'
+import { formatZodIssues } from '@katajs/core'
 
 handler: async (c) => {
   const parsed = WebhookSchema.safeParse(await c.raw.req.json())

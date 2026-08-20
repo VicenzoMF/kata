@@ -281,7 +281,7 @@ describe('formatResult()', () => {
     expect(text).not.toContain('pnpm install')
   })
 
-  it('warns that .mcp.json requires @kata/docs-mcp to be published', () => {
+  it('warns that .mcp.json requires @katajs/docs-mcp to be published', () => {
     const text = formatResult({
       cwd: '/proj/my-app',
       dir: 'my-app',
@@ -290,7 +290,7 @@ describe('formatResult()', () => {
       packageManager: 'pnpm',
       files: [{ path: '.mcp.json', status: 'created' }],
     })
-    expect(text).toContain('.mcp.json registers @kata/docs-mcp')
+    expect(text).toContain('.mcp.json registers @katajs/docs-mcp')
     expect(text).toContain('published to npm')
   })
 })

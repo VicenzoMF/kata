@@ -60,6 +60,6 @@ describe('createProject()', () => {
       registryKeys: null,
       scopedKeys: null,
     })
-    expect(project.packageManifest('katajs')).toBeNull()
+    expect(project.packageManifest('@katajs/core')).toBeNull()
   })
 })

@@ -144,8 +144,8 @@ O `package.json` gerado conecta os scripts do dia a dia: `pnpm dev` (watch),
 do servidor rodando).
 
 ::: warning Pré-lançamento & nome do pacote
-O framework é publicado no npm como **`katajs`** (o nome `kata` já estava em uso),
-então o `package.json` gerado depende de `katajs`. A CLI/bin continua `kata` — os
+O framework é publicado no npm como **`@katajs/core`** (o nome `kata` já estava em uso),
+então o `package.json` gerado depende de `@katajs/core`. A CLI/bin continua `kata` — os
 scripts e hooks chamam `kata verify`. Ele ainda não foi publicado, então
 `pnpm install` ainda não consegue resolver o `package.json` gerado; enquanto isso,
 rode o exemplo do repositório (veja o [Início rápido](/pt/guide/quickstart)).

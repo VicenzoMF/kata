@@ -548,7 +548,7 @@ function moduleSpecifierOf(node: ts.Expression): string | undefined {
 
 /**
  * Split a bare specifier into the installed package and the export subpath
- * a manifest is keyed by: `katajs/jwt` → `katajs` + `./jwt`, `@scope/pkg` →
+ * a manifest is keyed by: `@katajs/core/jwt` → `@katajs/core` + `./jwt`, `@scope/pkg` →
  * `@scope/pkg` + `.`.
  */
 function splitSpecifier(specifier: string): { packageName: string; subpath: string } {
@@ -559,7 +559,7 @@ function splitSpecifier(specifier: string): { packageName: string; subpath: stri
   return { packageName, subpath: rest.length === 0 ? '.' : `./${rest.join('/')}` }
 }
 
-// Path helpers. `@kata/verify` treats file paths as opaque POSIX-ish strings
+// Path helpers. `@katajs/verify` treats file paths as opaque POSIX-ish strings
 // (they come from `fs-walk`, and tests use `/repo/...` literals), so joining and
 // normalising `..` here keeps module resolution free of `node:path` — and free of
 // the Windows-separator mismatch importing it would introduce.

@@ -1,4 +1,4 @@
-import { defineContext, singleton } from 'katajs'
+import { defineContext, singleton } from '@katajs/core'
 
 /**
  * A logger singleton, registered in the DI context only to make a point: a
