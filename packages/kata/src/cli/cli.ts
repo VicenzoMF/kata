@@ -3,7 +3,7 @@
 // whole command is testable without spawning a subprocess. `main.ts` is the
 // only place that talks to `process`.
 
-import { runCli } from '@katajs/verify'
+import { runCli } from '@katajs-framework/verify'
 
 import { type InitResult, init } from './init'
 import { createModule, type NewResult } from './new'
@@ -20,7 +20,7 @@ export type ParsedArgs = {
   /** `--minimal`: write only the harness configs, no runnable app. */
   minimal: boolean
   /** `--with-docs-mcp`: also write `.mcp.json`, registering the
-   *  `@katajs/docs-mcp` docs-search server (ADR-0023). */
+   *  `@katajs-framework/docs-mcp` docs-search server (ADR-0023). */
   docsMcp: boolean
 }
 
@@ -40,7 +40,7 @@ Usage:
 Options:
   -C, --cwd <dir>     Base directory to resolve [dir] against (default: cwd)
       --minimal       Write only the harness configs — no app (for existing projects)
-      --with-docs-mcp Also write .mcp.json, registering the @katajs/docs-mcp docs-search server
+      --with-docs-mcp Also write .mcp.json, registering the @katajs-framework/docs-mcp docs-search server
   -f, --force         Overwrite existing source files (never the manifests/configs)
   -h, --help          Show this help
 
@@ -131,7 +131,7 @@ function nextSteps(result: InitResult): string[] {
   steps.push(`  ${pm.run('test')}         # unit tests`)
   if (result.docsMcp) {
     steps.push('')
-    steps.push('.mcp.json registers @katajs/docs-mcp via `npx` — requires it to be')
+    steps.push('.mcp.json registers @katajs-framework/docs-mcp via `npx` — requires it to be')
     steps.push('published to npm first (see the Kata repo for current status).')
   }
   return steps
@@ -192,7 +192,7 @@ export function formatNewResult(result: NewResult): string {
 
 /**
  * If `argv` is a `verify` invocation, return the args that follow the `verify`
- * token so `@katajs/verify`'s CLI sees them exactly as it would standalone;
+ * token so `@katajs-framework/verify`'s CLI sees them exactly as it would standalone;
  * otherwise return `null`. The command is the first non-flag arg (matching
  * `parseArgs`). Exported so `main.ts` can route the long-running `--watch` mode.
  */
@@ -209,7 +209,7 @@ export async function run(
 ): Promise<RunResult> {
   const verifyArgs = verifyArgv(argv)
   if (verifyArgs) {
-    // Delegate to @katajs/verify's pure CLI. `--watch` never reaches here — it is
+    // Delegate to @katajs-framework/verify's pure CLI. `--watch` never reaches here — it is
     // long-running and dispatched in main.ts — so runCli only does single-shot
     // (human or --json) runs, which already return an output string + exit code.
     const { output, exitCode } = runCli(verifyArgs, cwd)

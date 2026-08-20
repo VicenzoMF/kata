@@ -5,31 +5,31 @@ description: Cada export público de kata, kata/jwt e kata/node, além do bin ka
 
 # Referência da API
 
-Kata distribui um único pacote, `@katajs/core`, com três caminhos de import e um binário.
+Kata distribui um único pacote, `@katajs-framework/core`, com três caminhos de import e um binário.
 Nada é re-exportado de Hono — a superfície pública é exatamente o que as tabelas
 abaixo listam, derivada dos próprios entry points do pacote.
 
 | Import | Propósito |
 |---|---|
-| `@katajs/core` | Núcleo: a factory de contexto, os construtores de slot, o error envelope, os middlewares embutidos e todos os tipos públicos. |
-| `@katajs/core/jwt` | Primitivas JWT stateless mais o middleware `jwtAuth` e os guards de autorização. |
-| `@katajs/core/node` | `gracefulShutdown` exclusivo de Node, para drenar um servidor em `SIGTERM` / `SIGINT`. |
+| `@katajs-framework/core` | Núcleo: a factory de contexto, os construtores de slot, o error envelope, os middlewares embutidos e todos os tipos públicos. |
+| `@katajs-framework/core/jwt` | Primitivas JWT stateless mais o middleware `jwtAuth` e os guards de autorização. |
+| `@katajs-framework/core/node` | `gracefulShutdown` exclusivo de Node, para drenar um servidor em `SIGTERM` / `SIGINT`. |
 | `kata` (bin) | A CLI: `kata init` faz o scaffold de um app completo, `kata new` adiciona um módulo, `kata verify` roda as regras de lint. |
 
 ```ts
-import { defineContext, scoped, singleton } from '@katajs/core'
-import { jwtAuth, requireRole, signJwt } from '@katajs/core/jwt'
-import { gracefulShutdown } from '@katajs/core/node'
+import { defineContext, scoped, singleton } from '@katajs-framework/core'
+import { jwtAuth, requireRole, signJwt } from '@katajs-framework/core/jwt'
+import { gracefulShutdown } from '@katajs-framework/core/node'
 ```
 
-A divisão é deliberada: `@katajs/core` é neutro em relação ao runtime e roda onde quer que
-Hono rode (Node, Bun, Deno, edge), `@katajs/core/jwt` é o único módulo que toca `hono/jwt`,
-e `@katajs/core/node` é o único módulo que toca `node:process` — assim, um build edge que
-importa `@katajs/core` nunca puxa internals do Node.
+A divisão é deliberada: `@katajs-framework/core` é neutro em relação ao runtime e roda onde quer que
+Hono rode (Node, Bun, Deno, edge), `@katajs-framework/core/jwt` é o único módulo que toca `hono/jwt`,
+e `@katajs-framework/core/node` é o único módulo que toca `node:process` — assim, um build edge que
+importa `@katajs-framework/core` nunca puxa internals do Node.
 
 ## Dependências peer
 
-Kata declara duas dependências peer. Instale-as junto com `@katajs/core`; ele não empacota
+Kata declara duas dependências peer. Instale-as junto com `@katajs-framework/core`; ele não empacota
 nenhuma das duas.
 
 ```json
@@ -44,9 +44,9 @@ nenhuma das duas.
 | Peer | Faixa | Usada para |
 |---|---|---|
 | `hono` | `^4` | O router, o contexto, os adaptadores de runtime e o cliente RPC tipado (`hc`). |
-| `zod` | `^3` | Cada schema de `input` / `output` e os schemas de claims em `@katajs/core/jwt`. |
+| `zod` | `^3` | Cada schema de `input` / `output` e os schemas de claims em `@katajs-framework/core/jwt`. |
 
-## `@katajs/core` — núcleo
+## `@katajs-framework/core` — núcleo
 
 Valores:
 
@@ -103,7 +103,7 @@ Tipos de opções dos middlewares embutidos — `CorsOptions`, `SecureHeadersOpt
 `BodyLimitOptions` — também são exportados. Veja [Middleware](/pt/reference/middleware)
 para os campos deles.
 
-## `@katajs/core/jwt` — auth
+## `@katajs-framework/core/jwt` — auth
 
 Valores:
 
@@ -130,12 +130,12 @@ Tipos:
 | `GuardOptions` | Opções para `guard`: `slot?`, `authorize`, `code?`, `message?`. |
 
 ::: tip Você é dono do fluxo de login
-`@katajs/core/jwt` te dá assinatura, verificação, o middleware de auth e os guards.
+`@katajs-framework/core/jwt` te dá assinatura, verificação, o middleware de auth e os guards.
 Hashing de senha, o store de usuários, a route de login e os refresh tokens continuam sendo seus.
 Veja o [cookbook de Autenticação](/pt/cookbook/auth) para o padrão completo.
 :::
 
-## `@katajs/core/node` — runtime Node
+## `@katajs-framework/core/node` — runtime Node
 
 Valores:
 

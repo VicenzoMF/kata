@@ -14,7 +14,7 @@ e retorna um app Hono paramétrico que você serve e do qual exporta um tipo.
 vinculada, não um import livre — ela já está tipada para o seu registry.
 
 ```ts
-import { defineContext, singleton } from '@katajs/core'
+import { defineContext, singleton } from '@katajs-framework/core'
 
 export const k = defineContext({ logger: singleton(console) })
 export const { defineRoute, defineMiddleware, createApp } = k
@@ -69,7 +69,7 @@ Declare preocupações transversais uma vez aqui, em vez de repeti-las em cada r
 Os built-ins de hardening de primeira parte são o caso canônico:
 
 ```ts
-import { bodyLimit, cors, secureHeaders } from '@katajs/core'
+import { bodyLimit, cors, secureHeaders } from '@katajs-framework/core'
 
 const app = createApp({
   modules: [users, orders],
@@ -174,15 +174,15 @@ serve({ fetch: app.fetch, port }, (info) => {
 o handler de requisição; `serve` é dono do socket. Optar por graceful shutdown é um
 passo separado e explícito ([ADR-0014](/adr/0014-lifecycle-shutdown)).
 
-### Graceful shutdown — `@katajs/core/node`
+### Graceful shutdown — `@katajs-framework/core/node`
 
 O `serve()` do `@hono/node-server` retorna um handle de servidor. Passe-o para
-`gracefulShutdown` de `@katajs/core/node` para drenar requisições em andamento em `SIGTERM` /
+`gracefulShutdown` de `@katajs-framework/core/node` para drenar requisições em andamento em `SIGTERM` /
 `SIGINT` antes de o processo sair:
 
 ```ts
 import { serve } from '@hono/node-server'
-import { gracefulShutdown } from '@katajs/core/node'
+import { gracefulShutdown } from '@katajs-framework/core/node'
 
 import { createApp, k } from './context'
 import * as products from './modules/products/products.route'
@@ -217,8 +217,8 @@ type GracefulShutdownOptions = {
 ```
 
 ::: tip
-`@katajs/core/node` é o único entry que toca em `node:process`. Importar a raiz
-runtime-neutra (`@katajs/core`) a partir de um build edge ou Workers nunca o puxa
+`@katajs-framework/core/node` é o único entry que toca em `node:process`. Importar a raiz
+runtime-neutra (`@katajs-framework/core`) a partir de um build edge ou Workers nunca o puxa
 ([ADR-0014](/adr/0014-lifecycle-shutdown)).
 :::
 
@@ -229,7 +229,7 @@ timer de force-exit e a fronteira do `main.ts`.
 
 `app.fetch` é o handler universal. No Bun, Deno ou em um runtime edge/Workers,
 entregue-o ao servidor daquela plataforma, em vez de `@hono/node-server`. O core do Kata
-(`@katajs/core`) é runtime-neutro; apenas `@katajs/core/node` é específico do Node.
+(`@katajs-framework/core`) é runtime-neutro; apenas `@katajs-framework/core/node` é específico do Node.
 
 ```ts
 // Bun

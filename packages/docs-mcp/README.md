@@ -1,4 +1,4 @@
-# @katajs/docs-mcp
+# @katajs-framework/docs-mcp
 
 A local [MCP](https://modelcontextprotocol.io) server that lets an AI agent
 search Kata's documentation instead of guessing at APIs it was never trained
@@ -10,11 +10,11 @@ three tools over stdio.
 ## Usage
 
 ```sh
-pnpm --filter=@katajs/docs-mcp start   # dev: copies docs/ then runs via tsx
+pnpm --filter=@katajs-framework/docs-mcp start   # dev: copies docs/ then runs via tsx
 ```
 
 Once published, `kata init --with-docs-mcp` writes a `.mcp.json` registering
-it via `npx -y @katajs/docs-mcp` — no local checkout needed
+it via `npx -y @katajs-framework/docs-mcp` — no local checkout needed
 ([ADR-0023](../../docs/adr/0023-docs-mcp-npm-distribution.md)). `scripts/copy-docs.mjs`
 bundles `docs/{guide,cookbook,reference,adr}` into `data/docs/` before both
 `start` and `build`, and `main.ts` resolves it relative to itself — the same

@@ -61,7 +61,7 @@ export type InitOptions = {
   /** Write only the harness configs — no runnable app. For adding Kata to an
    *  existing project (the pre-#200 default). */
   minimal?: boolean
-  /** Also write `.mcp.json`, registering the `@katajs/docs-mcp` docs-search
+  /** Also write `.mcp.json`, registering the `@katajs-framework/docs-mcp` docs-search
    *  server (ADR-0023). Opt-in: most projects don't run an MCP client. */
   docsMcp?: boolean
   /** Env to detect the invoking package manager from (issue #214). Defaults

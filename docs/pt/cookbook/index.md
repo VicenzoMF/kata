@@ -28,7 +28,7 @@ de memória:
 
 - O core API exportado vive em
   [`packages/kata/src/index.ts`](https://github.com/VicenzoMF/kata/blob/main/packages/kata/src/index.ts);
-  os helpers de auth ficam sob [`@katajs/core/jwt`](https://github.com/VicenzoMF/kata/blob/main/packages/kata/src/jwt/index.ts).
+  os helpers de auth ficam sob [`@katajs-framework/core/jwt`](https://github.com/VicenzoMF/kata/blob/main/packages/kata/src/jwt/index.ts).
 - Apps de referência executáveis vivem em
   [`examples/hello`](https://github.com/VicenzoMF/kata/tree/main/examples/hello)
   e [`examples/shop`](https://github.com/VicenzoMF/kata/tree/main/examples/shop).
@@ -44,11 +44,11 @@ dependência em uma única chamada `defineContext({...})` (veja [Context e DI](/
 [ADR-0004](/adr/0004-di-via-scoped-slots)), e os helpers `defineRoute` /
 `defineMiddleware` / `createApp` que ela retorna são vinculados a esse context.
 A configuração idiomática os re-exporta para que o resto do app importe de
-`./context`, nunca de `@katajs/core` diretamente:
+`./context`, nunca de `@katajs-framework/core` diretamente:
 
 ```ts
 // src/context.ts
-import { defineContext, scoped, singleton } from '@katajs/core'
+import { defineContext, scoped, singleton } from '@katajs-framework/core'
 
 import { makeDb } from './db'
 import type { User } from './modules/users/users.schema'
@@ -100,7 +100,7 @@ O cookbook é orientado a tarefas. Para a assinatura exaustiva de cada helper, v
 [`defineRoute`](/pt/reference/define-route),
 [`defineMiddleware`](/pt/reference/define-middleware),
 [`createApp`](/pt/reference/create-app), os
-[middlewares embutidos](/pt/reference/middleware) e [`@katajs/core/jwt`](/pt/reference/jwt).
+[middlewares embutidos](/pt/reference/middleware) e [`@katajs-framework/core/jwt`](/pt/reference/jwt).
 :::
 
 ## Veja também

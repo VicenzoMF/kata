@@ -1,4 +1,4 @@
-import { jwtAuth } from '@katajs/core/jwt'
+import { jwtAuth } from '@katajs-framework/core/jwt'
 
 import { JWT_SECRET } from '../config'
 import { defineMiddleware } from '../context'

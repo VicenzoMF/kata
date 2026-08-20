@@ -2,10 +2,10 @@
  * Loading the `provides.json` a middleware-shipping package publishes.
  *
  * `kata verify` reads source, and an installed package is compiled JavaScript —
- * so a middleware imported from `@katajs/core` used to be unresolvable, which
+ * so a middleware imported from `@katajs-framework/core` used to be unresolvable, which
  * (before issue #206) silently disabled `kata/scoped-slot-not-provided` for the
  * whole project. A manifest closes that hole without a hardcoded allowlist in
- * the verifier: `@katajs/core` generates one at build time from its own middleware
+ * the verifier: `@katajs-framework/core` generates one at build time from its own middleware
  * sources, so it cannot drift when a new first-party middleware ships, and any
  * third-party author gets the same mechanism by shipping the same file.
  *

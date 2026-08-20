@@ -55,7 +55,7 @@ describe('runCli() — the hello example is clean', () => {
   it('has no suppressed checks — every middleware in its chains resolves (#206)', () => {
     // hello's app-level chain is `[cors(), secureHeaders(), bodyLimit(...)]`,
     // exactly the shape that used to disable kata/scoped-slot-not-provided
-    // project-wide. They resolve through @katajs/core's provides.json manifest now.
+    // project-wide. They resolve through @katajs-framework/core's provides.json manifest now.
     const { output, exitCode } = runCli(['--strict-coverage'], helloDir)
     expect(exitCode).toBe(0)
     expect(output).not.toContain('suppressed')
@@ -77,14 +77,14 @@ describe('runCli() — a project with violations', () => {
     mkdirSync(suppressedModuleDir, { recursive: true })
     writeFileSync(
       join(suppressedFixture, 'src', 'context.ts'),
-      `import { defineContext, scoped } from '@katajs/core'
+      `import { defineContext, scoped } from '@katajs-framework/core'
 export const k = defineContext({ currentUser: scoped() })
 `,
     )
     writeFileSync(
       join(suppressedModuleDir, 'users.route.ts'),
       `import { z } from 'zod'
-import { cors } from '@katajs/core'
+import { cors } from '@katajs-framework/core'
 import { defineRoute } from '../../context'
 
 export const meRoute = defineRoute({
@@ -100,7 +100,7 @@ export const meRoute = defineRoute({
 
     writeFileSync(
       join(fixture, 'src', 'context.ts'),
-      `import { defineContext, scoped, singleton } from '@katajs/core'
+      `import { defineContext, scoped, singleton } from '@katajs-framework/core'
 export const k = defineContext({
   logger: singleton({ info() {} }),
   currentUser: scoped(),

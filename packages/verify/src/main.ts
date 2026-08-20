@@ -1,7 +1,7 @@
 #!/usr/bin/env tsx
 /**
  * Executable entry for the `kata-verify` bin and the `verify` package script.
- * The only place in `@katajs/verify` that touches `process` — all logic lives in
+ * The only place in `@katajs-framework/verify` that touches `process` — all logic lives in
  * the pure {@link runCli} (single-shot) and {@link watchProject} (long-running).
  */
 import { resolveTarget, runCli } from './cli'

@@ -40,10 +40,10 @@ e os detalhes por rota seriam perdidos. `AppType` é exatamente
 `KataApp<typeof modules>` — o mesmo tipo escrito de duas formas.
 
 ::: tip
-`KataApp` é exportado de `@katajs/core` se você quiser nomear o tipo explicitamente:
+`KataApp` é exportado de `@katajs-framework/core` se você quiser nomear o tipo explicitamente:
 
 ```ts
-import type { KataApp } from '@katajs/core'
+import type { KataApp } from '@katajs-framework/core'
 
 export type Modules = typeof modules
 export type AppType = KataApp<Modules> // ≡ typeof app
@@ -139,7 +139,7 @@ if (res.status === 404) {
 return res.json() // { id: string; name: string; email: string }
 ```
 
-`ErrorBodySchema` (exportado de `@katajs/core`) é o schema canônico do envelope de erro do
+`ErrorBodySchema` (exportado de `@katajs-framework/core`) é o schema canônico do envelope de erro do
 Kata, então o branch 404 fica tipado de ponta a ponta. Veja [Erros](/pt/guide/errors) para o
 formato do envelope e `c.error(...)`.
 

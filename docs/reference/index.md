@@ -5,31 +5,31 @@ description: Every public export across kata, kata/jwt, and kata/node, plus the 
 
 # API reference
 
-Kata ships one package, `@katajs/core`, with three import paths and one binary. Nothing
+Kata ships one package, `@katajs-framework/core`, with three import paths and one binary. Nothing
 is re-exported from Hono — the public surface is exactly what the tables below
 list, derived from the package's own entry points.
 
 | Import | Purpose |
 |---|---|
-| `@katajs/core` | Core: the context factory, slot constructors, the error envelope, built-in middleware, and every public type. |
-| `@katajs/core/jwt` | Stateless JWT primitives plus the `jwtAuth` middleware and authorization guards. |
-| `@katajs/core/node` | Node-only `gracefulShutdown` for draining a server on `SIGTERM` / `SIGINT`. |
+| `@katajs-framework/core` | Core: the context factory, slot constructors, the error envelope, built-in middleware, and every public type. |
+| `@katajs-framework/core/jwt` | Stateless JWT primitives plus the `jwtAuth` middleware and authorization guards. |
+| `@katajs-framework/core/node` | Node-only `gracefulShutdown` for draining a server on `SIGTERM` / `SIGINT`. |
 | `kata` (bin) | The CLI: `kata init` scaffolds a full app, `kata new` adds a module, `kata verify` runs the lint rules. |
 
 ```ts
-import { defineContext, scoped, singleton } from '@katajs/core'
-import { jwtAuth, requireRole, signJwt } from '@katajs/core/jwt'
-import { gracefulShutdown } from '@katajs/core/node'
+import { defineContext, scoped, singleton } from '@katajs-framework/core'
+import { jwtAuth, requireRole, signJwt } from '@katajs-framework/core/jwt'
+import { gracefulShutdown } from '@katajs-framework/core/node'
 ```
 
-The split is deliberate: `@katajs/core` is runtime-neutral and runs wherever Hono runs
-(Node, Bun, Deno, edge), `@katajs/core/jwt` is the only module that touches `hono/jwt`,
-and `@katajs/core/node` is the only module that touches `node:process` — so an edge build
-that imports `@katajs/core` never pulls in Node internals.
+The split is deliberate: `@katajs-framework/core` is runtime-neutral and runs wherever Hono runs
+(Node, Bun, Deno, edge), `@katajs-framework/core/jwt` is the only module that touches `hono/jwt`,
+and `@katajs-framework/core/node` is the only module that touches `node:process` — so an edge build
+that imports `@katajs-framework/core` never pulls in Node internals.
 
 ## Peer dependencies
 
-Kata declares two peer dependencies. Install them alongside `@katajs/core`; it bundles
+Kata declares two peer dependencies. Install them alongside `@katajs-framework/core`; it bundles
 neither.
 
 ```json
@@ -44,9 +44,9 @@ neither.
 | Peer | Range | Used for |
 |---|---|---|
 | `hono` | `^4` | The router, context, runtime adapters, and the typed RPC client (`hc`). |
-| `zod` | `^3` | Every `input` / `output` schema and the claims schemas in `@katajs/core/jwt`. |
+| `zod` | `^3` | Every `input` / `output` schema and the claims schemas in `@katajs-framework/core/jwt`. |
 
-## `@katajs/core` — core
+## `@katajs-framework/core` — core
 
 Values:
 
@@ -90,7 +90,7 @@ Types:
 | `SingletonKeys` | The singleton keys of a registry. |
 | `ScopedKeys` | The scoped keys of a registry — the only keys a middleware may `provides`/`set`. |
 | `ResolvedValue` | The value type a slot resolves to via `c.get`. |
-| `SlotValue<R, K>` | `ResolvedValue<R[K]>` for a scoped key `K` — the same projection `c.get` uses, and what `@katajs/core/jwt`'s `guard` derives `authorize`'s parameter from. |
+| `SlotValue<R, K>` | `ResolvedValue<R[K]>` for a scoped key `K` — the same projection `c.get` uses, and what `@katajs-framework/core/jwt`'s `guard` derives `authorize`'s parameter from. |
 | `Logger` | The structured logger shape a `logger` singleton may satisfy for per-request logging. `extra.err` arrives pre-flattened as a `SerializedError`, never a raw `Error`. |
 | `SerializedError` | The plain-data mirror of an `Error` — `{ name, message, stack?, cause?, errors? }` — that `logger.error` receives under `extra.err`. |
 | `LogExtra` | The `extra` payload type of every `Logger` method: open (`Record<string, unknown>`), with the reserved `err` key typed as `SerializedError`. |
@@ -107,7 +107,7 @@ Built-in middleware option types — `CorsOptions`, `SecureHeadersOptions`, and
 `BodyLimitOptions` — are also exported. See [Middleware](/reference/middleware)
 for their fields.
 
-## `@katajs/core/jwt` — auth
+## `@katajs-framework/core/jwt` — auth
 
 Values:
 
@@ -134,12 +134,12 @@ Types:
 | `GuardOptions` | Options for `guard`: `slot?`, `authorize`, `code?`, `message?`. |
 
 ::: tip You own the login flow
-`@katajs/core/jwt` gives you signing, verification, the auth middleware, and guards.
+`@katajs-framework/core/jwt` gives you signing, verification, the auth middleware, and guards.
 Password hashing, the user store, the login route, and refresh tokens stay yours.
 See the [Authentication cookbook](/cookbook/auth) for the full pattern.
 :::
 
-## `@katajs/core/node` — Node runtime
+## `@katajs-framework/core/node` — Node runtime
 
 Values:
 

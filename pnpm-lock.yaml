@@ -11,7 +11,7 @@ importers:
       '@biomejs/biome':
         specifier: ^2.4.15
         version: 2.4.15
-      '@katajs/core':
+      '@katajs-framework/core':
         specifier: workspace:*
         version: link:packages/kata
       '@vitest/coverage-v8':
@@ -35,7 +35,7 @@ importers:
       '@hono/node-server':
         specifier: ^1.13
         version: 1.19.14(hono@4.12.21)
-      '@katajs/core':
+      '@katajs-framework/core':
         specifier: workspace:*
         version: link:../../packages/kata
       hono:
@@ -60,7 +60,7 @@ importers:
       '@hono/node-server':
         specifier: ^1.13
         version: 1.19.14(hono@4.12.21)
-      '@katajs/core':
+      '@katajs-framework/core':
         specifier: workspace:*
         version: link:../../packages/kata
       hono:
@@ -85,7 +85,7 @@ importers:
       '@hono/node-server':
         specifier: ^1.13
         version: 1.19.14(hono@4.12.21)
-      '@katajs/core':
+      '@katajs-framework/core':
         specifier: workspace:*
         version: link:../../packages/kata
       hono:
@@ -132,7 +132,7 @@ importers:
 
   packages/kata:
     devDependencies:
-      '@katajs/verify':
+      '@katajs-framework/verify':
         specifier: workspace:*
         version: link:../verify
       '@types/node':

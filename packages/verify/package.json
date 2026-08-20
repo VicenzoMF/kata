@@ -1,5 +1,5 @@
 {
-  "name": "@katajs/verify",
+  "name": "@katajs-framework/verify",
   "version": "0.0.0",
   "private": true,
   "type": "module",

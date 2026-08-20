@@ -5,7 +5,7 @@ description: Signature reference for kata/jwt — signJwt, verifyJwt, jwtAuth, t
 
 # kata/jwt
 
-`@katajs/core/jwt` is the auth subpath of the `@katajs/core` package. It ships the stateless JWT
+`@katajs-framework/core/jwt` is the auth subpath of the `@katajs-framework/core` package. It ships the stateless JWT
 primitives — `signJwt` / `verifyJwt` — plus the Kata-aware `jwtAuth` middleware
 and the authorization guards. It is the only module that imports `hono/jwt`, so
 it adds no dependency beyond the `hono` peer ([ADR-0013](/adr/0013-jwt-delivery)).
@@ -18,7 +18,7 @@ import {
   guard,
   requireRole,
   requireClaim,
-} from '@katajs/core/jwt'
+} from '@katajs-framework/core/jwt'
 ```
 
 Everything is a function. An invalid or expired token is an expected outcome,
@@ -149,7 +149,7 @@ if (result.ok) {
 }
 ```
 
-`FieldIssue` is the core export from `@katajs/core` reused here (`{ path, message, code,
+`FieldIssue` is the core export from `@katajs-framework/core` reused here (`{ path, message, code,
 expected?, received? }`); see [Errors](/guide/errors).
 
 ## `jwtAuth`
@@ -175,7 +175,7 @@ signature (ADR-0013 §4).
 
 ```ts
 // src/middlewares/auth.ts
-import { jwtAuth } from '@katajs/core/jwt'
+import { jwtAuth } from '@katajs-framework/core/jwt'
 
 import { JWT_SECRET } from '../config'
 import { defineMiddleware } from '../context'
@@ -285,7 +285,7 @@ type GuardOptions<R extends Registry, S extends ScopedKeys<R> = 'currentUser'> =
 | `message?` | `string` | 403 envelope message. Default `'Insufficient permissions'`. |
 
 ```ts
-import { guard } from '@katajs/core/jwt'
+import { guard } from '@katajs-framework/core/jwt'
 
 const requireOwner = defineMiddleware({
   provides: [] as const,
@@ -364,10 +364,10 @@ handler: requireClaim('plan', (v) => v === 'pro' || v === 'team')
 
 `Registry`, `Middleware`, `MiddlewareContext`, `ScopedKeys`, `SlotValue`, and
 `FieldIssue` are core types re-used in these signatures; they are exported from
-`@katajs/core`, not `@katajs/core/jwt`.
+`@katajs-framework/core`, not `@katajs-framework/core/jwt`.
 
 ::: info You own the login flow
-`@katajs/core/jwt` gives you signing, verification, the auth middleware, and guards.
+`@katajs-framework/core/jwt` gives you signing, verification, the auth middleware, and guards.
 Password hashing, the user store, the login route, refresh tokens, and remote
 JWKS / OIDC sit beyond this seam — they are yours. See the
 [Authentication cookbook](/cookbook/auth) and [ADR-0013](/adr/0013-jwt-delivery).
@@ -379,5 +379,5 @@ JWKS / OIDC sit beyond this seam — they are yours. See the
 - [Authentication cookbook](/cookbook/auth) — the end-to-end login walkthrough.
 - [defineMiddleware](/reference/define-middleware) — `provides`, the handler, short-circuiting.
 - [Errors](/guide/errors) — the unified error envelope guards and `jwtAuth` render.
-- [API reference](/reference/) — every public export across `@katajs/core`, `@katajs/core/jwt`, and `@katajs/core/node`.
+- [API reference](/reference/) — every public export across `@katajs-framework/core`, `@katajs-framework/core/jwt`, and `@katajs-framework/core/node`.
 - [ADR-0013](/adr/0013-jwt-delivery) — why `hono/jwt`, why a subpath, the BYO boundary.

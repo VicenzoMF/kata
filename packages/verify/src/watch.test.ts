@@ -15,13 +15,13 @@ function write(rel: string, text: string): string {
   return full
 }
 
-const CONTEXT = `import { defineContext, scoped, singleton } from '@katajs/core'
+const CONTEXT = `import { defineContext, scoped, singleton } from '@katajs-framework/core'
 export const k = defineContext({
   logger: singleton({ info() {} }),
   currentUser: scoped(),
 })`
 
-const CONTEXT_NO_LOGGER = `import { defineContext, scoped } from '@katajs/core'
+const CONTEXT_NO_LOGGER = `import { defineContext, scoped } from '@katajs-framework/core'
 export const k = defineContext({ currentUser: scoped() })`
 
 const CLEAN_ROUTE = `import { defineRoute } from '../../context'

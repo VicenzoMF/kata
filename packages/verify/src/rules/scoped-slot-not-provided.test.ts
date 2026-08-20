@@ -344,9 +344,9 @@ describe('kata/scoped-slot-not-provided', () => {
       exports: { '.': { cors: { provides: [] } } },
     }
     const p = project(
-      [appWith('[cors()]', "import { cors } from '@katajs/core'\n"), READS_CURRENT_USER],
+      [appWith('[cors()]', "import { cors } from '@katajs-framework/core'\n"), READS_CURRENT_USER],
       SCOPED,
-      (name) => (name === '@katajs/core' ? manifest : null),
+      (name) => (name === '@katajs-framework/core' ? manifest : null),
     )
     // cors() resolves to `provides: []`, so the read is *disproved* rather than skipped.
     expect(issuesOf(p)).toHaveLength(1)
@@ -720,7 +720,7 @@ const app = k.createApp({ modules: [], middlewares: [auth] })`,
   it('flags a guard() middleware reading its slot before the provider runs', () => {
     const guardMw = {
       relPath: 'src/middlewares/require-tenant-owner.ts',
-      text: `import { guard } from '@katajs/core/jwt'
+      text: `import { guard } from '@katajs-framework/core/jwt'
 export const requireTenantOwner = defineMiddleware({
   provides: [] as const,
   handler: guard({ slot: 'tenantId', authorize: (id) => id === 1 }),
@@ -747,7 +747,7 @@ export const requireTenantOwner = defineMiddleware({
   it('passes a guard() middleware whose slot is provided earlier in the chain', () => {
     const guardMw = {
       relPath: 'src/middlewares/require-tenant-owner.ts',
-      text: `import { guard } from '@katajs/core/jwt'
+      text: `import { guard } from '@katajs-framework/core/jwt'
 export const requireTenantOwner = defineMiddleware({
   provides: [] as const,
   handler: guard({ slot: 'tenantId', authorize: (id) => id === 1 }),
@@ -771,7 +771,7 @@ export const requireTenantOwner = defineMiddleware({
   it('defaults an unslotted guard() to reading `currentUser`', () => {
     const guardMw = {
       relPath: 'src/middlewares/require-admin.ts',
-      text: `import { guard } from '@katajs/core/jwt'
+      text: `import { guard } from '@katajs-framework/core/jwt'
 export const requireAdmin = defineMiddleware({
   provides: [] as const,
   handler: guard({ authorize: (u) => u.role === 'admin' }),
@@ -798,7 +798,7 @@ export const requireAdmin = defineMiddleware({
   it('flags requireRole() placed before its provider — the slot is its 2nd argument', () => {
     const requireRoleMw = {
       relPath: 'src/middlewares/admin-only.ts',
-      text: `import { requireRole } from '@katajs/core/jwt'
+      text: `import { requireRole } from '@katajs-framework/core/jwt'
 export const adminOnly = defineMiddleware({
   provides: [] as const,
   handler: requireRole('admin'),
@@ -822,7 +822,7 @@ export const adminOnly = defineMiddleware({
   it('flags requireClaim() reading its explicit slot — the 3rd argument', () => {
     const requireClaimMw = {
       relPath: 'src/middlewares/owner-only.ts',
-      text: `import { requireClaim } from '@katajs/core/jwt'
+      text: `import { requireClaim } from '@katajs-framework/core/jwt'
 export const ownerOnly = defineMiddleware({
   provides: [] as const,
   handler: requireClaim('id', 1, { slot: 'tenantId' }),
@@ -849,7 +849,7 @@ export const ownerOnly = defineMiddleware({
   it('does not flag a guard() whose slot is a dynamic value (best-effort — a missed read, not a suppression)', () => {
     const guardMw = {
       relPath: 'src/middlewares/dynamic-guard.ts',
-      text: `import { guard } from '@katajs/core/jwt'
+      text: `import { guard } from '@katajs-framework/core/jwt'
 const SLOT = 'tenantId'
 export const dynamicGuard = defineMiddleware({
   provides: [] as const,

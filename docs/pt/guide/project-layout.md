@@ -115,7 +115,7 @@ e servi-lo em um único arquivo. Ambos os exemplos prontos fazem exatamente isso
 ```ts
 // src/main.ts — examples/hello
 import { serve } from '@hono/node-server'
-import { bodyLimit, cors, secureHeaders } from '@katajs/core'
+import { bodyLimit, cors, secureHeaders } from '@katajs-framework/core'
 
 import { createApp, k } from './context'
 import * as auth from './modules/auth/auth.route'
