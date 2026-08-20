@@ -24,7 +24,7 @@ import type { Registry } from '../types'
  * must observe the final body. For those, ADR-0020 introduces an opt-in
  * `fromHonoTransform()` that wires a real `next` and threads Kata's final
  * `Response` back through the wrapped middleware. See
- * https://github.com/VicenzoMF/kata/blob/v0.1.0/docs/adr/0020-cors-preflight-and-response-transform-seam.md.
+ * https://github.com/VicenzoMF/kata/blob/v0.3.0/docs/adr/0020-cors-preflight-and-response-transform-seam.md.
  *
  * Headers the wrapped middleware set land on `c.res` here, not on the
  * `Response` the route pipeline eventually builds — those are merged onto it

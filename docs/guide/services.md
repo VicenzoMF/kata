@@ -7,7 +7,7 @@ description: Business logic lives in pure functions with no framework imports �
 
 A service is where your business logic lives. It sits in `<domain>.service.ts` and
 is made of plain functions — and, crucially, it imports *nothing* from the
-framework: no `katajs`, no Hono, no `defineContext`, no `defineRoute`, no `c`. A route
+framework: no `@katajs/core`, no Hono, no `defineContext`, no `defineRoute`, no `c`. A route
 handler validates the input, calls a service, and returns the result. The service
 itself has no idea it is being served over HTTP.
 
@@ -29,7 +29,7 @@ protecting it.
 ## A service is just functions
 
 The `hello` example keeps its whole user store in one file. Notice what it does
-**not** import: nothing from `katajs`, no Hono, no request context.
+**not** import: nothing from `@katajs/core`, no Hono, no request context.
 
 ```ts
 // src/modules/users/users.service.ts
@@ -69,7 +69,7 @@ the service, and returns the value (which Kata then validates against `output`):
 
 ```ts
 // src/modules/users/users.route.ts
-import { ErrorBodySchema } from 'katajs'
+import { ErrorBodySchema } from '@katajs/core'
 
 import { defineRoute } from '../../context'
 
@@ -310,7 +310,7 @@ service signature and every route handler stays put. The full recipe is in
 ## Rules
 
 - A service imports types from `<domain>.schema.ts` and other services. Nothing from
-  `katajs`, Hono, or the request context.
+  `@katajs/core`, Hono, or the request context.
 - A service never calls `c.get(...)`, `c.json(...)`, or `c.error(...)`. It takes
   dependencies as arguments and returns plain values or typed result unions.
 - Services are functions with named exports — no classes, no `this`

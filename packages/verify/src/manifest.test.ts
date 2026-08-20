@@ -41,11 +41,11 @@ describe('parseManifest()', () => {
 })
 
 describe('createManifestLoader()', () => {
-  it('finds the manifest katajs ships, walking up to the workspace node_modules', () => {
-    // The examples install `katajs` as a workspace link, so this exercises the
+  it('finds the manifest @katajs/core ships, walking up to the workspace node_modules', () => {
+    // The examples install `@katajs/core` as a workspace link, so this exercises the
     // real lookup path an installed app takes.
     const load = createManifestLoader(new URL('../../../examples/hello', import.meta.url).pathname)
-    const manifest = load('katajs')
+    const manifest = load('@katajs/core')
     expect(manifest?.exports['.']?.['cors']?.provides).toEqual([])
   })
 
@@ -56,6 +56,6 @@ describe('createManifestLoader()', () => {
 
   it('memoizes, so a package is looked up once per loader', () => {
     const load = createManifestLoader(new URL('../../../examples/hello', import.meta.url).pathname)
-    expect(load('katajs')).toBe(load('katajs'))
+    expect(load('@katajs/core')).toBe(load('@katajs/core'))
   })
 })

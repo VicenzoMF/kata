@@ -39,6 +39,7 @@ import {
   serialize,
 } from './generators'
 import type { ClaudeSettings, CodexHooks } from './templates/types'
+import { KATA_VERSION } from './templates/version'
 
 function parseClaude(): ClaudeSettings {
   return JSON.parse(renderClaudeSettings()) as ClaudeSettings
@@ -224,17 +225,17 @@ describe('renderLefthookYml() — issue #130', () => {
 })
 
 describe('renderMcpJson() — ADR-0023 (--with-docs-mcp)', () => {
-  it('registers @kata/docs-mcp as a local stdio server via npx', () => {
+  it('registers @katajs/docs-mcp as a local stdio server via npx', () => {
     const json = JSON.parse(renderMcpJson())
     expect(json.mcpServers['kata-docs'].command).toBe('npx')
-    expect(json.mcpServers['kata-docs'].args).toEqual(['-y', '@kata/docs-mcp'])
+    expect(json.mcpServers['kata-docs'].args).toEqual(['-y', '@katajs/docs-mcp'])
   })
 })
 
 describe('renderExample* — `kata init` app skeleton (issue #200)', () => {
   it('context.ts calls defineContext and re-exports the bound factory (ADR-0004)', () => {
     const src = renderExampleContext()
-    expect(src).toContain("import { defineContext } from 'katajs'")
+    expect(src).toContain("import { defineContext } from '@katajs/core'")
     expect(src).toContain('export const k = defineContext({})')
     expect(src).toContain('export const { defineRoute, defineMiddleware, createApp } = k')
     expect(src).toContain('export type AppRegistry = typeof k.registry')
@@ -386,7 +387,11 @@ describe('renderExample* — `kata init` app skeleton (issue #200)', () => {
     expect(pkg.scripts.hurl).toBe(
       'hurl --test --color --variable host=${HURL_HOST:-http://localhost:3000} src/modules/*/*.hurl',
     )
-    expect(pkg.dependencies.katajs).toBeDefined() // published as `katajs` (#199); bin stays `kata`
+    // Published as `@katajs/core`: the unscoped `katajs` is permanently blocked by
+    // npm's name-similarity filter (the dormant `kata-js`), so the scope is forced.
+    // The bin stays `kata`. The pin must track the CLI's own version — a hardcoded
+    // range silently breaks `kata init` the moment a new minor ships.
+    expect(pkg.dependencies['@katajs/core']).toBe(`^${KATA_VERSION}`)
     expect(pkg.dependencies.hono).toBeDefined()
     expect(pkg.dependencies.zod).toBeDefined()
     expect(pkg.dependencies['@hono/node-server']).toBeDefined()

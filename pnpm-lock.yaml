@@ -11,12 +11,12 @@ importers:
       '@biomejs/biome':
         specifier: ^2.4.15
         version: 2.4.15
+      '@katajs/core':
+        specifier: workspace:*
+        version: link:packages/kata
       '@vitest/coverage-v8':
         specifier: ^4.1.7
         version: 4.1.7(vitest@4.1.7)
-      katajs:
-        specifier: workspace:*
-        version: link:packages/kata
       lefthook:
         specifier: ^2.1.8
         version: 2.1.8
@@ -35,12 +35,12 @@ importers:
       '@hono/node-server':
         specifier: ^1.13
         version: 1.19.14(hono@4.12.21)
+      '@katajs/core':
+        specifier: workspace:*
+        version: link:../../packages/kata
       hono:
         specifier: ^4
         version: 4.12.21
-      katajs:
-        specifier: workspace:*
-        version: link:../../packages/kata
       zod:
         specifier: ^3
         version: 3.25.76
@@ -60,12 +60,12 @@ importers:
       '@hono/node-server':
         specifier: ^1.13
         version: 1.19.14(hono@4.12.21)
+      '@katajs/core':
+        specifier: workspace:*
+        version: link:../../packages/kata
       hono:
         specifier: ^4
         version: 4.12.21
-      katajs:
-        specifier: workspace:*
-        version: link:../../packages/kata
       zod:
         specifier: ^3
         version: 3.25.76
@@ -85,12 +85,12 @@ importers:
       '@hono/node-server':
         specifier: ^1.13
         version: 1.19.14(hono@4.12.21)
+      '@katajs/core':
+        specifier: workspace:*
+        version: link:../../packages/kata
       hono:
         specifier: ^4
         version: 4.12.21
-      katajs:
-        specifier: workspace:*
-        version: link:../../packages/kata
       zod:
         specifier: ^3
         version: 3.25.76
@@ -132,7 +132,7 @@ importers:
 
   packages/kata:
     devDependencies:
-      '@kata/verify':
+      '@katajs/verify':
         specifier: workspace:*
         version: link:../verify
       '@types/node':

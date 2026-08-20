@@ -1,31 +1,53 @@
-# Releasing `katajs` to npm
+# Releasing `@katajs/core` to npm
 
 This document covers how the framework is published. The npm package is
-**`katajs`**; the framework's identity stays **Kata** and the CLI command stays
-**`kata`** (with a `katajs` bin alias). Only `katajs` is publishable —
-`@kata/verify` is `private` and is **bundled into the CLI at build time** (it is
+**`@katajs/core`**; the framework's identity stays **Kata** and the CLI command stays
+**`kata`** (with a `@katajs/core` bin alias). Only `@katajs/core` is publishable —
+`@katajs/verify` is `private` and is **bundled into the CLI at build time** (it is
 never a runtime dependency and is never published).
 
 The package is *prepared and proven* but **not yet published**: publishing is a
-manual action by the owner (needs an npm token).
+manual action by the owner. The npm account has 2FA set to `auth-and-writes`
+via **passkey**, not TOTP — `--otp=<code>` does not apply. `npm publish` prints
+an auth URL to approve in the browser, so it needs a real TTY; a non-interactive
+shell fails with `EOTP` before ever reaching the registry.
 
 ---
 
 ## Name
 
-The bare `kata` on npm is an **unrelated, dormant** package (`kata@1.0.3`,
-AGPL-3.0, *"Generate HTML from template literal"*, last published 2022) — we
-leave it untouched and publish under **`katajs`** instead. Rationale:
+The package is **`@katajs/core`**. The framework's identity stays **Kata** and the
+CLI command stays **`kata`**. Three npm constraints forced the scope:
 
-- `katajs` is free, unscoped, and `npx katajs init|verify` works out of the box.
-- The framework is still called **Kata**; only the npm id and the import
-  specifier are `katajs` (`import … from 'katajs'`).
+1. **`kata` is taken** — an unrelated, dormant package (`kata@1.0.3`, AGPL-3.0,
+   *"Generate HTML from template literal"*, last published 2022). Left untouched.
+2. **`katajs` is unpublishable** — npm's name-similarity filter rejects it with
+   `E403 Package name too similar to existing package kata-js`. `kata-js` is a
+   dead 2016 boilerplate (one version, never updated, maintainer `ivoputzer`),
+   but npm normalises punctuation, so `kata-js` and `katajs` collide. The name
+   is free yet permanently blocked while `kata-js` exists.
+3. **`@kata` is taken** — the scope belongs to another npm account.
+
+Scoped packages are exempt from the similarity filter, so `@katajs/core` is the
+first name that both reads correctly and can actually be published. This is the
+NestJS/Angular shape (`@nestjs/core`, `@angular/core`) and leaves room for
+`@katajs/docs-mcp` and `@katajs/verify` under one scope.
+
+Consequences:
+
+- Import specifier is `@katajs/core` (`import … from '@katajs/core'`), with
+  `@katajs/core/jwt` and `@katajs/core/node` subpaths.
 - The CLI keeps the short `kata` command (`kata init` / `kata new` /
-  `kata verify`); a `katajs` bin alias is also published so `npx katajs …`
-  resolves to this package and never collides with the squatted `kata`.
+  `kata verify`). A `katajs` bin alias still ships, so `npx katajs …` works
+  *inside a project that already depends on the package*; it can no longer
+  bootstrap from an empty directory, since the unscoped `katajs` does not exist.
+  Bootstrap is `npx @katajs/core init`.
+- The scaffold pins `@katajs/core` to the CLI's own version (`KATA_VERSION`), so
+  a released minor never generates an unresolvable range.
 
-A scoped `@<scope>/kata` was the alternative (preserves the literal name like
-NestJS/Angular) but was rejected in favour of the simpler unscoped install.
+An earlier revision of this document chose the unscoped `katajs` and explicitly
+rejected a scope "in favour of the simpler unscoped install". That rationale is
+void: the unscoped install was never available.
 
 ---
 
@@ -35,7 +57,7 @@ NestJS/Angular) but was rejected in favour of the simpler unscoped install.
   `directory: packages/kata`), `bugs`, `license`, `author`, `engines.node >=20`.
 - **Entry points:** `main`, `types`, and an `exports` map for `.`, `./jwt`,
   `./node`, and `./package.json`. ESM-only (`"type": "module"`).
-- **Bin:** `kata` **and** `katajs`, both → `./dist/cli/main.js` (shebang
+- **Bin:** `kata` **and** `@katajs/core`, both → `./dist/cli/main.js` (shebang
   preserved by tsup).
 - **`files`:** `["dist", "README.md", "LICENSE", "NOTICE"]` — a whitelist, so
   `src/`, tests, configs, and hooks can never leak (proven below).
@@ -54,11 +76,11 @@ Sourcemaps are intentionally **off** in `tsup.config.ts`: esbuild inlines
 
 ## Proof (no real publish performed)
 
-`pnpm --filter=katajs build && cd packages/kata && npm pack --dry-run` →
-**14 files, ~40 kB packed / ~142 kB unpacked**:
+`pnpm --filter=@katajs/core build && cd packages/kata && npm pack --dry-run` →
+**15 files, ~58 kB packed / ~208 kB unpacked**:
 
 ```
-LICENSE  NOTICE  README.md  package.json
+LICENSE  NOTICE  README.md  package.json  provides.json
 dist/index.js          dist/index.d.ts
 dist/jwt/index.js      dist/jwt/index.d.ts
 dist/node/index.js     dist/node/index.d.ts
@@ -69,13 +91,13 @@ dist/chunk-*.js        dist/context-*.d.ts        (shared chunks)
 No `src/`, no `*.test.ts`, no hooks, no `tsconfig`/`tsup`/`biome`/`oxlint`
 configs, no `.map` files.
 
-Consumed from a real tarball in a throwaway app (`npm i ./katajs-0.1.0.tgz hono
+Consumed from a real tarball in a throwaway app (`npm i ./katajs-core-0.3.0.tgz hono
 zod@^3`):
 
-- `import { defineContext } from 'katajs'` → app boots, `GET /hello → 200`.
-- `katajs/jwt` and `katajs/node` subpaths resolve at runtime **and** under `tsc
+- `import { defineContext } from '@katajs/core'` → app boots, `GET /hello → 200`.
+- `@katajs/core/jwt` and `@katajs/core/node` subpaths resolve at runtime **and** under `tsc
   --strict` with `skipLibCheck: false`.
-- `npx katajs --help` / `kata verify` run from the linked bin(s).
+- `npx @katajs/core --help` / `kata verify` run from the linked bin(s).
 
 ---
 
@@ -87,7 +109,7 @@ pnpm install
 pnpm typecheck && pnpm test && pnpm exec kata verify packages/kata
 
 # 1. Build + inspect the tarball
-pnpm --filter=katajs build
+pnpm --filter=@katajs/core build
 cd packages/kata
 npm pack --dry-run            # confirm contents; expect 0 warnings
 
@@ -95,15 +117,15 @@ npm pack --dry-run            # confirm contents; expect 0 warnings
 npm publish --access public
 #    Safer first cut: publish under a pre-release tag, promote later:
 #    npm publish --tag next --access public
-#    npm dist-tag add katajs@0.1.0 latest
+#    npm dist-tag add @katajs/core@0.3.0 latest
 
 # 3. Tag the release in git
-git tag katajs-v0.1.0 && git push origin katajs-v0.1.0
+git tag katajs-v0.3.0 && git push origin katajs-v0.3.0
 
 # 4. Verify from the registry in a fresh dir
 cd "$(mktemp -d)" && npm init -y >/dev/null
-npm i katajs hono zod
-node -e "import('katajs').then(m => console.log(Object.keys(m)))"
+npm i @katajs/core hono zod
+node -e "import('@katajs/core').then(m => console.log(Object.keys(m)))"
 ```
 
 ---
@@ -137,13 +159,20 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm typecheck && pnpm test && pnpm exec kata verify packages/kata
-      - run: pnpm --filter=katajs build
+      - run: pnpm --filter=@katajs/core build
       - run: npm publish --access public --provenance
         working-directory: packages/kata
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 ```
 
+> **Deprecated auth path.** The `NPM_TOKEN` flow above is on borrowed time:
+> npm granular tokens configured to bypass 2FA lose the right to publish after
+> **January 2027**. Once `@katajs/core` exists on the registry, replace it with
+> **trusted publishing (OIDC)** — no stored token at all. It could not be used
+> for the first release: a trusted publisher is configured in the package's
+> settings on npmjs.com, which requires the package to already exist.
+
 `--provenance` needs `id-token: write`, npm ≥ 9.5, and a public repo; drop it
 otherwise. For multi-package releases later, consider Changesets — overkill
-while `katajs` is the only published package.
+while `@katajs/core` is the only published package.

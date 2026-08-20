@@ -1,4 +1,4 @@
-import { ErrorBodySchema } from 'katajs'
+import { ErrorBodySchema } from '@katajs/core'
 
 import { defineRoute } from '../../context'
 import { requireAuth } from '../../middlewares/auth'

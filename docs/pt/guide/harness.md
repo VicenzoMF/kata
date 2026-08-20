@@ -153,7 +153,7 @@ Fechar uma supressão significa tornar a expressão legível:
 
 - **Um middleware de um pacote npm.** O pacote publica um manifesto
   `provides.json` descrevendo o que cada middleware exportado fornece e lê; o
-  `katajs` gera o seu no build, que é por que `cors()`, `secureHeaders()` e
+  `@katajs/core` gera o seu no build, que é por que `cors()`, `secureHeaders()` e
   `bodyLimit()` resolvem. Autores de middleware de terceiros podem publicar o
   mesmo arquivo.
 - **Uma factory local.** O `kata verify` segue a chamada até o `return`, então

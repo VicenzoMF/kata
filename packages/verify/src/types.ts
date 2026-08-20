@@ -1,5 +1,5 @@
 /**
- * Shared types for `@kata/verify`.
+ * Shared types for `@katajs/verify`.
  *
  * A rule is a pure function `(project) => Issue[]` — or, when it has coverage
  * gaps to declare, `(project) => { issues, suppressions }`. The runner builds
@@ -104,7 +104,7 @@ export type ManifestEntry = {
  * Shipping this is how `kata verify` resolves `cors()` — imported from a
  * compiled package whose source it cannot read — instead of giving up and
  * silently disabling `kata/scoped-slot-not-provided` project-wide (issue #206).
- * `katajs` generates its own at build time; any third-party middleware author
+ * `@katajs/core` generates its own at build time; any third-party middleware author
  * can ship the same file to become resolvable.
  */
 export type ProvidesManifest = {

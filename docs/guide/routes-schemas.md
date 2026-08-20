@@ -179,12 +179,12 @@ Reach for the map form when a route answers with more than one status and you wa
 envelope ([ADR-0011](/adr/0011-multi-status-output-schemas)):
 
 ```ts
-import { ErrorBodySchema } from 'katajs'
+import { ErrorBodySchema } from '@katajs/core'
 
 output: { 200: UserSchema, 404: ErrorBodySchema }
 ```
 
-`ErrorBodySchema` is exported from `katajs`. It is the Zod mirror of the unified error
+`ErrorBodySchema` is exported from `@katajs/core`. It is the Zod mirror of the unified error
 envelope that `c.error(...)` produces (see [Errors](/guide/errors)), which makes it
 the canonical schema to put behind any `4xx`/`5xx` status. When you want a tighter
 contract, substitute a stricter refinement — for example pinning `error` to a
@@ -278,7 +278,7 @@ return only ever produces JSON. Declare that contract with `raw()` instead of a 
 schema:
 
 ```ts
-import { raw } from 'katajs'
+import { raw } from '@katajs/core'
 
 export const usersCsvRoute = defineRoute({
   method: 'GET',
@@ -402,7 +402,7 @@ export type CreateUserBody = z.infer<typeof CreateUserBodySchema>
 
 ```ts
 // src/modules/users/users.route.ts
-import { ErrorBodySchema } from 'katajs'
+import { ErrorBodySchema } from '@katajs/core'
 
 import { defineRoute } from '../../context'
 

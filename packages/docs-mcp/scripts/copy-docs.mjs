@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // Copies the framework's docs into this package (ADR-0023) so the published
-// npm tarball is self-contained — a consumer running `npx @kata/docs-mcp`
+// npm tarball is self-contained — a consumer running `npx @katajs/docs-mcp`
 // has no checkout of the Kata monorepo to read `docs/` from. `data/` is
 // generated and gitignored (see root `.gitignore`); this script is the only
 // thing that writes it, and it runs before both `start` (dev) and `build`.

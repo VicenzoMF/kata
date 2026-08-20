@@ -19,7 +19,7 @@ sobre o app inteiro com `middlewares:`.
 ## defineMiddleware
 
 `defineContext` retorna `defineMiddleware`. Importe-o do seu módulo de contexto,
-não de `katajs`:
+não de `@katajs/core`:
 
 ```ts
 import { defineMiddleware } from '../context'
@@ -83,7 +83,7 @@ vazios. Um middleware preenche um com `c.set`, e o handler o lê com `c.get`.
 Dado um contexto com um scoped slot `currentUser`:
 
 ```ts
-import { defineContext, scoped, singleton } from 'katajs'
+import { defineContext, scoped, singleton } from '@katajs/core'
 
 export type CurrentUser = { id: string }
 
@@ -126,12 +126,12 @@ regra de lint `kata/scoped-slot-not-provided`. Singletons não precisam de
 provedor — eles vivem durante todo o tempo de vida do processo.
 :::
 
-Para autenticação real, `katajs/jwt` traz `jwtAuth`, que verifica um bearer token e
+Para autenticação real, `@katajs/core/jwt` traz `jwtAuth`, que verifica um bearer token e
 preenche um slot `currentUser` para você. O app de exemplo o encapsula para que o
 literal `provides` permaneça no call site:
 
 ```ts
-import { jwtAuth } from 'katajs/jwt'
+import { jwtAuth } from '@katajs/core/jwt'
 
 import { JWT_SECRET } from '../config'
 import { defineMiddleware } from '../context'
@@ -189,7 +189,7 @@ Uma rota lista seu middleware em `use:`, e eles rodam da esquerda para
 a direita, todos antes do handler:
 
 ```ts
-import { ErrorBodySchema } from 'katajs'
+import { ErrorBodySchema } from '@katajs/core'
 
 import { defineRoute } from '../../context'
 import { requireAuth } from '../../middlewares/auth'
@@ -237,7 +237,7 @@ tamanho de corpo — e repeti-las no `use:` de cada rota seria ruído. Declare-a
 no app com `createApp({ middlewares })`:
 
 ```ts
-import { bodyLimit, cors, secureHeaders } from 'katajs'
+import { bodyLimit, cors, secureHeaders } from '@katajs/core'
 
 import { createApp } from './context'
 import * as orders from './modules/orders/orders.route'

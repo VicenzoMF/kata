@@ -13,10 +13,11 @@
  * fixture" (item 5), keeping Kata's runtime↔type bridge honest. A runtime
  * round-trip against the same routes is exercised in client.test.ts.
  */
+
+import type { KataApp } from '@katajs/core'
 import type { Hono, InferRequestType, InferResponseType } from 'hono'
 import { hc } from 'hono/client'
 import type { BlankEnv } from 'hono/types'
-import type { KataApp } from 'katajs'
 
 import type { AppType, Modules } from './server'
 

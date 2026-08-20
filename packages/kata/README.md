@@ -1,4 +1,4 @@
-# katajs
+# @katajs/core
 
 > A web framework on Hono. Opinionated like NestJS, functional like a script,
 > verifiable like a type system.
@@ -8,16 +8,16 @@ Static DI, mandatory input/output schemas, and a locked folder layout — see th
 
 ## Install
 
-`hono` and `zod` are peer dependencies — install them alongside `katajs`:
+`hono` and `zod` are peer dependencies — install them alongside `@katajs/core`:
 
 ```sh
-pnpm add katajs hono zod
+pnpm add @katajs/core hono zod
 ```
 
 ## Usage
 
 ```ts
-import { defineContext, singleton } from 'katajs'
+import { defineContext, singleton } from '@katajs/core'
 
 const { defineRoute, createApp } = defineContext({
   greeting: singleton('hello'),
