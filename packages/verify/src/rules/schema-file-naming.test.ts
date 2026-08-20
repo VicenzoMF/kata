@@ -66,7 +66,29 @@ describe('rule: kata/schema-file-naming', () => {
     const issues = schemaFileNaming.check(project)
     expect(issues).toHaveLength(1)
     expect(issues[0]!.file).toBe('src/modules/orders/utils.ts')
-    expect(issues[0]!.message).toContain('Expected one of: orders.{route,service,schema}.ts')
+    expect(issues[0]!.message).toContain(
+      'Expected one of: orders.{route,service,schema,test}.ts or orders.hurl',
+    )
+  })
+
+  it('lists <domain>.test.ts and <domain>.hurl as legal in the violation message', () => {
+    const project = createProject({
+      root: '/app',
+      registryKeys: new Set(),
+      files: [
+        {
+          path: '/app/src/modules/users/helpers.ts',
+          relPath: 'src/modules/users/helpers.ts',
+          text: '',
+        },
+      ],
+    })
+
+    const issues = schemaFileNaming.check(project)
+    expect(issues).toHaveLength(1)
+    expect(issues[0]!.message).toBe(
+      'File helpers.ts violates the naming convention. Expected one of: users.{route,service,schema,test}.ts or users.hurl',
+    )
   })
 
   it('ignores files outside src/modules', () => {
