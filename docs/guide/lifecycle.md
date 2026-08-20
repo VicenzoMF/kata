@@ -1,6 +1,6 @@
 ---
 title: Lifecycle & graceful shutdown
-description: Serve a Kata app on Node and drain in-flight requests on SIGTERM with gracefulShutdown from kata/node.
+description: Serve a Kata app on Node and drain in-flight requests on SIGTERM with gracefulShutdown from @katajs-framework/core/node.
 ---
 
 # Lifecycle & graceful shutdown

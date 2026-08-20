@@ -1,9 +1,9 @@
 ---
-title: kata/jwt
-description: Referência de assinaturas para kata/jwt — signJwt, verifyJwt, jwtAuth, os guards e todos os tipos exportados.
+title: '@katajs-framework/core/jwt'
+description: Referência de assinaturas para @katajs-framework/core/jwt — signJwt, verifyJwt, jwtAuth, os guards e todos os tipos exportados.
 ---
 
-# kata/jwt
+# @katajs-framework/core/jwt
 
 `@katajs-framework/core/jwt` é o subcaminho de auth do pacote `@katajs-framework/core`. Ele entrega as primitivas
 JWT stateless — `signJwt` / `verifyJwt` — mais o middleware `jwtAuth` ciente do

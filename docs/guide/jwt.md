@@ -1,6 +1,6 @@
 ---
 title: JWT auth
-description: Authenticate requests with kata/jwt — sign and verify tokens, fill a scoped currentUser slot via jwtAuth, and authorize with role and claim guards.
+description: Authenticate requests with @katajs-framework/core/jwt — sign and verify tokens, fill a scoped currentUser slot via jwtAuth, and authorize with role and claim guards.
 ---
 
 # JWT auth

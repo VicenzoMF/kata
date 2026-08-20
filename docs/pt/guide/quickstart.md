@@ -31,9 +31,9 @@ importa `@katajs-framework/core`** (`import … from '@katajs-framework/core'`),
 curto **`kata`** (`kata init`, `kata verify`). `npx @katajs-framework/core …` também funciona, como alias.
 :::
 
-::: warning Pré-lançamento
-Kata ainda não foi publicado no npm. Hoje o caminho mais rápido é clonar o repositório
-e rodar o exemplo completo, que é o que o restante desta página percorre.
+::: tip Rode o exemplo completo a partir do código-fonte
+O app finalizado que esta página constrói também vive no repositório, então você
+pode pular a digitação e rodá-lo diretamente:
 
 ```bash
 git clone https://github.com/VicenzoMF/kata.git

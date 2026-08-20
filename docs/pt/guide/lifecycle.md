@@ -1,6 +1,6 @@
 ---
 title: Ciclo de vida e graceful shutdown
-description: Sirva uma app Kata no Node e drene as requisições em andamento no SIGTERM com gracefulShutdown de kata/node.
+description: Sirva uma app Kata no Node e drene as requisições em andamento no SIGTERM com gracefulShutdown de @katajs-framework/core/node.
 ---
 
 # Ciclo de vida e graceful shutdown
