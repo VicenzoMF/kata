@@ -4,6 +4,7 @@ import { join } from 'node:path'
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
+import pkg from '../../package.json' with { type: 'json' }
 import { formatResult, parseArgs, run } from './cli'
 
 let dir = ''
@@ -292,5 +293,26 @@ describe('formatResult()', () => {
     })
     expect(text).toContain('.mcp.json registers @katajs-framework/docs-mcp')
     expect(text).toContain('published to npm')
+  })
+})
+
+describe('npm bin manifest', () => {
+  // Guards the `npx @katajs-framework/core init` bootstrap, which is load-bearing
+  // and fails silently to a stranger.
+  //
+  // The package ships two bin names, `kata` and `katajs`, and neither matches
+  // `core` — the unscoped part of the package name — so npm's "bin named after
+  // the package" rule does NOT fire here. What makes it resolve is npm's earlier
+  // rule, in libnpmexec/lib/get-bin-from-manifest.js:
+  //
+  //   if (new Set(Object.values(bin)).size === 1) return Object.keys(bin)[0]
+  //
+  // Any number of bin names is fine *as long as they alias one file*. Point
+  // `kata` and `katajs` at different files and npm falls through to
+  // `throw new Error('could not determine executable to run')` — breaking the
+  // first command a new user ever types, while every already-installed project
+  // keeps working, so tests that run from node_modules would not notice.
+  it('keeps every bin an alias of one file, so npx can resolve the package', () => {
+    expect(new Set(Object.values(pkg.bin)).size).toBe(1)
   })
 })

@@ -48,8 +48,16 @@ Consequences:
   `kata verify`), plus a `katajs` bin alias. Both resolve inside a project that
   depends on the package; neither can bootstrap from an empty directory, since
   no unscoped `kata`/`katajs` package of ours exists. Bootstrap is
-  `npx @katajs-framework/core init` — verified to resolve correctly even though
-  the package ships two bins and neither matches the package name.
+  `npx @katajs-framework/core init`.
+- **Every `bin` entry must point at the same file.** There is no bin named
+  `core`, so npm's "bin matching the unscoped package name" rule never fires.
+  The bootstrap resolves only because npm falls back to
+  `new Set(Object.values(bin)).size === 1` (libnpmexec's
+  `get-bin-from-manifest.js`) — several names are fine while they alias one
+  file. Give `kata` and `katajs` different targets and
+  `npx @katajs-framework/core …` dies with "could not determine executable to
+  run", while every already-installed project keeps working. Locked by a test
+  in `cli.test.ts`.
 - The scaffold pins `@katajs-framework/core` to the CLI's own version (`KATA_VERSION`), so
   a released minor never generates an unresolvable range.
 
