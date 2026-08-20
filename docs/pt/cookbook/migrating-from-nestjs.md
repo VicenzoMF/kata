@@ -559,10 +559,11 @@ Os globais do `NestFactory` mapeiam de forma limpa:
   roda antes do `use:` de cada rota, compartilhando o mesmo contrato, o mesmo store
   scoped por requisição e a mesma semântica de curto-circuito. Os embutidos de endurecimento ficam aqui —
   `middlewares: [cors(), secureHeaders(), bodyLimit()]`.
-- Um middleware Hono de terceiros arbitrário (ou o tratamento completo de preflight `OPTIONS`
-  de CORS) → `createApp` ainda retorna um app Hono simples, então `app.use('*', ...)`
-  também funciona, e continua sendo o ponto recomendado para o preflight de CORS para o app inteiro (veja a
-  nota em [`packages/kata/src/middlewares/cors.ts`](https://github.com/VicenzoMF/kata/blob/main/packages/kata/src/middlewares/cors.ts)).
+- Um middleware Hono de terceiros arbitrário → `createApp` ainda retorna um app Hono
+  simples, então `app.use('*', ...)` também funciona. CORS não precisa dessa válvula de
+  escape: um `cors()` global também responde ao preflight `OPTIONS` por conta própria
+  ([Preflight de CORS](/pt/guide/app-middleware#preflight-de-cors)) — não o registre
+  uma segunda vez nativamente.
 
 ## O que Kata intencionalmente NÃO tem
 

@@ -560,10 +560,11 @@ The `NestFactory` globals map cleanly:
   runs before every route's `use:`, sharing the same contract, per-request scoped
   store, and short-circuit semantics. The hardening built-ins live here —
   `middlewares: [cors(), secureHeaders(), bodyLimit()]`.
-- An arbitrary third-party Hono middleware (or full CORS preflight `OPTIONS`
-  handling) → `createApp` still returns a plain Hono app, so `app.use('*', ...)`
-  works too, and remains the recommended spot for app-wide CORS preflight (see the
-  note in [`packages/kata/src/middlewares/cors.ts`](https://github.com/VicenzoMF/kata/blob/main/packages/kata/src/middlewares/cors.ts)).
+- An arbitrary third-party Hono middleware → `createApp` still returns a plain
+  Hono app, so `app.use('*', ...)` works too. CORS needs no such escape hatch: a
+  global `cors()` also answers the `OPTIONS` preflight itself
+  ([CORS preflight](../guide/app-middleware.md#cors-preflight)) — do not register
+  it a second time natively.
 
 ## What Kata intentionally does NOT have
 

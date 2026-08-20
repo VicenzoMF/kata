@@ -15,9 +15,10 @@ A correlação de requisições (`x-request-id`) **não** é um middleware. É e
 no runtime e se aplica a toda resposta incondicionalmente. Veja
 [Request id](#request-id) abaixo.
 
-Para onde eles rodam, a ordenação em relação ao `use:` da route e a ressalva do
-preflight de CORS, veja [Middleware no nível do app](/pt/guide/app-middleware).
-Esta página é a referência de assinaturas.
+Para onde eles rodam, a ordenação em relação ao `use:` da route e como o
+preflight de CORS é respondido, veja
+[Middleware no nível do app](/pt/guide/app-middleware). Esta página é a
+referência de assinaturas.
 
 ```ts
 import { bodyLimit, cors, secureHeaders } from '@katajs-framework/core'
@@ -60,14 +61,14 @@ const app = createApp({
 Chamado sem argumento, `cors()` passa `undefined` ao Hono — a política padrão do
 próprio Hono se aplica (`Access-Control-Allow-Origin: *`).
 
-::: warning O preflight não é respondido por uma cadeia `use:` / global
-O kata registra um handler apenas para o método declarado de uma route e não tem
-route `OPTIONS` implícita, então um preflight de navegador (`OPTIONS`) nunca é
-correspondido. `cors()` ainda define os headers `Access-Control-Allow-*` na
-resposta *real*, mas não responde ao preflight. Para tratamento completo do
-preflight, aplique CORS como um middleware nativo do Hono no app retornado por
-`createApp` — `app.use('*', honoCors(...))`.
-Veja [Tratando o preflight de CORS](/pt/guide/app-middleware#handling-cors-preflight).
+::: info O preflight é respondido automaticamente
+Um `cors()` na cadeia `middlewares` do app também responde ao preflight de
+navegador: o kata não tem route `OPTIONS` implícita, então o runtime roda a
+cadeia global na requisição `OPTIONS` sem correspondência e o `cors()` a
+curto-circuita com um `204` + os headers `Access-Control-Allow-*`, num caminho
+livre de auth ([ADR-0020](/adr/0020-cors-preflight-and-response-transform-seam)).
+Não registre CORS uma segunda vez no app retornado. Veja
+[Preflight de CORS](/pt/guide/app-middleware#preflight-de-cors).
 :::
 
 ## `secureHeaders`
@@ -279,7 +280,7 @@ Tudo nesta página vem do core entry do `@katajs-framework/core`:
 ## Veja também
 
 - [Middleware no nível do app](/pt/guide/app-middleware) — a cadeia
-  `middlewares`, a ordenação e o padrão de preflight de CORS.
+  `middlewares`, a ordenação e como o preflight de CORS é respondido.
 - [Middleware](/pt/guide/middleware) — o contrato `Middleware<R>` e o
   preenchimento de scoped slot para middleware que você escreve.
 - [`defineMiddleware`](/pt/reference/define-middleware) — defina seu próprio middleware.
