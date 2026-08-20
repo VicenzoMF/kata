@@ -167,6 +167,15 @@ The default is `['SIGTERM', 'SIGINT']`:
   Kubernetes pod termination, systemd).
 - **`SIGINT`** — Ctrl-C in a dev terminal, so local shutdown drains too.
 
+::: warning Launchers can swallow `SIGTERM`
+`npx tsx src/main.ts` runs the app as a child of the `npx` process: the
+`SIGTERM` you send lands on `npx`, which exits without forwarding it, so the app
+never sees the signal and nothing drains. Package-manager script runners
+(`pnpm dev`, `npm run dev`) can interpose the same way. When signals matter,
+launch the process directly — `node --import tsx src/main.ts` in dev, or the
+built output (`node dist/main.js`).
+:::
+
 `SIGKILL` and `SIGSTOP` are uncatchable by definition. `SIGHUP` (reload semantics
 vary by deployment) is intentionally left to you. Override the set with `signals`
 if you need a different trap.
@@ -178,6 +187,42 @@ and test runs, couple the runtime-neutral core to `node:process`, and be wrong f
 serverless or embedded hosts that never own the process. `main.ts` — the one place
 the layout lets you talk to `process` — calls `gracefulShutdown` explicitly.
 :::
+
+## Testing graceful shutdown
+
+The drain sequence only shows itself on a real process: spawn the entrypoint as
+a child, wait until it answers, send `SIGTERM`, and assert the behavior
+documented [above](#what-it-does-on-a-signal). Spawn `node --import tsx`
+directly — not `npx tsx`, per the warning above — so the signal reaches the app.
+
+```ts
+// src/main.shutdown.test.ts
+import { spawn } from 'node:child_process'
+import { once } from 'node:events'
+import { setTimeout as sleep } from 'node:timers/promises'
+import { expect, it } from 'vitest'
+
+it('drains in-flight work and exits 0 on SIGTERM', async () => {
+  const child = spawn('node', ['--import', 'tsx', 'src/main.ts'], {
+    env: { ...process.env, PORT: '3123' },
+  })
+  while ((await fetch('http://localhost:3123/users').catch(() => null)) === null) {
+    await sleep(50) // wait for readiness
+  }
+
+  const inflight = fetch('http://localhost:3123/users') // in-flight when the signal lands
+  await sleep(50)
+  child.kill('SIGTERM')
+
+  expect((await inflight).status).toBe(200)                            // steps 3–4: in-flight completes
+  await expect(fetch('http://localhost:3123/users')).rejects.toThrow() // step 3: new connections refused
+  const [code] = await once(child, 'exit')
+  expect(code).toBe(0)                                                 // step 6: clean exit
+})
+```
+
+To make the drain observable, point the in-flight request at your slowest
+route — a handler that finishes before the signal arrives proves nothing.
 
 ## How it relates to `@hono/node-server`
 

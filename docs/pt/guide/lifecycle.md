@@ -171,6 +171,15 @@ O default é `['SIGTERM', 'SIGINT']`:
 - **`SIGINT`** — Ctrl-C em um terminal de dev, para que o desligamento local
   também drene.
 
+::: warning Launchers podem engolir o `SIGTERM`
+`npx tsx src/main.ts` roda a app como filha do processo `npx`: o `SIGTERM` que
+você envia atinge o `npx`, que sai sem repassá-lo, então a app nunca vê o sinal
+e nada drena. Script runners de gerenciadores de pacote (`pnpm dev`,
+`npm run dev`) podem se interpor da mesma forma. Quando sinais importam, lance o
+processo diretamente — `node --import tsx src/main.ts` em dev, ou o build final
+(`node dist/main.js`).
+:::
+
 `SIGKILL` e `SIGSTOP` são incapturáveis por definição. `SIGHUP` (a semântica de
 reload varia conforme o deployment) é deixado para você de propósito. Sobrescreva o
 conjunto com `signals` se precisar de uma captura diferente.
@@ -183,6 +192,43 @@ ao `node:process`, e estaria errado para hosts serverless ou embarcados que nunc
 são donos do processo. `main.ts` — o único lugar onde o layout deixa você falar com
 o `process` — chama `gracefulShutdown` explicitamente.
 :::
+
+## Testando o graceful shutdown
+
+A sequência de dreno só se revela em um processo real: faça o spawn do
+entrypoint como processo filho, espere até ele responder, envie `SIGTERM` e
+verifique o comportamento documentado [acima](#o-que-ele-faz-em-um-sinal). Faça
+o spawn de `node --import tsx` diretamente — não de `npx tsx`, conforme o aviso
+acima — para que o sinal chegue à app.
+
+```ts
+// src/main.shutdown.test.ts
+import { spawn } from 'node:child_process'
+import { once } from 'node:events'
+import { setTimeout as sleep } from 'node:timers/promises'
+import { expect, it } from 'vitest'
+
+it('drena o trabalho em andamento e sai com 0 no SIGTERM', async () => {
+  const child = spawn('node', ['--import', 'tsx', 'src/main.ts'], {
+    env: { ...process.env, PORT: '3123' },
+  })
+  while ((await fetch('http://localhost:3123/users').catch(() => null)) === null) {
+    await sleep(50) // espera a prontidão
+  }
+
+  const inflight = fetch('http://localhost:3123/users') // em andamento quando o sinal chega
+  await sleep(50)
+  child.kill('SIGTERM')
+
+  expect((await inflight).status).toBe(200)                            // passos 3–4: a em andamento termina
+  await expect(fetch('http://localhost:3123/users')).rejects.toThrow() // passo 3: novas conexões recusadas
+  const [code] = await once(child, 'exit')
+  expect(code).toBe(0)                                                 // passo 6: saída limpa
+})
+```
+
+Para tornar o dreno observável, aponte a requisição em andamento para sua rota
+mais lenta — um handler que termina antes de o sinal chegar não prova nada.
 
 ## Como ele se relaciona com `@hono/node-server`
 
