@@ -30,7 +30,7 @@ export type CorsOptions = NonNullable<Parameters<typeof honoCors>[0]>
  * an `OPTIONS` responder for any path bearing `cors()`; until that lands, apply
  * CORS at the app level on the Hono instance returned by `createApp`
  * (`app.use('*', ...)`) for full preflight handling. See
- * https://github.com/VicenzoMF/kata/blob/v0.3.0/docs/adr/0020-cors-preflight-and-response-transform-seam.md.
+ * https://github.com/VicenzoMF/kata/blob/v0.3.1/docs/adr/0020-cors-preflight-and-response-transform-seam.md.
  */
 export function cors<R extends Registry = Registry>(options?: CorsOptions): Middleware<R> {
   return {
