@@ -260,17 +260,21 @@ rota.
 ### `guard`
 
 ```ts
-guard<R extends Registry, C = unknown>(
-  options: GuardOptions<R, C>,
+guard<R extends Registry, const S extends ScopedKeys<R> = 'currentUser'>(
+  options: GuardOptions<R, S>,
 ): Middleware<R>['handler']
 ```
 
-A forma geral. `C` é a sua asserção do tipo do valor do slot.
+`S` é a *chave* do slot, não o tipo do valor — o parâmetro de `authorize` é
+derivado de `R` via `SlotValue<R, S>`, a mesma projeção que `RouteContext.get`
+usa. Você fornece `R` explicitamente; `S` é inferido de `options.slot` (ou usa
+o padrão `'currentUser'`), nunca passado como um segundo argumento de tipo
+explícito.
 
 ```ts
-type GuardOptions<R extends Registry, C = unknown> = {
-  slot?: string
-  authorize: (claims: C, c: MiddlewareContext<R>) => boolean | Promise<boolean>
+type GuardOptions<R extends Registry, S extends ScopedKeys<R> = 'currentUser'> = {
+  slot?: S
+  authorize: (claims: SlotValue<R, S>, c: MiddlewareContext<R>) => boolean | Promise<boolean>
   code?: string
   message?: string
 }
@@ -279,7 +283,7 @@ type GuardOptions<R extends Registry, C = unknown> = {
 | Campo | Tipo | Efeito |
 | --- | --- | --- |
 | `authorize` | `(claims, c) => boolean \| Promise<boolean>` | Predicado sobre o valor do slot. Retorne `false` para rejeitar com 403 (obrigatório). |
-| `slot?` | `string` | Slot que o guard lê. Padrão `'currentUser'`. |
+| `slot?` | `S extends ScopedKeys<R>` | Slot que o guard lê. Padrão `'currentUser'`. Precisa ser uma chave scoped real de `R`. |
 | `code?` | `string` | Código `error` do envelope 403. Padrão `'forbidden'`. |
 | `message?` | `string` | Mensagem do envelope 403. Padrão `'Insufficient permissions'`. |
 
@@ -288,7 +292,7 @@ import { guard } from '@katajs-framework/core/jwt'
 
 const requireOwner = defineMiddleware({
   provides: [] as const,
-  handler: guard<AppRegistry, User>({
+  handler: guard<AppRegistry>({
     authorize: (user, c) => user.id === c.raw.req.param('id'),
     code: 'forbidden',
     message: 'Not your resource',
@@ -296,18 +300,29 @@ const requireOwner = defineMiddleware({
 })
 ```
 
+::: warning Mudança incompatível (#211)
+`slot` era uma `string` pura e `C` (agora `S`) uma asserção não verificada do
+tipo do valor do slot — `guard<R, Membership>({ slot: 'currentOrg', authorize:
+(m) => m.role === 'owner' })` compilava mesmo com `currentOrg` guardando um
+`Org`, e respondia 403 a toda requisição em runtime. `slot` agora é `S extends
+ScopedKeys<R>` e o tipo dos claims de `authorize` é derivado de `R`, então um
+par `slot` / predicado errado agora é um erro de `tsc`. Remova qualquer segundo
+argumento de tipo explícito que você passava — ele não significa mais "o tipo
+dos claims", e o uso antigo não satisfaz a nova constraint `ScopedKeys<R>`.
+:::
+
 ### `requireRole`
 
 ```ts
-requireRole<R extends Registry>(
+requireRole<R extends Registry, const S extends ScopedKeys<R> = 'currentUser'>(
   role: string | readonly string[],
-  options?: { slot?: string },
+  options?: { slot?: S },
 ): Middleware<R>['handler']
 ```
 
 Açúcar sobre `guard`. Permite somente quando o `role` do valor do slot é (um dos)
-`role`. Lê o slot padrão `currentUser` (sobrescreva via `options.slot`) e rejeita
-com o envelope 403 `forbidden` padrão.
+`role`. Lê o slot padrão `currentUser` (sobrescreva via `options.slot`, inferido
+da mesma forma que o de `guard`) e rejeita com o envelope 403 `forbidden` padrão.
 
 ```ts
 use: [requireUser, requireRole('admin')]
@@ -317,17 +332,17 @@ use: [requireUser, requireRole(['admin', 'editor'])]
 ### `requireClaim`
 
 ```ts
-requireClaim<R extends Registry, C extends Record<string, unknown> = Record<string, unknown>>(
+requireClaim<R extends Registry, const S extends ScopedKeys<R> = 'currentUser'>(
   key: string,
   expected: unknown | ((value: unknown) => boolean),
-  options?: { slot?: string },
+  options?: { slot?: S },
 ): Middleware<R>['handler']
 ```
 
 Açúcar sobre `guard`. Permite somente quando a claim do valor do slot em `key`
 corresponde a `expected` — por igualdade estrita, ou por predicado quando
 `expected` é uma função. Lê o slot padrão `currentUser` (sobrescreva via
-`options.slot`).
+`options.slot`, inferido da mesma forma que o de `guard`).
 
 ```ts
 // igualdade estrita
@@ -348,10 +363,11 @@ handler: requireClaim('plan', (v) => v === 'pro' || v === 'team')
 | `JwtError` | Uma falha de verificação: `{ code, message, issues? }`. |
 | `JwtVerifyResult<T>` | O resultado de `verifyJwt`: `{ ok: true, claims }` ou `{ ok: false, error }`. |
 | `JwtAuthOptions<S, R>` | Opções para `jwtAuth`. |
-| `GuardOptions<R, C>` | Opções para `guard`. |
+| `GuardOptions<R, S>` | Opções para `guard`. |
 
-`Registry`, `Middleware`, `MiddlewareContext` e `FieldIssue` são tipos centrais
-reutilizados nestas assinaturas; eles são exportados de `@katajs-framework/core`, não de `@katajs-framework/core/jwt`.
+`Registry`, `Middleware`, `MiddlewareContext`, `ScopedKeys`, `SlotValue` e
+`FieldIssue` são tipos centrais reutilizados nestas assinaturas; eles são
+exportados de `@katajs-framework/core`, não de `@katajs-framework/core/jwt`.
 
 ::: info Você é dono do fluxo de login
 `@katajs-framework/core/jwt` te dá assinatura, verificação, o middleware de auth e os guards. Hash

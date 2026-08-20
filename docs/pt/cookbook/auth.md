@@ -274,7 +274,9 @@ Authorization: Bearer <token for a non-admin>
 ```
 
 Para qualquer coisa que o baseado em role não consiga expressar, desça para `guard` com um predicado customizado
-(ele pode ser `async` e recebe o contexto do middleware como segundo argumento):
+(ele pode ser `async` e recebe o contexto do middleware como segundo argumento).
+O parâmetro `user` de `authorize` é tipado a partir do slot `currentUser` do registry —
+forneça apenas o argumento de tipo do registry, nunca o tipo do valor do slot:
 
 ```ts
 import { guard } from '@katajs-framework/core/jwt'
@@ -282,7 +284,7 @@ import { guard } from '@katajs-framework/core/jwt'
 // Apenas o dono do recurso pode lê-lo.
 const requireOwner = defineMiddleware({
   provides: [] as const,
-  handler: guard<AppRegistry, User>({
+  handler: guard<AppRegistry>({
     authorize: (user, c) => user.id === c.raw.req.param('id'),
     code: 'forbidden',
     message: 'Not your resource',

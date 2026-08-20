@@ -274,7 +274,9 @@ Authorization: Bearer <token for a non-admin>
 ```
 
 For anything role-based won't express, drop to `guard` with a custom predicate
-(it may be `async`, and receives the middleware context as a second argument):
+(it may be `async`, and receives the middleware context as a second argument).
+`authorize`'s `user` parameter is typed from the registry's `currentUser` slot —
+supply only the registry type argument, never the slot's value type:
 
 ```ts
 import { guard } from '@katajs-framework/core/jwt'
@@ -282,7 +284,7 @@ import { guard } from '@katajs-framework/core/jwt'
 // Only the owner of the resource may read it.
 const requireOwner = defineMiddleware({
   provides: [] as const,
-  handler: guard<AppRegistry, User>({
+  handler: guard<AppRegistry>({
     authorize: (user, c) => user.id === c.raw.req.param('id'),
     code: 'forbidden',
     message: 'Not your resource',

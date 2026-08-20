@@ -371,11 +371,13 @@ export const UserClaimsSchema = z.object({
 ### `requireRole`
 
 ```ts
-requireRole(role: string | readonly string[], options?: { slot?: string })
+requireRole<R, S>(role: string | readonly string[], options?: { slot?: S })
 ```
 
 Permite apenas quando o `role` do valor do slot é (um dos) `role`. Lê o slot
-padrão `currentUser`. Um não-admin recebe:
+padrão `currentUser`. `S` — a chave do slot — é inferido de `options.slot` (ou
+usa o padrão `'currentUser'`) e checado contra o registry de `R`, exatamente
+como o [`guard`](#guard) abaixo. Um não-admin recebe:
 
 ```http
 GET /admin/metrics
@@ -386,10 +388,10 @@ Authorization: Bearer <token for a non-admin>
 ### `requireClaim`
 
 ```ts
-requireClaim(
+requireClaim<R, S>(
   key: string,
   expected: unknown | ((value: unknown) => boolean),
-  options?: { slot?: string },
+  options?: { slot?: S },
 )
 ```
 
@@ -418,12 +420,16 @@ A forma geral. Forneça qualquer predicado sobre o valor do slot; ele pode ser
 `async` e recebe o context do middleware como segundo argumento.
 
 ```ts
-guard<R, C>(options: GuardOptions<R, C>)
+guard<R, S extends ScopedKeys<R> = 'currentUser'>(options: GuardOptions<R, S>)
 ```
 
 `GuardOptions`: `authorize` (o predicado, obrigatório), `slot?` (padrão
 `'currentUser'`), `code?` (padrão `'forbidden'`) e `message?` (padrão
 `'Insufficient permissions'`).
+
+`slot` é genérico sobre `R`: o parâmetro de `authorize` é inferido como o tipo
+*real* do slot que ele nomeia — você só fornece `R` explicitamente, nunca um
+segundo argumento de tipo para o tipo dos claims.
 
 ```ts
 import { guard } from '@katajs-framework/core/jwt'
@@ -431,7 +437,7 @@ import { guard } from '@katajs-framework/core/jwt'
 // Apenas o dono do recurso pode lê-lo.
 const requireOwner = defineMiddleware({
   provides: [] as const,
-  handler: guard<AppRegistry, User>({
+  handler: guard<AppRegistry>({
     authorize: (user, c) => user.id === c.raw.req.param('id'),
     code: 'forbidden',
     message: 'Not your resource',
@@ -440,6 +446,19 @@ const requireOwner = defineMiddleware({
 ```
 
 `requireRole` e `requireClaim` são açúcar fino sobre `guard`.
+
+:::: warning Mudança incompatível: `slot` agora é checado contra o registry
+Antes, `guard<R, C>({ slot, authorize })` recebia `slot` como uma `string` pura
+e `C` como uma asserção não verificada do que ele guardava — `guard({ slot:
+'currentOrg', authorize: (m: Membership) => m.role === 'owner' })` compilava
+mesmo com `currentOrg` guardando um `Org`, e em vez disso respondia 403 a toda
+requisição em runtime. `slot` agora é `S extends ScopedKeys<R>` e o parâmetro
+de `authorize` é derivado do próprio `R`, então essa chamada é um erro de
+`tsc`. Remova qualquer segundo argumento de tipo explícito que você passava a
+`guard` / `requireRole` / `requireClaim` — ele agora é inferido, e passar o
+antigo tipo dos claims ali não compila contra a nova constraint `S extends
+ScopedKeys<R>`.
+::::
 
 ## O que é seu
 
