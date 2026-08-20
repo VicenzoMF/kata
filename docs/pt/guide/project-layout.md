@@ -1,11 +1,12 @@
 ---
 title: Estrutura do projeto
-description: A árvore src/ travada, por que cada arquivo é localizável pelo sufixo e como a estrutura alimenta o kata verify.
+description: A árvore src/ travada — e a raiz de src/ aberta — por que cada arquivo é localizável pelo sufixo e como a estrutura alimenta o kata verify.
 ---
 
 # Estrutura do projeto
 
-O Kata trava a estrutura de pastas. Toda route, service, schema e test fica em um
+O Kata trava a estrutura de pastas — os arquivos nomeados abaixo e o formato de
+cada módulo. Toda route, service, schema e test fica em um
 caminho que você consegue prever a partir do nome do domínio. Nada fica solto. Isso não é uma
 preferência de estilo — é o contrato que o `kata verify` lê, e a razão pela qual um agente consegue
 encontrar o arquivo de que precisa sem buscar.
@@ -26,6 +27,10 @@ src/
         ├── <domain>.hurl         # E2E de API (Hurl)
         └── <domain>.test.ts      # testes unitários
 ```
+
+A árvore é normativa, não exaustiva. Os arquivos nomeados são fixos e `modules/` é
+restrito, mas a raiz de `src/` também aceita arquivos seus — um `config.ts`, um
+`store.ts`. [A raiz de `src/`](#a-raiz-de-src) abaixo enuncia a regra.
 
 `context.ts` é especial. Ele contém sua única chamada `defineContext({...})` e
 re-exporta `defineRoute`, `defineMiddleware` e `createApp` já vinculados ao
@@ -75,6 +80,35 @@ baratas e exatas. Veja [O harness](/pt/guide/harness) para o conjunto completo d
 `UsersController` não estão — o sufixo carrega o significado, e o harness casa com
 ele. Renomear `context.ts` quebra as verificações de DI da mesma forma.
 :::
+
+## A raiz de `src/`
+
+A trava é assimétrica, e vale enunciar a regra em vez de deixá-la para ser
+descoberta:
+
+- **A raiz de `src/` é aberta.** Infraestrutura compartilhada não-HTTP vive aqui:
+  um `config.ts`, um `store.ts` ou pool de conexões, um logger, um `client.ts` de
+  RPC tipado, helpers de teste entre módulos. Qualquer nome de arquivo passa —
+  nenhuma regra de nomenclatura se aplica à raiz. Os exemplos prontos usam isso:
+  `examples/hello` mantém `JWT_SECRET` em `src/config.ts`, `examples/shop` tem
+  `src/store.ts` e `examples/hello-client` tem `src/client.ts`.
+- **Os diretórios de módulo continuam travados.** Dentro de
+  `src/modules/<domain>/`, todo arquivo é `<domain>.route.ts`,
+  `<domain>.service.ts`, `<domain>.schema.ts`, `<domain>.test.ts` ou
+  `<domain>.hurl` — nada além disso.
+
+A aplicação corresponde exatamente à regra: `kata/schema-file-naming` inspeciona
+apenas caminhos da forma `src/modules/<domain>/<arquivo>` — um arquivo na raiz de
+`src/` nunca tem o nome verificado. Arquivos da raiz ainda são código dentro de
+`src/`, então as regras de código (`kata/no-class`, `kata/no-decorator`, …) se
+aplicam a eles como a qualquer outro arquivo; só a restrição de nomenclatura para
+na fronteira do módulo.
+
+A assimetria é o ponto. Dentro de um módulo o sufixo *é* o tipo do arquivo — é
+isso que permite ao `kata verify` despachar regras mecanicamente e a qualquer um
+encontrar um arquivo só pelo nome. Um arquivo da raiz não tem superfície HTTP,
+então não há contrato de sufixo a aplicar: mantenha código de route, service e
+schema fora dele e dê o nome que ler melhor.
 
 ## `app.ts` vs. dobrá-lo em `main.ts`
 
@@ -172,7 +206,7 @@ Middleware que mais de um domínio usa — auth JWT, um slot de transação — 
 `src/middlewares/`, não dentro de um módulo. Cada um declara os scoped slots que `provides`;
 veja [Middleware](/pt/guide/middleware) e [App-level middleware](/pt/guide/app-middleware).
 Infraestrutura compartilhada não-HTTP (um `store.ts`, um pool de conexões) fica na raiz de `src/`,
-como em `examples/shop`.
+como em `examples/shop` — a regra está em [A raiz de `src/`](#a-raiz-de-src) acima.
 :::
 
 ## Scaffolding

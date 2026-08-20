@@ -1,11 +1,12 @@
 ---
 title: Project layout
-description: The locked src/ tree, why every file is findable by suffix, and how the layout powers kata verify.
+description: The locked src/ tree — and the open src/ root — why every file is findable by suffix, and how the layout powers kata verify.
 ---
 
 # Project layout
 
-Kata locks the folder layout. Every route, service, schema, and test lives at a path
+Kata locks the folder layout — the named files below and the shape of every module.
+Every route, service, schema, and test lives at a path
 you can predict from its domain name — nothing floats, and nothing is wired together by
 a config file. This is convention-over-configuration taken literally: a file's name and
 location are *data* the tooling reads, not just tidiness for humans. The layout is the
@@ -28,6 +29,10 @@ src/
         ├── <domain>.hurl         # API E2E (Hurl)
         └── <domain>.test.ts      # unit tests
 ```
+
+The tree is normative, not exhaustive. The named files are fixed and `modules/` is
+constrained, but the `src/` root also takes files of your own — a `config.ts`, a
+`store.ts`. [The `src/` root](#the-src-root) below states the rule.
 
 `context.ts` is special. It holds your one `defineContext({...})` call and re-exports
 `defineRoute`, `defineMiddleware`, and `createApp` already bound to the registry. The
@@ -78,6 +83,33 @@ cheap and exact. See [The harness](/guide/harness) for the full rule set.
 `UsersController` are not — the suffix carries the meaning, and the harness matches on
 it. Renaming `context.ts` breaks DI checks the same way.
 :::
+
+## The `src/` root
+
+The lock is asymmetric, and the rule is worth stating outright rather than leaving
+it to be discovered:
+
+- **The `src/` root is open.** Shared non-HTTP infrastructure lives here: a
+  `config.ts`, a `store.ts` or connection pool, a logger, a typed RPC `client.ts`,
+  cross-module test helpers. Any filename passes — no naming rule applies at the
+  root. The worked examples all use this: `examples/hello` keeps `JWT_SECRET` in
+  `src/config.ts`, `examples/shop` has `src/store.ts`, and `examples/hello-client`
+  has `src/client.ts`.
+- **Module directories stay locked.** Inside `src/modules/<domain>/` every file is
+  `<domain>.route.ts`, `<domain>.service.ts`, `<domain>.schema.ts`,
+  `<domain>.test.ts`, or `<domain>.hurl` — nothing else.
+
+Enforcement matches the rule exactly: `kata/schema-file-naming` inspects only paths
+of the form `src/modules/<domain>/<file>` — a file at the `src/` root is never
+checked for its name. Root files are still code under `src/`, so the code-level
+rules (`kata/no-class`, `kata/no-decorator`, …) apply to them like any other file;
+only the naming constraint stops at the module boundary.
+
+The asymmetry is the point. Inside a module the suffix *is* the file's type — that
+is what lets `kata verify` dispatch rules mechanically and lets anyone find a file
+by name alone. A root file has no HTTP surface, so there is no suffix contract to
+enforce: keep route, service, and schema code out of it and name it whatever reads
+best.
 
 ## `app.ts` vs. folding it into `main.ts`
 
@@ -174,7 +206,7 @@ Middleware that more than one domain uses — JWT auth, a transaction slot — b
 `src/middlewares/`, not inside a module. Each declares the scoped slots it `provides`;
 see [Middleware](/guide/middleware) and [App-level middleware](/guide/app-middleware).
 Shared non-HTTP infrastructure (a `store.ts`, a connection pool) sits at the `src/`
-root, as in `examples/shop`.
+root, as in `examples/shop` — the rule is in [The `src/` root](#the-src-root) above.
 :::
 
 ## Scaffolding

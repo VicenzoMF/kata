@@ -183,10 +183,13 @@ export const requireUser = defineMiddleware({
 })
 ```
 
-`JWT_SECRET` vive num pequeno `config.ts` e é compartilhado com a rota de emissão
-de token abaixo — eles precisam concordar ou todo token falha na verificação:
+`JWT_SECRET` vive num pequeno `config.ts` na raiz de `src/` (um espaço que a
+[estrutura deixa aberto](/pt/guide/project-layout#a-raiz-de-src)) e é
+compartilhado com a rota de emissão de token abaixo — eles precisam concordar ou
+todo token falha na verificação:
 
 ```ts
+// src/config.ts
 export const JWT_SECRET = process.env['JWT_SECRET'] ?? 'dev-secret'
 export const TOKEN_TTL_SECONDS = 60 * 60
 ```

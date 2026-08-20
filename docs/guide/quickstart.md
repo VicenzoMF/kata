@@ -184,10 +184,12 @@ export const requireUser = defineMiddleware({
 })
 ```
 
-`JWT_SECRET` lives in a small `config.ts` and is shared with the token-minting
-route below — they must agree or every token fails verification:
+`JWT_SECRET` lives in a small `config.ts` at the `src/` root (a spot the
+[layout leaves open](/guide/project-layout#the-src-root)) and is shared with the
+token-minting route below — they must agree or every token fails verification:
 
 ```ts
+// src/config.ts
 export const JWT_SECRET = process.env['JWT_SECRET'] ?? 'dev-secret'
 export const TOKEN_TTL_SECONDS = 60 * 60
 ```
