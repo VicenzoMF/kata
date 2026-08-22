@@ -58,7 +58,10 @@ kata init → /path/to/my-app
   create  package.json
   create  tsconfig.json
   create  .gitignore
+  create  .env.example
   create  README.md
+  create  docs/adr/_template.md
+  create  docs/adr/README.md
 
 Next steps:
   cd my-app
@@ -107,12 +110,15 @@ The smallest *complete* app that boots, typechecks, tests, and passes
 | `biome.json` / `.oxlintrc.json` | The formatter and linter configs the pre-commit runs. Written **only if absent**. |
 | `package.json` / `tsconfig.json` | Scripts, pinned deps, and strict compiler options. Written **only if absent**. |
 | `.gitignore` / `README.md` | Standard ignores and a per-app quickstart. Written **only if absent**. |
+| `.env.example` | The `JWT_SECRET` placeholder [`@katajs-framework/core/jwt`](/guide/jwt) reads — copy to `.env` and fill in. Written **only if absent**. |
+| `docs/adr/_template.md` / `docs/adr/README.md` | This *app's* own ADR skeleton and index — separate from Kata's framework ADRs, which stay linked at the pinned version instead of duplicated. Written **only if absent**. |
 
 ### Options
 
 ```
 -C, --cwd <dir>     Base directory to resolve [dir] against (default: cwd)
     --minimal       Write only the harness configs — no app (for existing projects)
+    --with-docs-mcp Also write .mcp.json, registering the @katajs-framework/docs-mcp docs-search server
 -f, --force         Overwrite existing source files (never the manifests/configs)
 -h, --help          Show this help
 ```
@@ -168,6 +174,32 @@ kata init → /path/to/project
 
 Harness configs written. Commit them, then start coding —
 the PreToolUse/Stop hooks run `kata verify` and `pnpm test` for you.
+```
+
+### `kata init --with-docs-mcp`
+
+Pass `--with-docs-mcp` (with either a full or a `--minimal` run) to also write
+`.mcp.json`, registering `@katajs-framework/docs-mcp` — a local MCP server that
+answers questions over the Kata docs with lexical search, no vector store or
+network call ([ADR-0022](/adr/0022-docs-mcp-lexical-search-over-vector-rag),
+[ADR-0023](/adr/0023-docs-mcp-npm-distribution)). It is opt-in: most projects
+don't run an MCP client, and `.mcp.json` is written **only if absent** so it
+never clobbers a project that already registers other servers there.
+
+```bash
+kata init my-app --with-docs-mcp
+```
+
+```
+kata init → /path/to/my-app
+  create  …
+  create  .mcp.json
+
+Next steps:
+  …
+
+.mcp.json registers @katajs-framework/docs-mcp via `npx` — requires it to be
+published to npm first (see the Kata repo for current status).
 ```
 
 ### Idempotency
