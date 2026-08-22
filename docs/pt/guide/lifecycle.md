@@ -201,6 +201,15 @@ verifique o comportamento documentado [acima](#o-que-ele-faz-em-um-sinal). Faça
 o spawn de `node --import tsx` diretamente — não de `npx tsx`, conforme o aviso
 acima — para que o sinal chegue à app.
 
+Esta é uma suíte em nível de processo, não o teste de um único módulo, então
+ela fica na raiz de `src/`, ao lado de `main.ts`, em vez de dentro de
+`src/modules/`: `src/` é a única árvore que o `"include": ["src"]` do
+`tsconfig.json` gerado checa por tipos, e essa config é um
+[arquivo protegido](/adr/0010-ban-no-verify-and-config-tampering) que um
+agente não pode alargar. Veja
+[Suítes de teste entre módulos e em nível de processo](/pt/guide/project-layout#suites-de-teste-entre-modulos-e-em-nivel-de-processo)
+para a regra completa.
+
 ```ts
 // src/main.shutdown.test.ts
 import { spawn } from 'node:child_process'

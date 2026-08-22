@@ -99,6 +99,40 @@ it to be discovered:
   `<domain>.route.ts`, `<domain>.service.ts`, `<domain>.schema.ts`,
   `<domain>.test.ts`, or `<domain>.hurl` — nothing else.
 
+### Cross-module and process-level test suites
+
+A `<domain>.test.ts` proves one module. Some suites cannot be scoped to a single
+domain — an HTTP flow that crosses module boundaries, the graceful-shutdown drain
+sequence (which has to spawn `main.ts` as a child process; see
+[Testing graceful shutdown](/guide/lifecycle#testing-graceful-shutdown)), or the
+typed [RPC client](/guide/rpc-client#testing-the-client-in-process) exercised
+against the running app. None of these has a domain folder to live in, so they
+belong beside `app.ts`, `context.ts`, and `main.ts`, at the `src/` root:
+`src/e2e.test.ts`, `src/main.shutdown.test.ts`, `src/client.test.ts`. A shared
+fixture such as a `test-server.ts` helper that boots the app once for several
+suites is exactly the kind of root file the previous section already allows —
+name each file for what it proves; `vitest`'s default glob (`**/*.test.ts`) picks
+it up regardless of where under `src/` it sits.
+
+**Why the `src/` root and not a top-level `tests/` or `e2e/` directory:** the
+generated `tsconfig.json` scopes `"include"` to `["src"]` — nothing outside
+`src/` is type-checked. A suite placed in a sibling `tests/` folder would still
+run under `vitest`, but `tsc` would never see it, silently losing any type-level
+proof the suite carries (the RPC client worked example's `@ts-expect-error`
+fixtures are exactly this kind of proof — see
+[Typed RPC client](/guide/rpc-client)). Widening `include` would fix that, but
+`tsconfig.json` is a [protected config](/adr/0010-ban-no-verify-and-config-tampering)
+(ADR-0010): an agent may not edit it, and a human editing it away defeats the
+same scoping that keeps `kata verify`'s walk — and `tsc`'s — cheap and exact.
+Keeping every suite inside `src/`, cross-module or not, is what keeps it both
+type-checked and inside the one directory the harness actually looks at.
+
+These root-level suites are still just files under `src/`: `kata verify` drops
+`*.test.ts` before dispatching any naming or schema rule (see
+[Why findability matters](#why-findability-matters) above), so nothing about
+placement or naming at the root is enforced beyond the `.test.ts` suffix
+`vitest` itself relies on.
+
 Enforcement matches the rule exactly: `kata/schema-file-naming` inspects only paths
 of the form `src/modules/<domain>/<file>` — a file at the `src/` root is never
 checked for its name. Root files are still code under `src/`, so the code-level

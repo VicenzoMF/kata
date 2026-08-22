@@ -231,4 +231,11 @@ describe('users RPC', () => {
 - `src/client.test.ts` exercita as mesmas rotas em runtime através de `testClient(app)`.
 
 As provas de tipo são o teste: `tsc --noEmit` roda no CI, então uma regressão na
-ponte runtime-para-tipo torna uma prova `false` e quebra o build.
+ponte runtime-para-tipo torna uma prova `false` e quebra o build. É também por
+isso que `client.test.ts` (e o próprio `client.ts`) ficam na raiz de `src/` em
+vez de uma árvore `tests/` ou `client/` separada: o `tsconfig.json` gerado só
+checa `src/` por tipos (`"include": ["src"]`), e esse arquivo é uma
+[config protegida](/adr/0010-ban-no-verify-and-config-tampering) (ADR-0010) —
+um agente não pode alargá-la para cobrir um diretório fora de `src/`. Veja
+[Suítes de teste entre módulos e em nível de processo](/pt/guide/project-layout#suites-de-teste-entre-modulos-e-em-nivel-de-processo)
+para a regra completa.

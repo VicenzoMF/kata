@@ -195,6 +195,14 @@ a child, wait until it answers, send `SIGTERM`, and assert the behavior
 documented [above](#what-it-does-on-a-signal). Spawn `node --import tsx`
 directly — not `npx tsx`, per the warning above — so the signal reaches the app.
 
+This is a process-level suite, not a single module's test, so it sits at the
+`src/` root next to `main.ts` rather than inside `src/modules/`: `src/` is the
+only tree the generated `tsconfig.json`'s `"include": ["src"]` type-checks, and
+that config is a [protected file](/adr/0010-ban-no-verify-and-config-tampering)
+an agent may not widen. See
+[Cross-module and process-level test suites](/guide/project-layout#cross-module-and-process-level-test-suites)
+for the full rule.
+
 ```ts
 // src/main.shutdown.test.ts
 import { spawn } from 'node:child_process'
