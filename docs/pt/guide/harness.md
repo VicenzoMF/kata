@@ -183,6 +183,59 @@ Como as regras são funções puras sobre arquivos parseados, elas também são
 trivialmente testáveis em unidade e carregam um viés de zero falso-positivo: quando o
 registry não pode ser determinado, as regras dependentes viram no-op em vez de chutar.
 
+## Não-objetivos: o que o `kata verify` deliberadamente não checa
+
+Nem toda propriedade que vale a pena checar vira uma regra. Uma surgiu em
+revisão ([issue #251](https://github.com/VicenzoMF/kata/issues/251)): um módulo
+sob `src/modules/<domain>/` cujas routes nunca são passadas para nenhum
+`createApp({ modules })` é superfície morta — toda route dentro dele ainda
+passa em `kata/no-route-without-output-schema` e afins individualmente, porque
+essas regras escaneiam arquivos `*.route.ts` diretamente (veja a tabela acima)
+e nunca perguntam se o módulo chegou a algum app. Um "módulo órfão" deveria
+virar sua própria regra?
+
+**Decisão: um não-objetivo documentado, não uma regra.**
+
+Toda regra acima prova uma *presença* — um `c.get('key')` que existe e não
+está registrado, uma `class` que existe, um `z.object(...)` inline que existe.
+O caso ilegível (um spread, um valor computado em runtime) é seguro de pular,
+porque pular só abre mão da checagem daquela expressão específica; a
+invariante "sem grafo entre arquivos para resolver em tempo de lint" acima se
+sustenta porque a resposta de cada regra permanece local ao que ela consegue
+ler.
+
+Uma regra de módulo órfão precisaria provar uma *ausência*: que nenhum
+`createApp({ modules })` em lugar nenhum do projeto inclui esse módulo. Essa
+não é uma pergunta local:
+
+- Um projeto pode ter mais de um `createApp` — servers separados, um worker,
+  apps de exemplo cada um conectando um subconjunto diferente. "Alcançável"
+  precisa ser uma união sobre todo call site que o projeto tem, não um só.
+- `modules:` é exatamente a forma que o `kata verify` já trata como
+  irresolvível quando aparece em `middlewares:` / `use:` — montada a partir de
+  uma lista compartilhada, filtrada por uma flag de env, montada num harness de
+  teste. Toda outra regra responde a uma expressão irresolvível com "pular" —
+  e isso custa um call site não checado. Aqui custaria a única evidência que
+  livraria o módulo de ser órfão: no instante em que um projeto usa uma
+  indireção, um módulo corretamente conectado passaria a ler como órfão. O modo
+  de falha que essa regra existiria para evitar é exatamente o que ela
+  introduziria.
+- Nada manda fazer isso. `createApp({ modules })` aceitar um subconjunto
+  escolhido a dedo é a forma de trabalho normal — um módulo scaffoldado antes
+  de ser conectado, um construído para um deployment que o app atual não é —
+  então não há ADR para ancorar uma regra, diferente de toda regra na tabela
+  acima. O epic do conjunto de regras
+  ([#164](https://github.com/VicenzoMF/kata/issues/164)) se limitou a impor
+  mecanicamente ADRs já existentes e já entregou todo o seu escopo (6/6
+  sub-issues); detecção de módulo órfão nunca fez parte dele.
+
+Alcançabilidade através de um número arbitrário de entry points é uma pergunta
+de programa inteiro — do tipo que uma ferramenta dedicada de dead-code
+(`ts-prune`, `knip`) responde com informação de tipo completa, não um passe
+sintático de menos de 100ms sobre um arquivo por vez. Se isso um dia valer a
+pena ter, é uma ferramenta separada conectada no CI, não uma regra do
+`kata verify`.
+
 ## O guard contra adulteração de config
 
 A literatura de engenharia de harness nomeia dois reflexos que um modelo busca no

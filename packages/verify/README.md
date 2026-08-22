@@ -43,6 +43,23 @@ prove (a spread config, a dynamic `c.get`/`c.set` key, an indeterminate registry
 or an unresolvable `use:` entry) is left alone, so the false-positive rate stays
 at zero on conforming code.
 
+## Non-goals
+
+**Orphan modules are not flagged.** A module under `src/modules/<domain>/`
+whose routes never reach any `createApp({ modules })` still passes every rule
+above — each scans `*.route.ts` files directly, blind to whether the module
+was ever wired in. This was considered and deliberately left out (issue
+[#251](https://github.com/VicenzoMF/kata/issues/251)): proving a module
+*unreachable* means proving a negative across every `createApp` call site a
+project has, and the `modules:` array is exactly the shape this engine already
+treats as unresolvable (a spread, an env-filtered list, a test harness). Every
+other rule answers "unresolvable" with "skip it" at zero cost; here it would
+cost the one signal that clears a module of being orphaned, so the rule would
+start flagging correctly-wired modules the moment a project uses one
+indirection. No ADR mandates it either — see [Harness engineering §
+Non-goals](../../docs/guide/harness.md#non-goals-what-kata-verify-deliberately-does-not-check)
+for the full reasoning.
+
 ## Suppressions
 
 "Left alone" is not the same as "checked", and the two must not print the same
