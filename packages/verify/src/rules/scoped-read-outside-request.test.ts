@@ -31,6 +31,33 @@ describe('kata/scoped-read-outside-request', () => {
     expect(issues[0]?.message).toContain("c.get('tenantId')")
   })
 
+  // Issue #248: confirms this rule has a real trigger on code that already
+  // typechecks — not merely a defensive/unreachable check. `readCurrentUserId`
+  // below mirrors a snippet verified directly against `examples/shop`: it
+  // passes `tsc --noEmit` with zero errors (a real `RouteContext`-typed
+  // parameter, a real registered key) *and* is called correctly, in-request,
+  // from inside a real `defineRoute` handler — yet is still flagged, because
+  // the rule's ancestor walk can't see across the call from `handler` into the
+  // helper. See the rule's doc comment for the full investigation.
+  it('flags a scoped read in a helper even when the handler calls it during the request (issue #248)', () => {
+    const issues = scopedReadOutsideRequest.check(
+      project(`function readCurrentUserId(c) {
+        return c.get('currentUser').id
+      }
+
+      export const r = defineRoute({
+        method: 'GET',
+        path: '/me',
+        use: [requireUser],
+        input: {},
+        output: UserSchema,
+        handler: (c) => readCurrentUserId(c),
+      })`),
+    )
+    expect(issues).toHaveLength(1)
+    expect(issues[0]?.message).toContain("c.get('currentUser')")
+  })
+
   it('passes a scoped read inside a defineRoute handler', () => {
     const issues = scopedReadOutsideRequest.check(
       project(`export const r = defineRoute({

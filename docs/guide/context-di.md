@@ -230,9 +230,15 @@ it too — so you find out as you type, not in production.
 ::: warning Reading a singleton at startup
 The five returned members are the public surface. Outside a request you have no
 `c`; to reach a singleton at boot — for example to log the listening port — call
-`k.resolve('logger').info(...)`. `resolve` is singleton-only: a scoped slot has no
-value at startup by definition, so reaching for one outside a request handler is a
-build-time error (`kata/scoped-read-outside-request`).
+`k.resolve('logger').info(...)`. `resolve` is singleton-only — its own type
+signature (`SingletonKeys<R>`) rejects a scoped key at compile time, so
+`k.resolve('currentUser')` is a plain `tsc` error, not a lint finding. The
+`kata/scoped-read-outside-request` rule polices a different surface — `c.get(...)`
+reads, which stay typeable for every key (scoped included) precisely so the
+middleware chain, not the type system, decides whether a read is safe. It catches
+a scoped `c.get` read anywhere outside a request handler, including a
+free-standing helper that takes `c` as a parameter — see [Gotchas in the auth
+cookbook](/cookbook/auth#gotchas) for a worked example.
 :::
 
 ## Filling scoped slots happens in middleware

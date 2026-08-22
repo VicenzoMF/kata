@@ -316,5 +316,37 @@ const requireOwner = defineMiddleware({
   um schema `input.headers`, ou `c.raw.req.header(...)`).
 - **Mantenha o secret fora do tipo do slot.** `resolve` decide o que cai no
   slot; retorne seu `User`, nunca o token bruto ou o secret.
-- **Não leia scoped slots no carregamento do módulo.** Eles só existem dentro de uma requisição
-  (imposto pela regra `kata/scoped-read-outside-request`).
+- **Não leia um scoped slot fora de um handler de request — inclusive a partir
+  de um helper para o qual você passa `c`.** A regra
+  `kata/scoped-read-outside-request` (ADR-0004) reprova qualquer
+  `c.get(scopedKey)` que não esteja lexicamente dentro de um handler
+  `defineRoute` / `defineMiddleware`. Isso cobre o caso óbvio (carregamento do
+  módulo, onde não há sequer um `c` de verdade para ler) *e* um caso menos óbvio,
+  que passa totalmente no type-check:
+
+  ```ts
+  // Reprovado, mesmo passando no type-check e sendo chamado só durante o request:
+  function readCurrentUserId(c: RouteContext<AppRegistry, InputSchemas>) {
+    return c.get('currentUser').id // a regra não enxerga quem chama isto
+  }
+
+  export const listOrdersRoute = defineRoute({
+    method: 'GET',
+    path: '/orders',
+    use: [requireAuth],
+    input: {},
+    output: OrderListSchema,
+    handler: (c) => listOrders(c.get('store'), readCurrentUserId(c)),
+  })
+  ```
+
+  A regra prova "dentro de um handler" percorrendo a AST, dentro de um único
+  arquivo, da chamada `c.get` até sua função envolvente — ela não tem um grafo de
+  chamadas, então um helper a um nível de indireção de distância é invisível
+  para ela, mesmo quando todo call site é seguro. Isso é proposital, não um bug
+  para contornar: é a mesma propriedade "um único grep responde quais rotas usam
+  qual slot" da qual a
+  [enumerabilidade estática](/pt/guide/context-di#por-que-enumerabilidade-estatica-importa)
+  depende. Leia o slot no handler e passe o *valor* para o helper —
+  `readCurrentUserId(c)` vira `c.get('currentUser').id` inline, ou um helper que
+  recebe o `CurrentUser` já resolvido em vez de `c`.
