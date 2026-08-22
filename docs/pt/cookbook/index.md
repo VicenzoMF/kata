@@ -18,6 +18,7 @@ espelha os apps de exemplo executáveis — [`examples/hello`](https://github.co
 | [Autenticação e autorização](/pt/cookbook/auth) | Identificar quem chama e expô-lo aos handlers via um scoped slot, e então autorizar rotas por role ou claim. |
 | [Acesso a banco de dados](/pt/cookbook/database) | Compartilhar um cliente de vida longa (db, cache, mailer) entre handlers via um singleton slot, e uma camada de serviço pura que você pode testar de forma unitária. |
 | [Erros e validação](/pt/cookbook/errors) | Retornar respostas 4xx corretas e entender os envelopes automáticos 422 / 500 do Kata. |
+| [Logging](/pt/cookbook/logging) | Correlacionar uma linha de log da camada de service com `c.requestId` passando um logger vinculado à requisição ao service como argumento. |
 | [Migrando do NestJS](/pt/cookbook/migrating-from-nestjs) | Mapear cada bloco de construção do NestJS — controllers, providers, guards, pipes, DTOs — para seu equivalente funcional no Kata. |
 | [Non-goals e BYO](/pt/cookbook/non-goals) | Veja o que o Kata deliberadamente deixa por sua conta — persistência, rate limiting, métricas, env, paginação — e o padrão idiomático bring-your-own para cada um. |
 
