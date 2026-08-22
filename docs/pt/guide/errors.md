@@ -185,6 +185,16 @@ subjacente nunca é exposta ao cliente.
 Reserve o throw para bugs genuínos. Para falhas que o cliente deve entender, retorne
 `c.error(...)`.
 
+::: tip Testando isso sem uma route de crash
+Exercitar esse caminho exige uma route que sempre lança — mas essa route nunca
+deve ir para a superfície real da app (um `GET /diagnostics/boom` acessível em
+produção). [Testando o error boundary sem uma route de
+crash](/pt/cookbook/errors#testando-o-error-boundary-sem-uma-route-de-crash)
+mostra o padrão: construa a route que lança dentro do arquivo de teste, com o
+`createApp`/`defineRoute` da própria app, e nunca a adicione ao array `modules`
+do `main.ts`.
+:::
+
 ## Status customizados: `c.error` e `c.json`
 
 Para erros de domínio — not found, forbidden, conflict — **retorne um `Response`**

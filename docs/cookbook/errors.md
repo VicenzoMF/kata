@@ -134,6 +134,76 @@ it reaches a client. In `log` mode the issues are still logged, but the handler'
 data is sent through, so a shape bug in production degrades to a log line rather
 than a failed response.
 
+## Testing the error boundary without a crash route
+
+**Problem:** you want a test that asserts Kata's `500` `internal_error` envelope
+(the last row of the table above) — but the only way to trigger it is a route
+that throws, and a dedicated `GET /diagnostics/boom` living in `main.ts`'s
+`modules: [...]` array would ship as a standing "crash the server on purpose"
+endpoint, reachable in production.
+
+**Solution:** call `createApp`/`defineRoute` a second time — the same factory
+functions `main.ts` uses, from the same `./context` — but do it *inside the
+test file*, on a throwaway route that is never exported and never added to the
+app's real `modules` array. `createApp` just builds a `Hono` app from whatever
+`modules` you hand it; nothing requires that array to be the one `main.ts`
+actually serves:
+
+```ts
+// examples/hello/src/error-boundary.test.ts
+import { describe, expect, it } from 'vitest'
+import { z } from 'zod'
+
+import { createApp, defineRoute } from './context' // the app's own factory + registry
+
+// Defined only here — not in a `*.route.ts` file, so it's never imported by
+// main.ts and never registered on the app that actually listens on a port.
+const crashRoute = defineRoute({
+  method: 'GET',
+  path: '/__test-only/boom',
+  input: {},
+  output: z.object({ ok: z.boolean() }),
+  handler: () => {
+    throw new Error('forced failure — error-boundary test only')
+  },
+})
+
+describe('error boundary: forcing a 500 without a shipped crash route', () => {
+  it('turns a thrown handler error into the unified internal_error envelope', async () => {
+    // Only the test-local route — main.ts's real modules ([users, auth, echo,
+    // diag]) are never imported here.
+    const app = createApp({ modules: [{ crashRoute }] })
+    const res = await app.request('/__test-only/boom')
+
+    expect(res.status).toBe(500)
+    expect(await res.json()).toEqual({
+      error: 'internal_error',
+      message: 'Internal server error',
+    })
+  })
+})
+```
+
+This exercises the real code path — the same `registerRoute` try/catch and
+`app.onError` fallback the shipped app runs, wired through the same
+`defineContext` registry — without adding a single route to `main.ts`'s
+`modules` array. The `Hono` app built here lives only for the duration of the
+test; it is never `serve()`d, so `/__test-only/boom` is never reachable outside
+`vitest run`. Kata's own suite covers the error boundary the identical way
+(`packages/kata/src/context.test.ts`, `describe('global error boundary (#62)')`):
+a throwaway `defineContext({})` and a `/boom` route built inline in the test.
+
+::: tip Prefer this over an injectable failing dependency
+If a route already depends on something registered via `defineContext` — a
+`db` singleton, a `mailer` — swapping it for a version that throws, in one
+test, is a legitimate way to cover *that handler's* failure path. It doesn't
+generalize the same way, though: it only works for routes that happen to have
+a fallible dependency to poison. The test-only module above needs nothing
+route-specific, so it's the default recommendation for asserting the error
+boundary itself; reach for a failing-dependency mock when you're testing one
+handler's specific failure mode instead.
+:::
+
 ## What's automatic vs. what you write
 
 | Situation | Status | Who produces it |

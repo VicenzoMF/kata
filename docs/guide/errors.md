@@ -193,6 +193,15 @@ one to your logger directly.
 Reserve throwing for genuine bugs. For failures the client should understand, return
 `c.error(...)`.
 
+::: tip Testing this without a crash route
+Exercising this path needs a route that always throws — but that route should
+never ship on the app's real surface (a `GET /diagnostics/boom` reachable in
+production). [Testing the error boundary without a crash
+route](/cookbook/errors#testing-the-error-boundary-without-a-crash-route) shows
+the pattern: build the throwing route inside the test file, with the app's own
+`createApp`/`defineRoute`, and never add it to `main.ts`'s `modules` array.
+:::
+
 ## Custom statuses: `c.error` and `c.json`
 
 For domain errors — not found, forbidden, conflict — **return a `Response`** from the
