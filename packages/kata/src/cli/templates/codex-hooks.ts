@@ -11,9 +11,14 @@
 // there — the commit/push bypasses and the config-tampering edits (#29,
 // ADR-0010) — are enforced by `kata verify` on PreToolUse instead.
 
+import { type PackageManager, pmCommands } from '../package-manager'
 import { CODEX_TOOL_MATCHER, harnessHooks } from './harness'
 import type { CodexHooks } from './types'
 
-export const codexHooksTemplate: CodexHooks = {
-  hooks: harnessHooks(CODEX_TOOL_MATCHER),
+/** `pm` is the package manager detected for the target project (#231) — see
+ *  {@link claudeSettingsTemplate}. */
+export function codexHooksTemplate(pm: PackageManager): CodexHooks {
+  return {
+    hooks: harnessHooks(CODEX_TOOL_MATCHER, pmCommands(pm)),
+  }
 }

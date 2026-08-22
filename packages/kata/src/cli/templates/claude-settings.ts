@@ -13,6 +13,7 @@
 // enforcement — they protect the project before any `kata verify` ruleset
 // exists.
 
+import { type PackageManager, pmCommands } from '../package-manager'
 import {
   CLAUDE_EDIT_MATCHER,
   CLAUDE_SETTINGS_SCHEMA,
@@ -22,8 +23,13 @@ import {
 } from './harness'
 import type { ClaudeSettings } from './types'
 
-export const claudeSettingsTemplate: ClaudeSettings = {
-  $schema: CLAUDE_SETTINGS_SCHEMA,
-  permissions: { deny: [...DENY_COMMANDS, ...DENY_CONFIG_EDITS] },
-  hooks: harnessHooks(CLAUDE_EDIT_MATCHER),
+/** `pm` is the package manager detected for the target project (#231) — the
+ *  hook commands resolve `kata` / the test script through it instead of
+ *  assuming a global `kata` and a pnpm toolchain. */
+export function claudeSettingsTemplate(pm: PackageManager): ClaudeSettings {
+  return {
+    $schema: CLAUDE_SETTINGS_SCHEMA,
+    permissions: { deny: [...DENY_COMMANDS, ...DENY_CONFIG_EDITS] },
+    hooks: harnessHooks(CLAUDE_EDIT_MATCHER, pmCommands(pm)),
+  }
 }

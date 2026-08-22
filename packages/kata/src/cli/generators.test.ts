@@ -38,19 +38,40 @@ import {
   renderOxlintrc,
   serialize,
 } from './generators'
+import type { PackageManager } from './package-manager'
 import type { ClaudeSettings, CodexHooks } from './templates/types'
 import { KATA_VERSION } from './templates/version'
 
-function parseClaude(): ClaudeSettings {
-  return JSON.parse(renderClaudeSettings()) as ClaudeSettings
+// Every PM the CLI detects (issue #231): the hook commands must resolve the
+// local `kata` bin / test script for all four, not just npm/pnpm.
+const PACKAGE_MANAGERS: readonly PackageManager[] = ['npm', 'pnpm', 'yarn', 'bun']
+
+/** Expected Pre/PostToolUse `kata verify --json` command per package manager. */
+const EXPECTED_VERIFY: Record<PackageManager, string> = {
+  npm: 'npx kata verify --json',
+  pnpm: 'pnpm exec kata verify --json',
+  yarn: 'yarn kata verify --json',
+  bun: 'bunx kata verify --json',
 }
 
-function parseCodex(): CodexHooks {
-  return JSON.parse(renderCodexHooks()) as CodexHooks
+/** Expected Stop `kata verify && <test script>` command per package manager. */
+const EXPECTED_STOP: Record<PackageManager, string> = {
+  npm: 'npx kata verify && npm run test',
+  pnpm: 'pnpm exec kata verify && pnpm test',
+  yarn: 'yarn kata verify && yarn test',
+  bun: 'bunx kata verify && bun run test',
 }
 
-function parseAgents(): CodexHooks {
-  return JSON.parse(renderAgentsHooks()) as CodexHooks
+function parseClaude(pm: PackageManager = 'npm'): ClaudeSettings {
+  return JSON.parse(renderClaudeSettings(pm)) as ClaudeSettings
+}
+
+function parseCodex(pm: PackageManager = 'npm'): CodexHooks {
+  return JSON.parse(renderCodexHooks(pm)) as CodexHooks
+}
+
+function parseAgents(pm: PackageManager = 'npm'): CodexHooks {
+  return JSON.parse(renderAgentsHooks(pm)) as CodexHooks
 }
 
 describe('serialize()', () => {
@@ -89,11 +110,13 @@ describe('renderClaudeSettings() — issues #27, #29', () => {
     expect(deny).toContain('Edit(.codex/hooks.json)')
   })
 
-  it('runs `kata verify --json` on Pre/PostToolUse and `kata verify && pnpm test` on Stop', () => {
-    const { hooks } = parseClaude()
-    expect(hooks.PreToolUse?.[0]?.hooks[0]?.command).toBe('kata verify --json')
-    expect(hooks.PostToolUse?.[0]?.hooks[0]?.command).toBe('kata verify --json')
-    expect(hooks.Stop?.[0]?.hooks[0]?.command).toBe('kata verify && pnpm test')
+  it.each(
+    PACKAGE_MANAGERS,
+  )('resolves the local `kata` bin and test script for %s (issue #231)', (pm) => {
+    const { hooks } = parseClaude(pm)
+    expect(hooks.PreToolUse?.[0]?.hooks[0]?.command).toBe(EXPECTED_VERIFY[pm])
+    expect(hooks.PostToolUse?.[0]?.hooks[0]?.command).toBe(EXPECTED_VERIFY[pm])
+    expect(hooks.Stop?.[0]?.hooks[0]?.command).toBe(EXPECTED_STOP[pm])
   })
 
   it('matches the file-writing tools on Pre/PostToolUse', () => {
@@ -124,6 +147,15 @@ describe('renderCodexHooks() — issue #28', () => {
     expect(hooks.PreToolUse?.[0]?.matcher).toBe('Bash|apply_patch')
     expect(hooks.PostToolUse?.[0]?.matcher).toBe('Bash|apply_patch')
   })
+
+  it.each(
+    PACKAGE_MANAGERS,
+  )('resolves the local `kata` bin and test script for %s (issue #231)', (pm) => {
+    const { hooks } = parseCodex(pm)
+    expect(hooks.PreToolUse?.[0]?.hooks[0]?.command).toBe(EXPECTED_VERIFY[pm])
+    expect(hooks.PostToolUse?.[0]?.hooks[0]?.command).toBe(EXPECTED_VERIFY[pm])
+    expect(hooks.Stop?.[0]?.hooks[0]?.command).toBe(EXPECTED_STOP[pm])
+  })
 })
 
 describe('renderAgentsHooks() — issue #200 (vendor-neutral .agents mirror)', () => {
@@ -141,24 +173,35 @@ describe('renderAgentsHooks() — issue #200 (vendor-neutral .agents mirror)', (
 
   it('runs the same hook commands as the Claude/Codex configs', () => {
     const { hooks } = parseAgents()
-    expect(hooks.PreToolUse?.[0]?.hooks[0]?.command).toBe('kata verify --json')
-    expect(hooks.PostToolUse?.[0]?.hooks[0]?.command).toBe('kata verify --json')
-    expect(hooks.Stop?.[0]?.hooks[0]?.command).toBe('kata verify && pnpm test')
+    expect(hooks.PreToolUse?.[0]?.hooks[0]?.command).toBe(EXPECTED_VERIFY.npm)
+    expect(hooks.PostToolUse?.[0]?.hooks[0]?.command).toBe(EXPECTED_VERIFY.npm)
+    expect(hooks.Stop?.[0]?.hooks[0]?.command).toBe(EXPECTED_STOP.npm)
     expect(hooks.Stop?.[0]?.hooks[0]?.timeout).toBe(180)
+  })
+
+  it.each(
+    PACKAGE_MANAGERS,
+  )('resolves the local `kata` bin and test script for %s (issue #231)', (pm) => {
+    const { hooks } = parseAgents(pm)
+    expect(hooks.PreToolUse?.[0]?.hooks[0]?.command).toBe(EXPECTED_VERIFY[pm])
+    expect(hooks.PostToolUse?.[0]?.hooks[0]?.command).toBe(EXPECTED_VERIFY[pm])
+    expect(hooks.Stop?.[0]?.hooks[0]?.command).toBe(EXPECTED_STOP[pm])
   })
 })
 
 describe('harness parity across .claude / .codex / .agents (#27, #28, #200)', () => {
-  it('runs the identical command sequence across all three harnesses', () => {
+  it.each(
+    PACKAGE_MANAGERS,
+  )('runs the identical command sequence across all three harnesses for %s (#231)', (pm) => {
     const commandsOf = (h: ClaudeSettings['hooks']): Array<string | undefined> => [
       h.PreToolUse?.[0]?.hooks[0]?.command,
       h.PostToolUse?.[0]?.hooks[0]?.command,
       h.Stop?.[0]?.hooks[0]?.command,
     ]
-    const expected = ['kata verify --json', 'kata verify --json', 'kata verify && pnpm test']
-    expect(commandsOf(parseClaude().hooks)).toEqual(expected)
-    expect(commandsOf(parseCodex().hooks)).toEqual(expected)
-    expect(commandsOf(parseAgents().hooks)).toEqual(expected)
+    const expected = [EXPECTED_VERIFY[pm], EXPECTED_VERIFY[pm], EXPECTED_STOP[pm]]
+    expect(commandsOf(parseClaude(pm).hooks)).toEqual(expected)
+    expect(commandsOf(parseCodex(pm).hooks)).toEqual(expected)
+    expect(commandsOf(parseAgents(pm).hooks)).toEqual(expected)
   })
 })
 
@@ -480,9 +523,9 @@ describe('renderModule* — `kata new <domain>` source files (Issue #102)', () =
 
 describe('determinism', () => {
   it('renders byte-identical output on repeated calls', () => {
-    expect(renderClaudeSettings()).toBe(renderClaudeSettings())
-    expect(renderCodexHooks()).toBe(renderCodexHooks())
-    expect(renderAgentsHooks()).toBe(renderAgentsHooks())
+    expect(renderClaudeSettings('npm')).toBe(renderClaudeSettings('npm'))
+    expect(renderCodexHooks('npm')).toBe(renderCodexHooks('npm'))
+    expect(renderAgentsHooks('npm')).toBe(renderAgentsHooks('npm'))
     expect(renderAgentsMd()).toBe(renderAgentsMd())
     expect(renderBiomeJson()).toBe(renderBiomeJson())
     expect(renderOxlintrc()).toBe(renderOxlintrc())

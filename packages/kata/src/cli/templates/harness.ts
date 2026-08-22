@@ -4,19 +4,29 @@
 // differ where this module lets them differ (the tool matcher), never in the
 // commands they run or the timeout they allow.
 
+import type { PackageManagerCommands } from '../package-manager'
 import type { HookCommand, HookEvents } from './types'
 
-/** The fast-loop command Pre/PostToolUse shell out to. The generated configs
- *  reference the `kata` CLI as a command string rather than depending on its
- *  internals (it may not be built yet); `kata verify` reads the hook event
- *  from stdin and emits the right shape per event. See CLAUDE.md / AGENTS.md:
- *  "`kata verify` — fast determ checks; use `--json` for hook output." */
-export const VERIFY_COMMAND = 'kata verify --json'
+/** The fast-loop command Pre/PostToolUse shell out to. A freshly `kata
+ *  init`-ed project only has `kata` in `node_modules/.bin`, never on PATH
+ *  (#231), so the command must resolve it through the detected package
+ *  manager's local-bin runner (`pm.exec`) instead of assuming a global
+ *  `kata`. `kata verify` reads the hook event from stdin and emits the right
+ *  shape per event. See CLAUDE.md / AGENTS.md: "`kata verify` — fast determ
+ *  checks; use `--json` for hook output." */
+export function verifyCommand(pm: PackageManagerCommands): string {
+  return pm.exec('kata verify --json')
+}
 
 /** The Stop gate runs the project's test suite. `kata verify` is a fast lint
  *  engine, not a test runner, so "done" is gated on the actual tests (#30) —
- *  mirroring this repo's own reference Stop hook, which runs the test ladder. */
-export const STOP_COMMAND = 'kata verify && pnpm test'
+ *  mirroring this repo's own reference Stop hook, which runs the test ladder.
+ *  Both halves resolve through the detected package manager (#231): `pm.exec`
+ *  for the `kata` bin, `pm.run` for the scaffolded `package.json`'s `test`
+ *  script — never a bare `kata` or a hardcoded `pnpm test`. */
+export function stopCommand(pm: PackageManagerCommands): string {
+  return `${pm.exec('kata verify')} && ${pm.run('test')}`
+}
 
 /** Stop runs the test suite; give it headroom over the millisecond Pre/Post
  *  hooks. Matches the timeout on this repo's own reference Stop hook. */
@@ -88,11 +98,15 @@ function commandHook(command: string, timeoutSeconds?: number): HookCommand {
 /** Build the three-event hook map shared by both harnesses. Only the tool
  *  matcher differs between Claude and Codex; the commands, the events, and the
  *  Stop timeout are identical — the entire point of #27/#28. Pre/Post run the
- *  fast `kata verify` loop; Stop runs the test suite (#30). */
-export function harnessHooks(toolMatcher: string): HookEvents {
+ *  fast `kata verify` loop; Stop runs the test suite (#30). `pm` is the
+ *  detected package manager (#231) — every command it builds resolves the
+ *  local `kata` bin and the local `test` script instead of assuming a global
+ *  `kata` and a pnpm toolchain. */
+export function harnessHooks(toolMatcher: string, pm: PackageManagerCommands): HookEvents {
+  const verify = commandHook(verifyCommand(pm))
   return {
-    PreToolUse: [{ matcher: toolMatcher, hooks: [commandHook(VERIFY_COMMAND)] }],
-    PostToolUse: [{ matcher: toolMatcher, hooks: [commandHook(VERIFY_COMMAND)] }],
-    Stop: [{ hooks: [commandHook(STOP_COMMAND, STOP_TIMEOUT_SECONDS)] }],
+    PreToolUse: [{ matcher: toolMatcher, hooks: [verify] }],
+    PostToolUse: [{ matcher: toolMatcher, hooks: [verify] }],
+    Stop: [{ hooks: [commandHook(stopCommand(pm), STOP_TIMEOUT_SECONDS)] }],
   }
 }

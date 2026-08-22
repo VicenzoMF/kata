@@ -2,6 +2,7 @@
 // here (that's `init.ts`), so these are trivially testable and the generated
 // bytes are asserted directly in generators.test.ts.
 
+import type { PackageManager } from './package-manager'
 import { exampleAdrReadme, exampleAdrTemplateSource } from './templates/adr'
 import { agentsHooksTemplate } from './templates/agents-hooks'
 import { agentsMd } from './templates/agents-md'
@@ -43,19 +44,21 @@ export function serialize(value: unknown): string {
 
 // ── Harness config files (`.claude` / `.codex` / `.agents` + the md pair) ─────
 
-/** Render `.claude/settings.json` for a new project (issues #27, #29). */
-export function renderClaudeSettings(): string {
-  return serialize(claudeSettingsTemplate)
+/** Render `.claude/settings.json` for a new project (issues #27, #29, #231).
+ *  `pm` is the package manager detected for the target project — the hook
+ *  commands resolve the local `kata` bin / test script through it. */
+export function renderClaudeSettings(pm: PackageManager): string {
+  return serialize(claudeSettingsTemplate(pm))
 }
 
-/** Render `.codex/hooks.json` for a new project (issue #28). */
-export function renderCodexHooks(): string {
-  return serialize(codexHooksTemplate)
+/** Render `.codex/hooks.json` for a new project (issue #28, #231). */
+export function renderCodexHooks(pm: PackageManager): string {
+  return serialize(codexHooksTemplate(pm))
 }
 
-/** Render `.agents/hooks.json` — the vendor-neutral hook mirror (issue #200). */
-export function renderAgentsHooks(): string {
-  return serialize(agentsHooksTemplate)
+/** Render `.agents/hooks.json` — the vendor-neutral hook mirror (issue #200, #231). */
+export function renderAgentsHooks(pm: PackageManager): string {
+  return serialize(agentsHooksTemplate(pm))
 }
 
 /** Render `AGENTS.md` — the canonical agent instructions (issue #31). */

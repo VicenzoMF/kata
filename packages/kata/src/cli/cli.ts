@@ -114,13 +114,13 @@ const STATUS_MARK: Record<InitResult['files'][number]['status'], string> = {
  *  must print commands that actually work on the first try, not a pnpm-only
  *  script + a `kata` bin that is never on PATH after an npm/yarn/bun install. */
 function nextSteps(result: InitResult): string[] {
+  const pm = pmCommands(result.packageManager)
   if (result.minimal) {
     return [
       'Harness configs written. Commit them, then start coding —',
-      'the PreToolUse/Stop hooks run `kata verify` and `pnpm test` for you.',
+      `the PreToolUse/Stop hooks run \`${pm.exec('kata verify')}\` and \`${pm.run('test')}\` for you.`,
     ]
   }
-  const pm = pmCommands(result.packageManager)
   const steps = ['Next steps:']
   if (result.dir !== '.') steps.push(`  cd ${result.dir}`)
   steps.push(`  ${pm.install}`)
