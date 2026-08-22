@@ -259,13 +259,15 @@ is left untouched unless you pass `--force`.
 kata init
 ```
 
-It writes four files:
+It writes six files:
 
 ```
 .claude/settings.json    Claude Code hooks + config-tampering bans
 .codex/hooks.json        Codex hooks → kata verify --json
+.agents/hooks.json       Vendor-neutral mirror of the same hook chain
 AGENTS.md                Canonical agent instructions (Codex + Claude)
 CLAUDE.md                Claude entrypoint → imports AGENTS.md
+lefthook.yml             Local git pre-commit: kata verify, Biome, oxlint, typecheck
 ```
 
 The generated `.claude/settings.json` carries the `permissions.deny` lists above
@@ -293,7 +295,9 @@ plus the three-event hook map: `PreToolUse` and `PostToolUse` matched on
 `Bash|apply_patch`. Codex matches on tool names and has no `Write`/`Edit`/
 `MultiEdit` tools, so file writes are detected from the `Bash`/`apply_patch` tool
 instead. The commands, the events, and the `Stop` timeout are identical — that
-parity is the point.
+parity is the point. `.agents/hooks.json` is a byte-for-byte-equivalent third
+mirror, for any harness that reads the emerging vendor-neutral `.agents/`
+convention instead of `.claude/` or `.codex/`.
 
 `kata init` scaffolds a complete runnable app on top of these harness files by
 default; `--minimal` writes only the harness. See [Bootstrap CLI](/guide/cli) for

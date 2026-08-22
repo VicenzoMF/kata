@@ -59,7 +59,10 @@ kata init → /path/to/my-app
   create  package.json
   create  tsconfig.json
   create  .gitignore
+  create  .env.example
   create  README.md
+  create  docs/adr/_template.md
+  create  docs/adr/README.md
 
 Next steps:
   cd my-app
@@ -109,12 +112,15 @@ O menor app *completo* que sobe, passa no typecheck, nos testes e no
 | `biome.json` / `.oxlintrc.json` | As configs de formatter e linter que o pre-commit roda. Escritas **só se ausentes**. |
 | `package.json` / `tsconfig.json` | Scripts, deps fixadas e opções estritas do compilador. Escritos **só se ausentes**. |
 | `.gitignore` / `README.md` | Ignores padrão e um quickstart por app. Escritos **só se ausentes**. |
+| `.env.example` | O placeholder de `JWT_SECRET` que [`@katajs-framework/core/jwt`](/pt/guide/jwt) lê — copie para `.env` e preencha. Escrito **só se ausente**. |
+| `docs/adr/_template.md` / `docs/adr/README.md` | O esqueleto e o índice de ADRs deste *app* — separados das ADRs do framework Kata, que ficam linkadas na versão fixada em vez de duplicadas. Escritos **só se ausentes**. |
 
 ### Opções
 
 ```
 -C, --cwd <dir>     Diretório base para resolver [dir] (padrão: cwd)
     --minimal       Escreve só as configs do harness — sem app (para projetos existentes)
+    --with-docs-mcp Também escreve .mcp.json, registrando o servidor de busca de docs @katajs-framework/docs-mcp
 -f, --force         Sobrescreve arquivos-fonte existentes (nunca os manifests/configs)
 -h, --help          Mostra esta ajuda
 ```
@@ -170,6 +176,32 @@ kata init → /path/to/project
 
 Harness configs written. Commit them, then start coding —
 the PreToolUse/Stop hooks run `kata verify` and `pnpm test` for you.
+```
+
+### `kata init --with-docs-mcp`
+
+Passe `--with-docs-mcp` (numa execução completa ou `--minimal`) para também
+escrever `.mcp.json`, registrando o `@katajs-framework/docs-mcp` — um servidor
+MCP local que responde perguntas sobre os docs do Kata com busca lexical, sem
+vector store nem chamada de rede ([ADR-0022](/adr/0022-docs-mcp-lexical-search-over-vector-rag),
+[ADR-0023](/adr/0023-docs-mcp-npm-distribution)). É opt-in: a maioria dos
+projetos não roda um cliente MCP, e `.mcp.json` é escrito **só se ausente**,
+então nunca sobrescreve um projeto que já registra outros servidores nele.
+
+```bash
+kata init my-app --with-docs-mcp
+```
+
+```
+kata init → /path/to/my-app
+  create  …
+  create  .mcp.json
+
+Next steps:
+  …
+
+.mcp.json registers @katajs-framework/docs-mcp via `npx` — requires it to be
+published to npm first (see the Kata repo for current status).
 ```
 
 ### Idempotência

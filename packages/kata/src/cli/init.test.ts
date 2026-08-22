@@ -85,6 +85,46 @@ describe('init() — full project scaffold (issue #200)', () => {
     expect(present).toEqual(paths.map(() => true))
   })
 
+  it('writes exactly the file list documented in docs/guide/cli.md (issue #242)', async () => {
+    // Guard against doc drift: if a target is added, removed, or reordered in
+    // `harnessTargets`/`appTargets` (init.ts), this fails until the `kata init`
+    // output block in docs/guide/cli.md (and its docs/pt/guide/cli.md mirror)
+    // is updated to match.
+    const result = await init({ cwd: dir })
+
+    expect(result.files.map((file) => file.path)).toEqual([
+      CLAUDE,
+      CODEX,
+      AGENTS_HOOKS,
+      AGENTS_MD,
+      CLAUDE_MD,
+      LEFTHOOK_YML,
+      BIOME,
+      OXLINT,
+      CONTEXT_TS,
+      APP_TS,
+      MAIN_TS,
+      MIDDLEWARE,
+      'src/modules/health/health.schema.ts',
+      'src/modules/health/health.service.ts',
+      HEALTH_ROUTE,
+      HEALTH_TEST,
+      HEALTH_HURL,
+      'src/modules/greetings/greetings.schema.ts',
+      'src/modules/greetings/greetings.service.ts',
+      GREETINGS_ROUTE,
+      'src/modules/greetings/greetings.test.ts',
+      GREETINGS_HURL,
+      PACKAGE_JSON,
+      TSCONFIG_JSON,
+      GITIGNORE,
+      ENV_EXAMPLE,
+      README,
+      ADR_TEMPLATE,
+      ADR_README,
+    ])
+  })
+
   it('writes the full canonical app: app.ts, context, middleware, both modules', async () => {
     const result = await init({ cwd: dir })
 

@@ -260,13 +260,15 @@ construiu o Kata.
 kata init
 ```
 
-Ele escreve quatro arquivos:
+Ele escreve seis arquivos:
 
 ```
 .claude/settings.json    Hooks do Claude Code + bans de adulteração de config
 .codex/hooks.json        Hooks do Codex → kata verify --json
+.agents/hooks.json       Espelho neutro de fornecedor da mesma cadeia de hooks
 AGENTS.md                Instruções canônicas de agente (Codex + Claude)
 CLAUDE.md                Entrypoint do Claude → importa AGENTS.md
+lefthook.yml             Pre-commit local do git: kata verify, Biome, oxlint, typecheck
 ```
 
 O `.claude/settings.json` gerado carrega as listas `permissions.deny` acima mais o
@@ -294,7 +296,9 @@ timeout de 180 segundos.
 `Bash|apply_patch`. O Codex casa por nomes de ferramentas e não tem ferramentas
 `Write`/`Edit`/`MultiEdit`, então as escritas de arquivo são detectadas a partir da
 ferramenta `Bash`/`apply_patch`. Os comandos, os eventos e o timeout do `Stop` são
-idênticos — essa paridade é o ponto.
+idênticos — essa paridade é o ponto. `.agents/hooks.json` é um terceiro espelho,
+byte a byte equivalente, para qualquer harness que leia a convenção emergente e
+neutra de fornecedor `.agents/` em vez de `.claude/` ou `.codex/`.
 
 Por padrão, `kata init` faz o scaffold de um app completo e executável em cima
 destes arquivos do harness; `--minimal` escreve só o harness. Veja
