@@ -326,6 +326,81 @@ registered dependencies (see [Context & DI](/guide/context-di)), `c.requestId` f
 the correlation id, and `c.raw` — the underlying Hono context, an escape hatch for
 the rare thing Kata does not wrap.
 
+## 204 No Content
+
+`output` is mandatory on every route ([ADR-0003](/adr/0003-mandatory-input-output-schemas)),
+but a `204` response carries no body by definition — HTTP forbids one. The two
+requirements don't actually collide: declare the map form with a `204` entry
+and return the body-less response with `c.json`, no framework change needed.
+
+```ts
+// src/modules/things/things.schema.ts
+export const NoContentSchema = z.void()
+```
+
+```ts
+// src/modules/things/things.route.ts
+import { NoContentSchema } from './things.schema'
+
+export const deleteThingRoute = defineRoute({
+  method: 'DELETE',
+  path: '/things/:id',
+  input: { params: DeleteThingParamsSchema },
+  output: { 204: NoContentSchema },
+  handler: (c) => {
+    deleteThing(c.get('store'), c.input.params.id)
+    return c.json(undefined, 204) // no cast needed — see below
+  },
+})
+```
+
+Two things make this work, neither of them a special case for `204`:
+
+- **No `200` key, so `SuccessOutput` is `never`.** Just like the info box above
+  says, a map with no `200` entry forces the handler to return a `Response` —
+  there is no plain-value shortcut, `204` included.
+- **`c.json(undefined, 204)` sends no body, and needs no cast.** `c.json`'s
+  generic type parameter is unconstrained, so `undefined` is a valid argument.
+  `JSON.stringify(undefined)` evaluates to the value `undefined`, not the
+  string `"undefined"` — and handing `undefined` to a `Response` as its body is
+  the same as handing it none at all. That distinction matters here because the
+  Fetch `Response` constructor *throws* if a real body (even `''`) is paired
+  with `status: 204` — so `c.json({ ok: true }, 204)` fails at request time,
+  while `c.json(undefined, 204)` doesn't.
+
+::: warning A `204` schema documents intent — it isn't enforced
+Kata validates a returned `Response`'s body by reading it as JSON
+(`response.clone().json()`) and comparing the result against the declared
+schema. A `204` response has nothing to read, so that call throws (`Unexpected
+end of JSON input`), and Kata's fallback for an unreadable body — the same one
+a plain-text or otherwise non-JSON response hits — is to skip validation and
+forward the response unchanged. In practice, `output: { 204: NoContentSchema }`
+can never fail its shape check, no matter what schema sits there. Declare one
+anyway: `output` stays mandatory, and `z.void()` says, in the same place every
+other status does, "this response has nothing in it."
+:::
+
+If a delete should confirm *what* happened instead of returning nothing — the
+id that was removed, a `deleted: true` flag — model it as an ordinary `200`
+body instead:
+
+```ts
+export const deleteThingRoute = defineRoute({
+  method: 'DELETE',
+  path: '/things/:id',
+  input: { params: DeleteThingParamsSchema },
+  output: { 200: DeleteConfirmationSchema }, // z.object({ id: z.string(), deleted: z.literal(true) })
+  handler: (c) => {
+    deleteThing(c.get('store'), c.input.params.id)
+    return { id: c.input.params.id, deleted: true as const }
+  },
+})
+```
+
+Both are legitimate — `204` suits a client that only needs the status code,
+`200 { id, deleted: true }` suits one that wants confirmation in the body.
+Pick whichever your API's callers need; Kata validates either the same way.
+
 ## Validation, both ends
 
 Put the two halves together and you get Kata's core promise: a route is checked on
