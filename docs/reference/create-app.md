@@ -95,6 +95,75 @@ const app = createApp({ modules: [users], requestLogging: false })
 The request id is also echoed on the `x-request-id` response header
 (`REQUEST_ID_HEADER`).
 
+#### What makes a logger "usable"
+
+A `logger` singleton is picked up automatically when its value structurally
+satisfies the exported `Logger` type:
+
+```ts
+type Logger = {
+  info(message: string, extra?: LogExtra): void
+  warn?(message: string, extra?: LogExtra): void
+  error?(message: string, extra?: LogExtra): void
+}
+```
+
+Only `info` is required — `console` and most structured loggers (pino,
+winston, …) satisfy it as-is. Kata checks for an `info` function at boot; a
+`logger` singleton that fails the check (not an object, or no `info` method)
+is treated as if none were registered — `requestLogging` becomes a silent
+no-op, and the framework diagnostics below fall back to `console.error` /
+`console.warn` instead. `warn` and `error` are optional: a one-method logger
+still works, it just receives every event through `info`.
+
+#### The per-request record
+
+Every completed request logs one line shaped as `RequestLogFields`:
+
+```ts
+type RequestLogFields = {
+  requestId: string
+  method: string
+  path: string
+  status: number
+  durationMs: number
+}
+```
+
+That object is passed as `extra`; the message is
+`` `${method} ${path} ${status} ${durationMs}ms` ``. The level tracks the
+status class, cascading down to a level the logger actually implements:
+
+| Status | Preferred level | Cascades to |
+|---|---|---|
+| `>= 500` | `error` | `warn`, then `info` |
+| `400`–`499` | `warn` | `info` |
+| `< 400` | `info` | — |
+
+This runs for every outcome — a normal response, a `422` input-validation
+failure, a middleware short-circuit, the `500` error boundary, or an unmatched
+route — so no request goes unlogged.
+
+#### Framework diagnostics
+
+Three more events log through the same `logger`. Unlike request completion
+above, these never cascade to a different level — each targets one level and,
+when the logger doesn't implement it, falls back to the matching `console`
+method instead:
+
+| Event | Level | Fallback | When |
+|---|---|---|---|
+| Output-schema mismatch | `error` | `console.error` | The handler's response doesn't match its declared `output` ([ADR-0009](/adr/0009-output-validation-mode)) |
+| `raw()` output content-type mismatch | `error` | `console.error` | A `raw()` response's actual `content-type` doesn't match the one it declares ([ADR-0024](/adr/0024-raw-output-contracts-and-response-validation)) |
+| Unhandled error | `error` | `console.error` | A throw escapes a route handler, app-level middleware, or the global error boundary — see [/guide/errors](/guide/errors) |
+| Unvalidated `raw()` body | `warn` | `console.warn` | Logged once at startup (not per request) when a route declares `raw()` output and `outputValidation` is `'log'`, since the body is only checked in `'strict'` mode |
+
+The unhandled-error diagnostic hands `logger.error` a pre-flattened
+`SerializedError` under `extra.err` — never a raw `Error` — so a
+`JSON.stringify`-based logger can't lose `message` / `stack` to `Error`'s
+non-enumerable properties. See [/guide/errors](/guide/errors) for the exact
+shape.
+
 ### `outputValidation` (optional)
 
 How an output-schema mismatch is handled ([ADR-0009](/adr/0009-output-validation-mode)):

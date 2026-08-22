@@ -95,6 +95,78 @@ const app = createApp({ modules: [users], requestLogging: false })
 O id de requisição também é ecoado no header de resposta `x-request-id`
 (`REQUEST_ID_HEADER`).
 
+#### O que torna um logger "utilizável"
+
+Um singleton `logger` é usado automaticamente quando seu valor satisfaz
+estruturalmente o tipo exportado `Logger`:
+
+```ts
+type Logger = {
+  info(message: string, extra?: LogExtra): void
+  warn?(message: string, extra?: LogExtra): void
+  error?(message: string, extra?: LogExtra): void
+}
+```
+
+Apenas `info` é obrigatório — `console` e a maioria dos loggers estruturados
+(pino, winston, …) já satisfazem isso como estão. Kata verifica a existência
+de uma função `info` no boot; um singleton `logger` que falha nessa checagem
+(não é um objeto, ou não tem `info`) é tratado como se nenhum estivesse
+registrado — `requestLogging` vira um no-op silencioso, e os diagnósticos do
+framework abaixo caem para `console.error` / `console.warn` em vez disso.
+`warn` e `error` são opcionais: um logger de um método só continua
+funcionando, apenas recebe todo evento através de `info`.
+
+#### O registro por requisição
+
+Toda requisição concluída loga uma linha no formato `RequestLogFields`:
+
+```ts
+type RequestLogFields = {
+  requestId: string
+  method: string
+  path: string
+  status: number
+  durationMs: number
+}
+```
+
+Esse objeto é passado como `extra`; a mensagem é
+`` `${method} ${path} ${status} ${durationMs}ms` ``. O nível acompanha a
+classe do status, caindo em cascata para um nível que o logger de fato
+implementa:
+
+| Status | Nível preferido | Cai para |
+|---|---|---|
+| `>= 500` | `error` | `warn`, depois `info` |
+| `400`–`499` | `warn` | `info` |
+| `< 400` | `info` | — |
+
+Isso roda para todo desfecho — uma resposta normal, uma falha `422` de
+validação de input, um curto-circuito de middleware, o boundary de erro
+`500`, ou uma route não encontrada — de modo que nenhuma requisição fica sem
+log.
+
+#### Diagnósticos do framework
+
+Mais três eventos logam através do mesmo `logger`. Diferente do log de
+requisição acima, eles nunca caem em cascata para outro nível — cada um mira
+um único nível e, quando o logger não o implementa, cai para o método
+`console` correspondente:
+
+| Evento | Nível | Fallback | Quando |
+|---|---|---|---|
+| Divergência de output-schema | `error` | `console.error` | A resposta do handler não corresponde ao `output` declarado ([ADR-0009](/adr/0009-output-validation-mode)) |
+| Divergência de content-type de output `raw()` | `error` | `console.error` | O `content-type` real de uma resposta `raw()` não corresponde ao declarado ([ADR-0024](/adr/0024-raw-output-contracts-and-response-validation)) |
+| Erro não tratado | `error` | `console.error` | Um throw escapa de um handler de route, de um middleware de nível de app, ou do boundary global de erro — veja [/pt/guide/errors](/pt/guide/errors) |
+| Body `raw()` não validado | `warn` | `console.warn` | Logado uma vez no startup (não por requisição) quando uma route declara output `raw()` e `outputValidation` é `'log'`, já que o body só é checado em modo `'strict'` |
+
+O diagnóstico de erro não tratado entrega ao `logger.error` um
+`SerializedError` pré-achatado sob `extra.err` — nunca um `Error` bruto — de
+modo que um logger baseado em `JSON.stringify` não perde `message` / `stack`
+para as propriedades não enumeráveis de `Error`. Veja
+[/pt/guide/errors](/pt/guide/errors) para o formato exato.
+
 ### `outputValidation` (opcional)
 
 Como uma divergência de output-schema é tratada ([ADR-0009](/adr/0009-output-validation-mode)):

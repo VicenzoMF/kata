@@ -24,7 +24,7 @@ export {
   formatZodIssues,
   serializeError,
 } from './errors'
-export type { LogExtra, Logger } from './logger'
+export type { LogExtra, Logger, RequestLogFields } from './logger'
 export type { BodyLimitOptions, CorsOptions, SecureHeadersOptions } from './middlewares'
 export { bodyLimit, cors, DEFAULT_MAX_BODY_SIZE, secureHeaders } from './middlewares'
 export type { OutputValidationMode } from './output-validation'
