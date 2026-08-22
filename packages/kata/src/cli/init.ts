@@ -107,15 +107,20 @@ type Target = {
 /** The agent-harness files `kata init` always writes (both full and `--minimal`
  *  runs): Claude settings (#27, #29), Codex hooks (#28), the vendor-neutral
  *  `.agents` mirror (#200), the AGENTS.md / CLAUDE.md instruction pair (#31), and
- *  the lefthook pre-commit config (#130). */
-const HARNESS_TARGETS: readonly Target[] = [
-  { path: '.claude/settings.json', render: renderClaudeSettings },
-  { path: '.codex/hooks.json', render: renderCodexHooks },
-  { path: '.agents/hooks.json', render: renderAgentsHooks },
-  { path: 'AGENTS.md', render: renderAgentsMd },
-  { path: 'CLAUDE.md', render: renderClaudeMd },
-  { path: 'lefthook.yml', render: renderLefthookYml },
-]
+ *  the lefthook pre-commit config (#130). Takes the detected package manager
+ *  (#231) so the hook commands in the three generated hook files resolve the
+ *  local `kata` bin / test script instead of assuming a global `kata` and a
+ *  pnpm toolchain. */
+function harnessTargets(pm: PackageManager): readonly Target[] {
+  return [
+    { path: '.claude/settings.json', render: () => renderClaudeSettings(pm) },
+    { path: '.codex/hooks.json', render: () => renderCodexHooks(pm) },
+    { path: '.agents/hooks.json', render: () => renderAgentsHooks(pm) },
+    { path: 'AGENTS.md', render: renderAgentsMd },
+    { path: 'CLAUDE.md', render: renderClaudeMd },
+    { path: 'lefthook.yml', render: renderLefthookYml },
+  ]
+}
 
 /** `.mcp.json`, registering the docs-search MCP server (ADR-0023). Written
  *  only with `--with-docs-mcp`; `onlyIfAbsent` since a real project's
@@ -214,12 +219,17 @@ export async function init(options: InitOptions = {}): Promise<InitResult> {
   const cwd = resolve(options.cwd ?? process.cwd(), options.dir ?? '.')
   const force = options.force ?? false
   const minimal = options.minimal ?? false
+  // Detected up front (#231) so the harness targets below can close over it —
+  // the generated hook commands need to know the package manager before any
+  // file is written, not after.
+  const packageManager = detectPackageManager(cwd, options.env ?? process.env)
   const targets = [
-    ...(minimal ? HARNESS_TARGETS : [...HARNESS_TARGETS, ...appTargets(appNameFromDir(cwd))]),
+    ...(minimal
+      ? harnessTargets(packageManager)
+      : [...harnessTargets(packageManager), ...appTargets(appNameFromDir(cwd))]),
     ...(options.docsMcp ? [DOCS_MCP_TARGET] : []),
   ]
   const files = await Promise.all(targets.map((target) => writeTarget(cwd, force, target)))
-  const packageManager = detectPackageManager(cwd, options.env ?? process.env)
   return {
     cwd,
     dir: options.dir ?? '.',

@@ -11,6 +11,7 @@ import {
   renderExamplePackageJson,
 } from './generators'
 import { appNameFromDir, type FileStatus, type InitResult, init } from './init'
+import type { ClaudeSettings, CodexHooks } from './templates/types'
 
 // Harness files (written on every run, full or --minimal).
 const CLAUDE = '.claude/settings.json'
@@ -126,8 +127,12 @@ describe('init() — full project scaffold (issue #200)', () => {
   it('writes exactly what the generators render', async () => {
     const result = await init({ cwd: dir })
 
-    expect(await readFile(join(dir, CLAUDE), 'utf8')).toBe(renderClaudeSettings())
-    expect(await readFile(join(dir, AGENTS_HOOKS), 'utf8')).toBe(renderAgentsHooks())
+    expect(await readFile(join(dir, CLAUDE), 'utf8')).toBe(
+      renderClaudeSettings(result.packageManager),
+    )
+    expect(await readFile(join(dir, AGENTS_HOOKS), 'utf8')).toBe(
+      renderAgentsHooks(result.packageManager),
+    )
     expect(await readFile(join(dir, APP_TS), 'utf8')).toBe(renderExampleApp())
     // package.json is titled after the (resolved) target directory.
     expect(await readFile(join(dir, PACKAGE_JSON), 'utf8')).toBe(
@@ -168,6 +173,66 @@ describe('init() — full project scaffold (issue #200)', () => {
     for (const path of [CLAUDE, APP_TS, PACKAGE_JSON, GREETINGS_ROUTE, ENV_EXAMPLE, ADR_README]) {
       expect(statusOf(second, path)).toBe('skipped')
     }
+  })
+})
+
+describe('generated harness hooks resolve the detected package manager (issue #231)', () => {
+  it('npm scaffold: hooks call `npx kata verify` / `npm run test`, never a bare `kata` or `pnpm`', async () => {
+    const result = await init({ cwd: dir, env: { npm_config_user_agent: 'npm/10.2.0 node/v20' } })
+    expect(result.packageManager).toBe('npm')
+
+    const claude = JSON.parse(await readFile(join(dir, CLAUDE), 'utf8')) as ClaudeSettings
+    expect(claude.hooks.PreToolUse?.[0]?.hooks[0]?.command).toBe('npx kata verify --json')
+    expect(claude.hooks.PostToolUse?.[0]?.hooks[0]?.command).toBe('npx kata verify --json')
+    expect(claude.hooks.Stop?.[0]?.hooks[0]?.command).toBe('npx kata verify && npm run test')
+
+    const codex = JSON.parse(await readFile(join(dir, CODEX), 'utf8')) as CodexHooks
+    expect(codex.hooks.PreToolUse?.[0]?.hooks[0]?.command).toBe('npx kata verify --json')
+    expect(codex.hooks.Stop?.[0]?.hooks[0]?.command).toBe('npx kata verify && npm run test')
+
+    const agents = JSON.parse(await readFile(join(dir, AGENTS_HOOKS), 'utf8')) as CodexHooks
+    expect(agents.hooks.PreToolUse?.[0]?.hooks[0]?.command).toBe('npx kata verify --json')
+    expect(agents.hooks.Stop?.[0]?.hooks[0]?.command).toBe('npx kata verify && npm run test')
+  })
+
+  it('pnpm scaffold: hooks call `pnpm exec kata verify` / `pnpm test`', async () => {
+    const result = await init({
+      cwd: dir,
+      env: { npm_config_user_agent: 'pnpm/8.6.0 npm/? node/v20' },
+    })
+    expect(result.packageManager).toBe('pnpm')
+
+    const claude = JSON.parse(await readFile(join(dir, CLAUDE), 'utf8')) as ClaudeSettings
+    expect(claude.hooks.PreToolUse?.[0]?.hooks[0]?.command).toBe('pnpm exec kata verify --json')
+    expect(claude.hooks.PostToolUse?.[0]?.hooks[0]?.command).toBe('pnpm exec kata verify --json')
+    expect(claude.hooks.Stop?.[0]?.hooks[0]?.command).toBe('pnpm exec kata verify && pnpm test')
+
+    const codex = JSON.parse(await readFile(join(dir, CODEX), 'utf8')) as CodexHooks
+    expect(codex.hooks.Stop?.[0]?.hooks[0]?.command).toBe('pnpm exec kata verify && pnpm test')
+
+    const agents = JSON.parse(await readFile(join(dir, AGENTS_HOOKS), 'utf8')) as CodexHooks
+    expect(agents.hooks.Stop?.[0]?.hooks[0]?.command).toBe('pnpm exec kata verify && pnpm test')
+  })
+
+  it('yarn scaffold: hooks call `yarn kata verify` / `yarn test`', async () => {
+    const result = await init({
+      cwd: dir,
+      env: { npm_config_user_agent: 'yarn/1.22.19 npm/? node/v20' },
+    })
+    expect(result.packageManager).toBe('yarn')
+
+    const claude = JSON.parse(await readFile(join(dir, CLAUDE), 'utf8')) as ClaudeSettings
+    expect(claude.hooks.PreToolUse?.[0]?.hooks[0]?.command).toBe('yarn kata verify --json')
+    expect(claude.hooks.Stop?.[0]?.hooks[0]?.command).toBe('yarn kata verify && yarn test')
+  })
+
+  it('bun scaffold: hooks call `bunx kata verify` / `bun run test`', async () => {
+    const result = await init({ cwd: dir, env: { npm_config_user_agent: 'bun/1.1.0 node/v20' } })
+    expect(result.packageManager).toBe('bun')
+
+    const claude = JSON.parse(await readFile(join(dir, CLAUDE), 'utf8')) as ClaudeSettings
+    expect(claude.hooks.PreToolUse?.[0]?.hooks[0]?.command).toBe('bunx kata verify --json')
+    expect(claude.hooks.Stop?.[0]?.hooks[0]?.command).toBe('bunx kata verify && bun run test')
   })
 })
 

@@ -9,9 +9,14 @@
 // Codex config) and uses the union tool matcher. AGENTS.md carries the
 // vendor-neutral *instructions*; this file carries the vendor-neutral *hooks*.
 
+import { type PackageManager, pmCommands } from '../package-manager'
 import { AGENTS_TOOL_MATCHER, harnessHooks } from './harness'
 import type { CodexHooks } from './types'
 
-export const agentsHooksTemplate: CodexHooks = {
-  hooks: harnessHooks(AGENTS_TOOL_MATCHER),
+/** `pm` is the package manager detected for the target project (#231) — see
+ *  {@link claudeSettingsTemplate}. */
+export function agentsHooksTemplate(pm: PackageManager): CodexHooks {
+  return {
+    hooks: harnessHooks(AGENTS_TOOL_MATCHER, pmCommands(pm)),
+  }
 }
