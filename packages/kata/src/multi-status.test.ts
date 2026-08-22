@@ -289,6 +289,66 @@ describe('multi-status output: single-entry ↔ status 200 are unified (ADR-0024
   })
 })
 
+describe('multi-status output: a bodyless 204 (issue #250)', () => {
+  // `output` has no key for a status that carries no body — a `204` still
+  // needs an entry (ADR-0003: `output` is mandatory), it's just never a
+  // schema anything gets checked against. `z.void()` documents that intent.
+  const NoContentSchema = z.void()
+
+  it('output: { 204: schema } + c.json(undefined, 204) sends a real empty 204 body', async () => {
+    const k = defineContext({})
+    // No `200` key, so `SuccessOutput` is `never` and the handler is forced
+    // to return a `Response` — exactly like any other map with no 200 entry.
+    const route = k.defineRoute({
+      method: 'DELETE',
+      path: '/things/:id',
+      input: { params: z.object({ id: z.string() }) },
+      output: { 204: NoContentSchema },
+      // `JSON.stringify(undefined)` is `undefined`, and Hono/undici treat an
+      // `undefined` response body as no body at all — so this compiles with
+      // no cast and never trips the "204 must not carry a body" runtime
+      // restriction the Fetch `Response` constructor enforces.
+      handler: (c) => c.json(undefined, 204),
+    })
+    const app = k.createApp({
+      modules: [{ route }],
+      outputValidation: 'strict',
+      requestLogging: false,
+    })
+    const res = await app.request('/things/1', { method: 'DELETE' })
+
+    expect(res.status).toBe(204)
+    expect(await res.clone().text()).toBe('')
+  })
+
+  it('a 204 body is never parsed as JSON, so its declared schema can never fail a check', async () => {
+    // `validateResponseBody` reads the body with `response.clone().json()`;
+    // on an empty (204) body that throws and is caught, and the response is
+    // forwarded unvalidated — the same fallback that skips a non-JSON body.
+    // So a schema declared under `204` documents intent but is never actually
+    // enforced, no matter what it is: even a schema that could never match
+    // still lets the response through with no 500 and nothing logged.
+    const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const k = defineContext({})
+    const route = k.defineRoute({
+      method: 'DELETE',
+      path: '/things/:id',
+      input: { params: z.object({ id: z.string() }) },
+      output: { 204: z.object({ thisCanNeverMatchAnEmptyBody: z.string() }) },
+      handler: (c) => c.json(undefined, 204),
+    })
+    const app = k.createApp({
+      modules: [{ route }],
+      outputValidation: 'strict',
+      requestLogging: false,
+    })
+    const res = await app.request('/things/1', { method: 'DELETE' })
+
+    expect(res.status).toBe(204)
+    expect(errSpy).not.toHaveBeenCalled()
+  })
+})
+
 // ────────────────────────────────────────────────────────────────────────────
 // Type-level — the RPC `Schema` derivation (ADR-0011 + epic #11)
 //
