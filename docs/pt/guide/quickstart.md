@@ -1,18 +1,19 @@
 ---
 title: Início rápido
-description: Construa uma API /users totalmente tipada em seis arquivos, suba ela e chame ela — incluindo falhas de validação e a rota /me protegida por JWT.
+description: Construa uma API /users totalmente tipada em nove arquivos, suba ela e chame ela — incluindo falhas de validação e a rota /me protegida por JWT.
 ---
 
 # Início rápido
 
 Isto constrói uma API `/users` totalmente tipada — crie um usuário, busque-o de volta, observe uma
-falha de validação e chame uma rota `/me` protegida por JWT — em seis pequenos arquivos. Isto é exatamente
+falha de validação e chame uma rota `/me` protegida por JWT — em nove pequenos arquivos. Isto é exatamente
 [`examples/hello`](https://github.com/VicenzoMF/kata/tree/main/examples/hello).
 
-O plano: leia os seis arquivos de cima a baixo (cada um introduz uma ideia do Kata),
-suba o app, depois chame ele com `curl` e observe cada contrato se manter. Cada passo
-tem links para o guia de conceito que o cobre em profundidade, para que você possa dar uma olhada rápida aqui e
-se aprofundar depois.
+O plano: leia os nove arquivos de cima a baixo (cada um introduz uma ideia do
+Kata, e nunca referencia um arquivo que você ainda não viu), suba o app, depois
+chame ele com `curl` e observe cada contrato se manter. Cada passo tem links
+para o guia de conceito que o cobre em profundidade, para que você possa dar
+uma olhada rápida aqui e se aprofundar depois.
 
 ## Instalação
 
@@ -42,65 +43,39 @@ pnpm --filter=hello dev      # sobe examples/hello em http://localhost:3000
 ```
 :::
 
-## Os seis arquivos
+## Os nove arquivos
 
 Kata trava o layout de pastas para que cada route, service, schema e teste seja
-localizável por glob (veja [layout do projeto](/pt/guide/project-layout)). O exemplo
-dobra `app.ts` dentro de `main.ts`, deixando seis arquivos:
+localizável por glob (veja [layout do projeto](/pt/guide/project-layout)). O
+exemplo dobra `app.ts` dentro de `main.ts`, e acrescenta um pequeno `config.ts`
+mais um segundo módulo (`auth`) para emissão de token, deixando nove arquivos:
 
 ```
 examples/hello/src/
 ├── context.ts                       # defineContext({ ... })
+├── config.ts                        # JWT_SECRET, TOKEN_TTL_SECONDS
 ├── middlewares/
-│   └── auth.ts                       # jwtAuth → preenche o slot currentUser
-└── modules/users/
-    ├── users.schema.ts               # DTOs Zod
-    ├── users.service.ts              # funções puras
-    └── users.route.ts                # apenas chamadas defineRoute
-main.ts                               # createApp + serve
+│   └── auth.ts                      # jwtAuth → preenche o slot currentUser
+├── modules/
+│   ├── users/
+│   │   ├── users.schema.ts          # DTOs Zod
+│   │   ├── users.service.ts         # funções puras
+│   │   └── users.route.ts           # apenas chamadas defineRoute
+│   └── auth/
+│       ├── auth.schema.ts           # DTOs de request/response do token
+│       └── auth.route.ts            # POST /auth/token
+└── main.ts                          # createApp + serve
 ```
 
-### 1. Declare cada dependência uma vez — `context.ts`
+Abaixo, os arquivos aparecem em **ordem de dependência** — cada um só importa
+de um arquivo que você já viu.
 
-`defineContext` é o único lugar onde dependências são registradas. Há dois
-tipos de slot:
-
-- `singleton(value)` — vive durante todo o tempo de vida do processo (pool do db, logger, mailer).
-- `scoped<T>()` — um valor por request, preenchido por um middleware (usuário atual,
-  tenant id, request id).
-
-`defineContext` retorna `defineRoute`, `defineMiddleware` e `createApp`
-já vinculados ao seu registry. Reexporte-os para que o resto da aplicação herde
-os tipos — `c.get('key')` só passa na checagem de tipos para chaves que você registrou aqui.
-
-```ts
-import { defineContext, scoped, singleton } from '@katajs-framework/core'
-
-import type { User } from './modules/users/users.schema'
-
-type Logger = { info: (msg: string, extra?: object) => void }
-
-const logger: Logger = {
-  info: (msg, extra) => console.log(`[hello] ${msg}`, extra ?? ''),
-}
-
-export const k = defineContext({
-  logger: singleton(logger),
-  currentUser: scoped<User>(),
-})
-
-export const { defineRoute, defineMiddleware, createApp } = k
-
-export type AppRegistry = typeof k.registry
-```
-
-Veja [context & DI](/pt/guide/context-di) para o modelo completo de slots.
-
-### 2. Schemas (DTOs) — `modules/users/users.schema.ts`
+### 1. Schemas (DTOs) — `modules/users/users.schema.ts`
 
 Os schemas Zod de cada domínio vivem em `<domain>.schema.ts`, nunca inline na
 route. Exporte os tipos `z.infer` ao lado deles, para que um único import traga tanto
-o schema em runtime quanto o tipo em tempo de compilação.
+o schema em runtime quanto o tipo em tempo de compilação. Este é o primeiro
+arquivo porque `context.ts`, a seguir, precisa do tipo `User` que ele exporta.
 
 ```ts
 import { z } from 'zod'
@@ -131,6 +106,44 @@ export type UserClaims = z.infer<typeof UserClaimsSchema>
 export type CreateUserBody = z.infer<typeof CreateUserBodySchema>
 ```
 
+### 2. Declare cada dependência uma vez — `context.ts`
+
+`defineContext` é o único lugar onde dependências são registradas. Há dois
+tipos de slot:
+
+- `singleton(value)` — vive durante todo o tempo de vida do processo (pool do db, logger, mailer).
+- `scoped<T>()` — um valor por request, preenchido por um middleware (usuário atual,
+  tenant id, request id).
+
+`defineContext` retorna `defineRoute`, `defineMiddleware` e `createApp`
+já vinculados ao seu registry. Reexporte-os para que o resto da aplicação herde
+os tipos — `c.get('key')` só passa na checagem de tipos para chaves que você registrou aqui.
+O slot `currentUser` abaixo é tipado a partir do DTO `User` do arquivo de
+schema que você acabou de ver, não de `unknown`.
+
+```ts
+import { defineContext, scoped, singleton } from '@katajs-framework/core'
+
+import type { User } from './modules/users/users.schema'
+
+type Logger = { info: (msg: string, extra?: object) => void }
+
+const logger: Logger = {
+  info: (msg, extra) => console.log(`[hello] ${msg}`, extra ?? ''),
+}
+
+export const k = defineContext({
+  logger: singleton(logger),
+  currentUser: scoped<User>(),
+})
+
+export const { defineRoute, defineMiddleware, createApp } = k
+
+export type AppRegistry = typeof k.registry
+```
+
+Veja [context & DI](/pt/guide/context-di) para o modelo completo de slots.
+
 ### 3. Lógica de negócio — `modules/users/users.service.ts`
 
 Services são funções simples e puras — triviais de testar unitariamente, sem imports
@@ -155,7 +168,27 @@ export async function createUser(input: CreateUserBody): Promise<User> {
 
 Mais sobre a fronteira em [services](/pt/guide/services).
 
-### 4. Middleware & scoped slots — `middlewares/auth.ts`
+### 4. Configuração compartilhada — `config.ts`
+
+Um pequeno `config.ts` na raiz de `src/` (um espaço que a
+[estrutura deixa aberto](/pt/guide/project-layout#a-raiz-de-src)) guarda o
+único segredo de que o fluxo JWT precisa. O middleware de auth a seguir, e a
+rota de emissão de token mais adiante neste passo a passo, importam ele — eles
+precisam concordar ou todo token falha na verificação:
+
+```ts
+// src/config.ts
+export const JWT_SECRET = process.env['JWT_SECRET'] ?? 'dev-secret'
+export const TOKEN_TTL_SECONDS = 60 * 60
+```
+
+::: warning
+`dev-secret` mantém o exemplo zero-config. Uma aplicação real define `JWT_SECRET` a partir do
+ambiente e se recusa a subir em produção quando ele não está definido. Nunca leve
+`dev-secret` para produção.
+:::
+
+### 5. Middleware & scoped slots — `middlewares/auth.ts`
 
 Um middleware declara quais scoped slots ele `provides`; seu handler os preenche.
 Retornar uma `Response` curto-circuita o request antes do handler rodar.
@@ -183,28 +216,11 @@ export const requireUser = defineMiddleware({
 })
 ```
 
-`JWT_SECRET` vive num pequeno `config.ts` na raiz de `src/` (um espaço que a
-[estrutura deixa aberto](/pt/guide/project-layout#a-raiz-de-src)) e é
-compartilhado com a rota de emissão de token abaixo — eles precisam concordar ou
-todo token falha na verificação:
-
-```ts
-// src/config.ts
-export const JWT_SECRET = process.env['JWT_SECRET'] ?? 'dev-secret'
-export const TOKEN_TTL_SECONDS = 60 * 60
-```
-
-::: warning
-`dev-secret` mantém o exemplo zero-config. Uma aplicação real define `JWT_SECRET` a partir do
-ambiente e se recusa a subir em produção quando ele não está definido. Nunca leve
-`dev-secret` para produção.
-:::
-
 Para preencher um slot com `c.set` diretamente, ou para acrescentar autorização com
 `requireRole` / `guard`, veja [middleware](/pt/guide/middleware) e o
 [cookbook de auth](/pt/cookbook/auth).
 
-### 5. Routes — `modules/users/users.route.ts`
+### 6. Routes — `modules/users/users.route.ts`
 
 Toda route declara schemas obrigatórios de `input` e `output` — omitir qualquer um é
 um erro de TypeScript. Dentro do handler, `c.input` é totalmente tipado a partir dos schemas
@@ -216,7 +232,8 @@ customizado.
 `{ 200: UserSchema, 404: ErrorBodySchema }` — que tipa e valida cada
 status. `ErrorBodySchema` é o envelope de erro unificado do Kata, a coisa canônica
 para colocar atrás de um status 4xx/5xx. Routes que leem um scoped slot listam o
-middleware provedor em `use:`.
+middleware provedor em `use:` — o `meRoute` abaixo lista o middleware
+`requireUser` do arquivo anterior.
 
 ```ts
 import { ErrorBodySchema } from '@katajs-framework/core'
@@ -261,10 +278,67 @@ export const meRoute = defineRoute({
 provê esse slot e está listado em `use:`. Referência completa em
 [routes & schemas](/pt/guide/routes-schemas).
 
-### 6. Suba ela — `main.ts`
+### 7. DTOs do token — `modules/auth/auth.schema.ts`
+
+A rota de emissão de token abaixo precisa dos seus próprios DTOs — mesma regra
+de `users.schema.ts`: schemas vivem em `<domain>.schema.ts`, nunca inline na
+route.
+
+```ts
+import { z } from 'zod'
+
+export const TokenRequestSchema = z.object({
+  id: z.string().min(1),
+  name: z.string().min(1),
+  email: z.string().email(),
+})
+
+export const TokenResponseSchema = z.object({
+  token: z.string(),
+})
+
+export type TokenRequest = z.infer<typeof TokenRequestSchema>
+export type TokenResponse = z.infer<typeof TokenResponseSchema>
+```
+
+### 8. Emita um token — `modules/auth/auth.route.ts`
+
+Essa rota assina um JWT com `signJwt` para que você possa exercitar `/me` sem
+ferramentas externas. Ela confia em quem a chama e **não** é como você
+autentica usuários reais:
+
+```ts
+import { signJwt } from '@katajs-framework/core/jwt'
+
+import { JWT_SECRET, TOKEN_TTL_SECONDS } from '../../config'
+import { defineRoute } from '../../context'
+
+import { TokenRequestSchema, TokenResponseSchema } from './auth.schema'
+
+export const mintTokenRoute = defineRoute({
+  method: 'POST',
+  path: '/auth/token',
+  input: { body: TokenRequestSchema },
+  output: TokenResponseSchema,
+  handler: async (c) => {
+    const { id, name, email } = c.input.body
+    const token = await signJwt(
+      { name, email },
+      { secret: JWT_SECRET, subject: id, expiresInSeconds: TOKEN_TTL_SECONDS },
+    )
+    return { token }
+  },
+})
+```
+
+A costura real para login, hashing de senha e refresh é sua — veja o
+[guia de JWT](/pt/guide/jwt) e o [cookbook de auth](/pt/cookbook/auth).
+
+### 9. Suba ela — `main.ts`
 
 `createApp({ modules })` conecta cada route exportada em cada módulo a um app
-Hono. Um módulo é apenas o import de namespace de um arquivo `.route.ts`. Entregue
+Hono. Um módulo é apenas o import de namespace de um arquivo `.route.ts` —
+tanto `users.route.ts` quanto `auth.route.ts` dos últimos passos. Entregue
 `app.fetch` ao `@hono/node-server` para escutar.
 
 Middleware transversal vai no slot opcional `middlewares` — uma cadeia que
@@ -297,37 +371,6 @@ O exemplo também passa `requestLogging: true` e um botão explícito de
 `outputValidation`. Ambos são opcionais. Veja [app middleware](/pt/guide/app-middleware)
 e [ciclo de vida](/pt/guide/lifecycle).
 :::
-
-A rota de emissão de token importada acima (`modules/auth/auth.route.ts`) assina um
-JWT com `signJwt` para que você possa exercitar `/me` sem ferramentas externas. Ela confia
-em quem a chama e **não** é como você autentica usuários reais:
-
-```ts
-import { signJwt } from '@katajs-framework/core/jwt'
-
-import { JWT_SECRET, TOKEN_TTL_SECONDS } from '../../config'
-import { defineRoute } from '../../context'
-
-import { TokenRequestSchema, TokenResponseSchema } from './auth.schema'
-
-export const mintTokenRoute = defineRoute({
-  method: 'POST',
-  path: '/auth/token',
-  input: { body: TokenRequestSchema },
-  output: TokenResponseSchema,
-  handler: async (c) => {
-    const { id, name, email } = c.input.body
-    const token = await signJwt(
-      { name, email },
-      { secret: JWT_SECRET, subject: id, expiresInSeconds: TOKEN_TTL_SECONDS },
-    )
-    return { token }
-  },
-})
-```
-
-A costura real para login, hashing de senha e refresh é sua — veja o
-[guia de JWT](/pt/guide/jwt) e o [cookbook de auth](/pt/cookbook/auth).
 
 ## Rode ela
 
