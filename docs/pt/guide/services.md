@@ -156,6 +156,14 @@ realmente existe; o service enxerga apenas um `Store` e um `userId`. A recompens
 quando você troca o store em memória por um banco de dados real: a assinatura do service não
 muda em nada — apenas o singleton que você registra.
 
+A mesma regra responde a uma pergunta que surge assim que um service quer logar
+algo: `c.requestId` vive num contexto que o service nunca enxerga, então como uma
+linha de log da camada de service se correlaciona com ele? Do mesmo jeito — a
+route constrói um logger por requisição a partir de `c.get('logger')` e
+`c.requestId` e o passa como argumento, sem diferença alguma de como passa
+`store`. Veja a [receita de logging](/pt/cookbook/logging) para o exemplo
+completo.
+
 ## Retorne resultados, não respostas
 
 Um service não tem `c`, então ele não pode chamar `c.json(...)` nem `c.error(...)` — e isso é

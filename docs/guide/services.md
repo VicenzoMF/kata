@@ -156,6 +156,13 @@ actually exists; the service sees only a `Store` and a `userId`. The payoff land
 when you swap the in-memory store for a real database: the service signature does not
 change at all — only the singleton you register does.
 
+The same rule answers a question that comes up as soon as a service wants to log
+something: `c.requestId` lives on the context a service never sees, so how does a
+service-layer log line get correlated with it? The same way — the route builds a
+per-request logger from `c.get('logger')` and `c.requestId` and passes it in as an
+argument, no differently from `store`. See the
+[logging recipe](/cookbook/logging) for the worked example.
+
 ## Return results, not responses
 
 A service has no `c`, so it cannot call `c.json(...)` or `c.error(...)` — and that is
