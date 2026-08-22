@@ -245,4 +245,11 @@ is a runnable, type-checked demonstration of everything above:
 - `src/client.test.ts` exercises the same routes at runtime through `testClient(app)`.
 
 The type proofs are the test: `tsc --noEmit` is run in CI, so a regression in the
-runtime-to-type bridge turns a proof `false` and fails the build.
+runtime-to-type bridge turns a proof `false` and fails the build. That is also why
+`client.test.ts` (and `client.ts` itself) sit at the `src/` root instead of a
+separate `tests/` or `client/` tree: the generated `tsconfig.json` only
+type-checks `src/` (`"include": ["src"]`), and that file is a
+[protected config](/adr/0010-ban-no-verify-and-config-tampering) (ADR-0010) — an
+agent cannot widen it to cover a directory outside `src/`. See
+[Cross-module and process-level test suites](/guide/project-layout#cross-module-and-process-level-test-suites)
+for the full rule.

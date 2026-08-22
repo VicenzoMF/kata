@@ -97,6 +97,43 @@ descoberta:
   `<domain>.service.ts`, `<domain>.schema.ts`, `<domain>.test.ts` ou
   `<domain>.hurl` — nada além disso.
 
+### Suítes de teste entre módulos e em nível de processo
+
+Um `<domain>.test.ts` prova um módulo. Algumas suítes não cabem em um único
+domínio — um fluxo HTTP que atravessa fronteiras de módulo, a sequência de
+dreno do graceful shutdown (que precisa fazer spawn de `main.ts` como processo
+filho; veja [Testando o graceful shutdown](/pt/guide/lifecycle#testando-o-graceful-shutdown)),
+ou o [cliente RPC](/pt/guide/rpc-client#testando-o-cliente-in-process) tipado
+exercitado contra o app em execução. Nenhuma dessas tem uma pasta de domínio
+para morar, então elas ficam ao lado de `app.ts`, `context.ts` e `main.ts`, na
+raiz de `src/`: `src/e2e.test.ts`, `src/main.shutdown.test.ts`,
+`src/client.test.ts`. Um fixture compartilhado como um helper `test-server.ts`
+que sobe o app uma vez para várias suítes é exatamente o tipo de arquivo de
+raiz que a seção anterior já permite — nomeie cada arquivo pelo que ele prova;
+o glob padrão do `vitest` (`**/*.test.ts`) o encontra independentemente de
+onde, dentro de `src/`, ele estiver.
+
+**Por que a raiz de `src/` e não um diretório `tests/` ou `e2e/` no topo:** o
+`tsconfig.json` gerado restringe `"include"` a `["src"]` — nada fora de
+`src/` é checado por tipos. Uma suíte colocada em uma pasta `tests/` irmã
+ainda rodaria sob o `vitest`, mas o `tsc` nunca a veria, perdendo em silêncio
+qualquer prova em nível de tipo que a suíte carregue (as fixtures
+`@ts-expect-error` do exemplo trabalhado do cliente RPC são exatamente esse
+tipo de prova — veja [Cliente RPC tipado](/pt/guide/rpc-client)). Alargar o
+`include` resolveria isso, mas `tsconfig.json` é uma
+[config protegida](/adr/0010-ban-no-verify-and-config-tampering) (ADR-0010):
+um agente não pode editá-lo, e um humano editá-lo para isso anula a mesma
+restrição que mantém a varredura do `kata verify` — e do `tsc` — barata e
+exata. Manter toda suíte dentro de `src/`, entre módulos ou não, é o que a
+mantém checada por tipos e dentro do único diretório que o harness de fato
+observa.
+
+Essas suítes na raiz continuam sendo apenas arquivos dentro de `src/`: o
+`kata verify` descarta `*.test.ts` antes de despachar qualquer regra de
+nomenclatura ou schema (veja [Por que a localizabilidade importa](#por-que-a-localizabilidade-importa)
+acima), então nada além do sufixo `.test.ts` de que o próprio `vitest`
+depende é aplicado quanto a posição ou nome na raiz.
+
 A aplicação corresponde exatamente à regra: `kata/schema-file-naming` inspeciona
 apenas caminhos da forma `src/modules/<domain>/<arquivo>` — um arquivo na raiz de
 `src/` nunca tem o nome verificado. Arquivos da raiz ainda são código dentro de
