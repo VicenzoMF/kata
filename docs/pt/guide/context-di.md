@@ -158,10 +158,17 @@ sinaliza — então você descobre enquanto digita, não em produção.
 ::: warning Lendo um singleton na inicialização
 Os cinco membros retornados são a superfície pública. Fora de um request você não
 tem `c`; para alcançar um singleton no boot — por exemplo para logar a porta de
-escuta — chame `k.resolve('logger').info(...)`. `resolve` é exclusivo para singletons:
-um scoped slot não tem valor na inicialização por definição, então tentar alcançar um
-deles fora de um handler de request é um erro em tempo de build
-(`kata/scoped-read-outside-request`).
+escuta — chame `k.resolve('logger').info(...)`. `resolve` é exclusivo para
+singletons — sua própria assinatura de tipo (`SingletonKeys<R>`) rejeita uma
+chave scoped em tempo de compilação, então `k.resolve('currentUser')` é um erro
+comum do `tsc`, não um achado de lint. A regra `kata/scoped-read-outside-request`
+cobre uma superfície diferente — leituras `c.get(...)`, que permanecem tipáveis
+para qualquer chave (scoped inclusive) justamente para que a cadeia de
+middleware, e não o sistema de tipos, decida se uma leitura é segura. Ela pega
+uma leitura scoped `c.get` em qualquer lugar fora de um handler de request,
+incluindo um helper independente que recebe `c` como parâmetro — veja
+[Pegadinhas no cookbook de auth](/pt/cookbook/auth#pegadinhas) para um exemplo
+trabalhado.
 :::
 
 ## Preencher scoped slots acontece no middleware

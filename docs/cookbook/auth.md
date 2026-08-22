@@ -316,6 +316,34 @@ const requireOwner = defineMiddleware({
   an `input.headers` schema, or `c.raw.req.header(...)`).
 - **Keep the secret out of the slot type.** `resolve` decides what lands in the
   slot; return your `User`, never the raw token or secret.
-- **Don't read scoped slots at module load.** They only exist inside a request
-  (enforced by the `kata/scoped-read-outside-request` rule).
-```
+- **Don't read a scoped slot outside a request handler — including from a
+  helper you hand `c` to.** `kata/scoped-read-outside-request` (ADR-0004) flags
+  any `c.get(scopedKey)` that isn't lexically inside a `defineRoute` /
+  `defineMiddleware` handler. That covers the obvious case (module load, where
+  there is no real `c` to read from anyway) *and* a less obvious, fully
+  typechecking one:
+
+  ```ts
+  // Flagged, even though it typechecks and is only ever called in-request:
+  function readCurrentUserId(c: RouteContext<AppRegistry, InputSchemas>) {
+    return c.get('currentUser').id // the rule can't see who calls this
+  }
+
+  export const listOrdersRoute = defineRoute({
+    method: 'GET',
+    path: '/orders',
+    use: [requireAuth],
+    input: {},
+    output: OrderListSchema,
+    handler: (c) => listOrders(c.get('store'), readCurrentUserId(c)),
+  })
+  ```
+
+  The rule proves "inside a handler" by walking the AST from the `c.get` call up
+  to its enclosing function, within one file — it has no call graph, so a helper
+  one level of indirection away is invisible to it even when every call site is
+  safe. That's by design, not a bug to route around: it's the same "single grep
+  answers which route uses which slot" property [static enumerability](/guide/context-di#why-static-enumerability-matters)
+  relies on. Read the slot in the handler and pass the *value* to the helper —
+  `readCurrentUserId(c)` becomes `c.get('currentUser').id` inline, or a helper
+  that takes the resolved `CurrentUser` instead of `c`.

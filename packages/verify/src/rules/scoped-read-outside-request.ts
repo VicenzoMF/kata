@@ -30,6 +30,55 @@
  * matches only the conventional context identifier `c` (as `kata/context-key-not-
  * registered` does) so a `map.get('x')` whose key coincides with a slot name is
  * never mistaken for a scoped read.
+ *
+ * ## Is this rule reachable on code that already typechecks? (issue #248)
+ *
+ * Yes — confirmed empirically, not just reasoned about. `RouteContext.get` and
+ * `MiddlewareContext.get` are monomorphic over *every* registered key, scoped
+ * ones included (see `context.ts`): "whether a scoped slot was actually filled
+ * is a question about the middleware chain, not about types, so `get` types
+ * every registered key." TypeScript therefore never rejects `c.get('scopedKey')`
+ * on its own — it happily typechecks anywhere a correctly-typed `c` is in scope.
+ *
+ * The rule's own module-load example (`const u = c.get('currentUser')` at the
+ * top of a file) is *not* such a case: there is no legitimate way to obtain a
+ * `RouteContext`/`MiddlewareContext`-typed `c` at module scope, so that snippet
+ * only "typechecks" if you fabricate one (`declare const c: ...`), which no real
+ * app does. That is the case issue #248's original POC tried (via `k.resolve`,
+ * a different function whose `SingletonKeys<R>` bound rejects a scoped key at
+ * the type level — a real, but unrelated, guard).
+ *
+ * The genuinely reachable trigger is a **free-standing helper**: a function
+ * (same file or imported across a module boundary) typed to take a `c` and
+ * read a scoped slot, called *correctly, during the request* from inside a real
+ * `defineRoute`/`defineMiddleware` handler. Verified directly against
+ * `examples/shop` — the following passes `tsc --noEmit` with zero errors and is
+ * still flagged by `kata verify`:
+ *
+ * ```ts
+ * function readCurrentUserId(c: RouteContext<AppRegistry, InputSchemas>): string {
+ *   return c.get('currentUser').id // flagged, even though nothing here throws
+ * }
+ *
+ * export const listOrdersRoute = defineRoute({
+ *   method: 'GET',
+ *   path: '/orders',
+ *   use: [requireAuth],
+ *   input: {},
+ *   output: OrderListSchema,
+ *   handler: (c) => listOrders(c.get('store'), readCurrentUserId(c)), // called in-request
+ * })
+ * ```
+ *
+ * The rule fires because `isInsideRequestHandler` walks *lexical* ancestors
+ * within one file's AST — it has no call graph, so it cannot see that
+ * `readCurrentUserId` is only ever invoked from inside a handler. This is
+ * intentional, not a gap to close: ADR-0004's payoff is "a single grep answers
+ * which route uses which slot," and a helper that reads `c.get(scopedKey)`
+ * itself breaks that property even when it is always called at a safe time. So
+ * this rule is **not purely defensive** — it has a real trigger on fully
+ * typechecking, runtime-safe code, by design (see `kata/scoped-slot-not-provided`
+ * for the sibling rule that *is* about an actual runtime throw).
  */
 import ts from 'typescript'
 
