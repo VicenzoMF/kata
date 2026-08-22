@@ -39,7 +39,7 @@ export const createUserRoute = defineRoute({
 })
 
 /**
- * Non-JSON output (ADR-0022): `raw('text/csv', z.string())` declares that this
+ * Non-JSON output (ADR-0024): `raw('text/csv', z.string())` declares that this
  * route serves CSV, not JSON — `output` can no longer lie about a `Response`'s
  * body the way a plain `z.string()` could (issue #208). `hc<typeof app>` types
  * the client's `.text()` accordingly instead of `.json()`.

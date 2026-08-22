@@ -215,8 +215,8 @@ describe('multi-status output: a Response is validated against output[status]', 
   })
 })
 
-describe('multi-status output: single-entry ↔ status 200 are unified (ADR-0022)', () => {
-  it('a Response against a plain Zod output is a tsc error (the escape hatch ADR-0022 closes)', async () => {
+describe('multi-status output: single-entry ↔ status 200 are unified (ADR-0024)', () => {
+  it('a Response against a plain Zod output is a tsc error (the escape hatch ADR-0024 closes)', async () => {
     const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
     const k = defineContext({})
     const route = k.defineRoute({
@@ -225,7 +225,7 @@ describe('multi-status output: single-entry ↔ status 200 are unified (ADR-0022
       input: {},
       output: CreatedSchema, // single schema, not a map
       // @ts-expect-error — a bare Response against a plain Zod output no longer
-      // compiles (ADR-0022); this line exercises the matching runtime guard,
+      // compiles (ADR-0024); this line exercises the matching runtime guard,
       // which now validates a Response at the schema's own status (200)
       // exactly like a plain return — instead of passing it through unchecked.
       handler: (c) => c.json({ totally: 'wrong' }, 200),
@@ -246,7 +246,7 @@ describe('multi-status output: single-entry ↔ status 200 are unified (ADR-0022
     const k = defineContext({})
     // The map form is how a route pairs a 200 success schema with another
     // status it sets via `c.json`/`c.error` — the single-schema form only
-    // ever describes 200 (ADR-0011, ADR-0022).
+    // ever describes 200 (ADR-0011, ADR-0024).
     const route = k.defineRoute({
       method: 'POST',
       path: '/things',

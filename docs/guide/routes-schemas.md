@@ -244,7 +244,7 @@ emits is documented in full under [Errors](/guide/errors).)
 
 A route only accepts a `Response` return for a status its `output` declares — a
 single entry declares just `200` (equivalent to `{ 200: entry }`), a map declares
-whatever keys it lists (ADR-0022). For a **declared** status, Kata validates a
+whatever keys it lists (ADR-0024). For a **declared** status, Kata validates a
 *clone* of the body against that entry before forwarding your original `Response`
 unchanged — a JSON schema reads it as JSON, a `raw()` entry reads it as text (see
 below). For an **undeclared** status — any status a map doesn't list — the
