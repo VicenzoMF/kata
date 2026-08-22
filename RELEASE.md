@@ -194,3 +194,61 @@ jobs:
 `--provenance` needs `id-token: write`, npm ≥ 9.5, and a public repo; drop it
 otherwise. For multi-package releases later, consider Changesets — overkill
 while `@katajs-framework/core` is the only published package.
+
+---
+
+# Releasing `@katajs-framework/docs-mcp` to npm
+
+`packages/docs-mcp/scripts/copy-docs.mjs` bundles `docs/{guide,cookbook,reference,adr}`
+into the package at **build** time (ADR-0023) — the published tarball is a
+frozen snapshot, not a live read of the monorepo's `docs/`. That means a
+docs-mcp release goes stale the moment `docs/` changes underneath it or
+`@katajs-framework/core` ships a version the snapshot doesn't describe yet
+(issue #235: an MCP consumer saw `npm install katajs` and six ADRs numbered
+`0016` months after both were fixed on `main`, because the snapshot was never
+rebuilt against current docs).
+
+**Release whenever either is true:**
+- `docs/{guide,cookbook,reference,adr}` changed since the last docs-mcp release, **or**
+- `@katajs-framework/core` shipped a new version.
+
+There is no automatic trigger for this yet — check it by hand (or eyeball
+`git log --oneline <last-docs-mcp-tag>..HEAD -- docs/ packages/kata` before
+publishing).
+
+## Manual release flow
+
+```sh
+# 0. Bump packages/docs-mcp/package.json version if needed.
+
+# 1. Build (copies docs/ fresh, then bundles) and smoke-check the local build.
+pnpm --filter=@katajs-framework/docs-mcp build
+pnpm --filter=@katajs-framework/docs-mcp smoke-check
+
+# 2. Publish (same manual, passkey-gated flow as core — see above;
+#    prepublishOnly re-runs build + typecheck).
+cd packages/docs-mcp
+npm publish --access public
+
+# 3. Tag the release in git
+git tag docs-mcp-v0.1.0 && git push origin docs-mcp-v0.1.0
+
+# 4. Post-publish smoke check against the real registry artifact, not just
+#    the local build — confirms `npx -y` resolves and serves the published
+#    snapshot.
+node scripts/smoke-check.mjs --pkg @katajs-framework/docs-mcp@0.1.0
+```
+
+`smoke-check.mjs` speaks real MCP protocol to the running server (spawned via
+stdio) and asserts two things a stale snapshot breaks silently:
+`search_docs("npm install")` surfaces `@katajs-framework/core` (not a stale
+unscoped `katajs`), and every indexed ADR has a unique number. Run it after
+step 1 against the local build, and again after step 2 against the published
+package — a green local check with a red registry check means the publish
+itself went wrong (wrong tag, stale `npm pack`, etc.), not the docs.
+
+CI automation for this (rebuild + republish + smoke-check on a `docs-mcp-v*`
+tag, mirroring core's release workflow above) is not wired yet — same
+constraint as core: the harness blocks agent edits to
+`.github/workflows/*`, so that workflow is an owner action from a
+non-Claude shell.

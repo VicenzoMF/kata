@@ -6,13 +6,14 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { z } from 'zod'
 
+import pkg from '../package.json' with { type: 'json' }
 import type { DocsIndex } from './indexer'
 import { getToc, readDoc, searchDocs } from './tools'
 
 const SECTIONS = ['guide', 'cookbook', 'reference', 'adr'] as const
 
 export const createServer = (index: DocsIndex): McpServer => {
-  const server = new McpServer({ name: 'kata-docs', version: '0.0.0' })
+  const server = new McpServer({ name: 'kata-docs', version: pkg.version })
 
   server.registerTool(
     'search_docs',
