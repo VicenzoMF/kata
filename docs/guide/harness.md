@@ -183,6 +183,54 @@ Because the rules are pure functions over parsed files, they are also trivially
 unit-tested and carry a zero false-positive bias: when the registry cannot be
 determined, the dependent rules no-op rather than guess.
 
+## Non-goals: what `kata verify` deliberately does not check
+
+Not every property worth checking becomes a rule. One came up in review
+([issue #251](https://github.com/VicenzoMF/kata/issues/251)): a module under
+`src/modules/<domain>/` whose routes are never passed into any
+`createApp({ modules })` is dead surface — every route inside it still passes
+`kata/no-route-without-output-schema` and friends individually, because those
+rules scan `*.route.ts` files directly (see the table above) and never ask
+whether the module reached an app. Should an "orphan module" be its own rule?
+
+**Decided: a documented non-goal, not a rule.**
+
+Every rule above proves a *presence* — a `c.get('key')` that exists and is
+unregistered, a `class` that exists, an inline `z.object(...)` that exists.
+The unreadable case (a spread, a value computed at runtime) is safe to skip,
+because skipping only forgoes the check on that one expression; the "no
+cross-file graph to resolve at lint time" invariant above holds because each
+rule's answer stays local to what it can read.
+
+An orphan-module rule would prove an *absence*: that no `createApp({ modules })`
+anywhere in the project ever includes this module. That is not a local
+question:
+
+- A project can have more than one `createApp` call — separate servers, a
+  worker, example apps each wiring a different subset. "Reachable" has to be a
+  union over every call site the project has, not one.
+- `modules:` is exactly the shape `kata verify` already treats as unresolvable
+  when it shows up in `middlewares:` / `use:` — built from a shared list,
+  filtered by an env flag, assembled in a test harness. Every other rule
+  answers an unresolved expression with "skip it," and that costs one
+  unchecked call site. Here it costs the one piece of evidence that would have
+  cleared the module: the moment a project uses one indirection, a
+  correctly-wired module starts reading as orphaned. The failure mode this
+  rule exists to avoid is exactly the one it would introduce.
+- Nothing mandates it. `createApp({ modules })` taking a hand-picked subset is
+  the working shape — a module scaffolded ahead of being wired in, one built
+  for a deployment the current app isn't — so there is no ADR to anchor a rule
+  to, unlike every rule in the table above. The rule-set epic
+  ([#164](https://github.com/VicenzoMF/kata/issues/164)) scoped itself to
+  mechanically enforcing ADRs already on the books and has already shipped its
+  full scope (6/6 sub-issues); orphan-module detection was never part of it.
+
+Reachability across an arbitrary number of entry points is a whole-program
+question — the kind a dedicated dead-code tool (`ts-prune`, `knip`) answers
+with full type information, not a sub-100ms syntactic pass over one file at a
+time. If that becomes worth having, it is a separate tool wired into CI, not a
+`kata verify` rule.
+
 ## The config-tampering guard
 
 The harness-engineering literature names two reflexes a model reaches for the
