@@ -23,13 +23,13 @@ export type CorsOptions = NonNullable<Parameters<typeof honoCors>[0]>
  * the `Access-Control-Allow-*` headers it sets survive into kata's final
  * response.
  *
- * Preflight: today kata registers a handler only for a route's declared method
- * and has no implicit `OPTIONS` route, so a browser preflight (`OPTIONS`) is not
- * intercepted by `cors()` in a `use` chain — it still only sets the CORS headers
- * on the actual response. ADR-0020 decides to close this gap by auto-synthesizing
- * an `OPTIONS` responder for any path bearing `cors()`; until that lands, apply
- * CORS at the app level on the Hono instance returned by `createApp`
- * (`app.use('*', ...)`) for full preflight handling. See
+ * Preflight: a `cors()` passed to `createApp`'s `middlewares` array (not a
+ * per-route `use` chain) answers a browser preflight (`OPTIONS`) itself — kata
+ * has no implicit `OPTIONS` route, so an unmatched `OPTIONS` request runs the
+ * global chain before the 404/405 decision, and `cors()` there short-circuits
+ * it with a `204` carrying the `Access-Control-Allow-*` headers. A per-route
+ * `use: [cors()]`, like this one, still only decorates that route's actual
+ * responses and does not answer `OPTIONS` for it. See
  * https://github.com/VicenzoMF/kata/blob/v0.3.1/docs/adr/0020-cors-preflight-and-response-transform-seam.md.
  */
 export function cors<R extends Registry = Registry>(options?: CorsOptions): Middleware<R> {
