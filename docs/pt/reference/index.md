@@ -89,7 +89,10 @@ Tipos:
 | `SingletonKeys` | As chaves singleton de um registry. |
 | `ScopedKeys` | As chaves scoped de um registry — as únicas chaves que um middleware pode `provides`/`set`. |
 | `ResolvedValue` | O tipo de valor para o qual um slot resolve via `c.get`. |
-| `Logger` | O formato de logger estruturado que um singleton `logger` pode satisfazer para logging por request. |
+| `Logger` | O formato de logger estruturado que um singleton `logger` pode satisfazer para logging por request. `extra.err` chega pré-achatado como um `SerializedError`, nunca um `Error` bruto. |
+| `SerializedError` | O espelho de dados puros de um `Error` — `{ name, message, stack?, cause?, errors? }` — que `logger.error` recebe sob `extra.err`. |
+| `LogExtra` | O tipo do payload `extra` de todo método de `Logger`: aberto (`Record<string, unknown>`), com a chave reservada `err` tipada como `SerializedError`. |
+| `RequestLogFields` | O registro por requisição que `requestLogging` passa como `extra`: `{ requestId, method, path, status, durationMs }`. Veja [createApp](/pt/reference/create-app#o-registro-por-requisicao). |
 | `OutputValidationMode` | `'strict' \| 'log' \| 'off'` — como uma divergência de output-schema é tratada (ADR-0009). |
 | `ErrorBody` | O tipo do objeto error-envelope: `{ error, message, issues? }`. |
 | `ErrorExtra` | Os extras opcionais para `c.error` / `buildErrorBody`: `{ status?, issues? }`. |

@@ -94,6 +94,7 @@ Types:
 | `Logger` | The structured logger shape a `logger` singleton may satisfy for per-request logging. `extra.err` arrives pre-flattened as a `SerializedError`, never a raw `Error`. |
 | `SerializedError` | The plain-data mirror of an `Error` — `{ name, message, stack?, cause?, errors? }` — that `logger.error` receives under `extra.err`. |
 | `LogExtra` | The `extra` payload type of every `Logger` method: open (`Record<string, unknown>`), with the reserved `err` key typed as `SerializedError`. |
+| `RequestLogFields` | The per-request record `requestLogging` passes as `extra`: `{ requestId, method, path, status, durationMs }`. See [createApp](/reference/create-app#the-per-request-record). |
 | `OutputValidationMode` | `'strict' \| 'log' \| 'off'` — how an output-schema mismatch is handled (ADR-0009). |
 | `ErrorBody` | The error-envelope object type: `{ error, message, issues? }`. |
 | `ErrorExtra` | The optional extras for `c.error` / `buildErrorBody`: `{ status?, issues? }`. |
