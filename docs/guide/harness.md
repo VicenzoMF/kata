@@ -351,6 +351,62 @@ convention instead of `.claude/` or `.codex/`.
 default; `--minimal` writes only the harness. See [Bootstrap CLI](/guide/cli) for
 every flag.
 
+## Running `.hurl` in CI
+
+The `Stop` layer in the table above runs `pnpm test` — Vitest only. The `.hurl`
+suites each module ships (see [project layout](/guide/project-layout)) are a
+separate, fourth layer that the harness does not wire up on its own, because
+they need something the other three layers don't: a live server. `pnpm hurl`
+against a server nobody started just fails with a connection error, so the
+suite is easy to leave outside every automated gate — validated by hand once
+and never run again.
+
+Kata's own CI closes that gap for the framework's example apps, and the same
+shape works for a generated app: **start the server, wait for it to accept
+connections, run Hurl, tear the server down.** This is the real job from
+[`.github/workflows/ci.yml`](https://github.com/VicenzoMF/kata/blob/main/.github/workflows/ci.yml),
+which boots `examples/hello` and `examples/shop` on separate ports and runs
+both suites against them:
+
+```yaml
+- name: Install hurl
+  run: |
+    curl -fsSL -o /tmp/hurl.deb \
+      "https://github.com/Orange-OpenSource/hurl/releases/download/${HURL_VERSION}/hurl_${HURL_VERSION}_amd64.deb"
+    sudo dpkg -i /tmp/hurl.deb
+
+- name: Run hurl E2E (hello + shop)
+  run: |
+    pnpm --filter=hello start &
+    HELLO_PID=$!
+    PORT=3001 pnpm --filter=shop start &
+    SHOP_PID=$!
+    trap 'kill "$HELLO_PID" "$SHOP_PID" 2>/dev/null || true' EXIT
+    npx --yes wait-on tcp:3000 tcp:3001 --timeout 30000
+    pnpm --filter=hello hurl
+    pnpm --filter=shop run hurl --variable host=http://localhost:3001
+```
+
+A generated app has one server, not two, so the recipe collapses to four
+lines — this is exactly what the scaffolded `README.md` documents under
+"Continuous integration":
+
+```bash
+pnpm start &
+SERVER_PID=$!
+trap 'kill "$SERVER_PID" 2>/dev/null || true' EXIT
+npx --yes wait-on tcp:3000 --timeout 30000
+pnpm hurl
+```
+
+Nothing here is GitHub-Actions-specific — it is four shell lines, so the same
+block works as a step in any CI, or as a local pre-push script. `wait-on`
+(fetched ad hoc with `npx --yes`, no dependency to add) polls the port instead
+of a fixed `sleep`, so the job runs as soon as the server is actually ready
+and never races a slow boot. The `trap` guarantees the server dies whether the
+suite passes or fails — a failing request fails the step (and therefore the
+job) without leaking a process behind it.
+
 ## See also
 
 - [Bootstrap CLI](/guide/cli) — the full `kata` command surface.

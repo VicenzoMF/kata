@@ -330,7 +330,44 @@ curl -X POST localhost:3000/greetings -H 'content-type: application/json' -d '{"
 - \`pnpm typecheck\` — \`tsc --noEmit\`.
 - \`kata verify\`    — fast deterministic lint rules (ADR-0003/0004/0005).
 - \`pnpm hurl\`      — API E2E (needs [Hurl](https://hurl.dev) installed and the
-  server running: \`pnpm start\` in another terminal).
+  server running: \`pnpm start\` in another terminal). Unlike \`pnpm test\`,
+  this is **not** run by the Stop hook or any local git hook — wire it into CI
+  yourself (see below) so it is not the only suite nobody automates.
+
+## Continuous integration
+
+\`pnpm hurl\` expects a server already listening, so a CI job needs a scripted
+boot / wait / run / teardown sequence, not just \`pnpm hurl\` on its own. This is
+the exact recipe Kata's own CI runs against \`examples/hello\` and
+\`examples/shop\`
+([\`.github/workflows/ci.yml\`](https://github.com/VicenzoMF/kata/blob/main/.github/workflows/ci.yml)),
+trimmed to one server:
+
+\`\`\`yaml
+# .github/workflows/ci.yml
+- run: pnpm install --frozen-lockfile
+- run: pnpm test
+- run: pnpm typecheck
+- run: pnpm exec kata verify --strict-coverage
+- name: Install hurl
+  run: |
+    curl -fsSL -o /tmp/hurl.deb \\
+      https://github.com/Orange-OpenSource/hurl/releases/download/8.0.1/hurl_8.0.1_amd64.deb
+    sudo dpkg -i /tmp/hurl.deb
+- name: Run hurl E2E
+  run: |
+    pnpm start &
+    SERVER_PID=$!
+    trap 'kill "$SERVER_PID" 2>/dev/null || true' EXIT
+    npx --yes wait-on tcp:3000 --timeout 30000
+    pnpm hurl
+\`\`\`
+
+The last step is plain shell, not GitHub-Actions-specific: start the server in
+the background, \`wait-on\` its port instead of a fixed \`sleep\`, run
+\`pnpm hurl\`, and the \`trap\` kills the server on exit whether the suite passed
+or failed. Run those four lines verbatim in any other CI, or as a local
+pre-push script.
 
 ## Add a module
 
