@@ -141,7 +141,7 @@ export type RouteContext<R extends Registry, I extends InputSchemas> = {
 }
 
 /**
- * A non-JSON response contract for one `output` entry (ADR-0022): the body is
+ * A non-JSON response contract for one `output` entry (ADR-0024): the body is
  * validated as **text** against `schema` instead of JSON, and the response's
  * `content-type` header must match `contentType` (parameters like
  * `; charset=utf-8` are ignored). Build one with {@link raw}.
@@ -153,7 +153,7 @@ export type RawOutput<T extends z.ZodTypeAny = z.ZodTypeAny> = {
 }
 
 /**
- * Declare a non-JSON response contract (ADR-0022) for an `output` entry: the
+ * Declare a non-JSON response contract (ADR-0024) for an `output` entry: the
  * body is validated as text against `schema`, and the response's
  * `content-type` must match `contentType`. Use it wherever a route serves
  * something other than JSON — CSV, plain text, a file download:
@@ -165,21 +165,21 @@ export type RawOutput<T extends z.ZodTypeAny = z.ZodTypeAny> = {
  * A `raw` entry has no plain-value equivalent, so it can only be satisfied by
  * a `Response` the handler builds itself — `RouteHandlerReturn` enforces this
  * at compile time, and `hc<typeof app>` types the endpoint's client response
- * with `.text()` instead of `.json()` (ADR-0022).
+ * with `.text()` instead of `.json()` (ADR-0024).
  */
 export function raw<T extends z.ZodTypeAny>(contentType: string, schema: T): RawOutput<T> {
   return { __kata: 'raw', contentType, schema }
 }
 
-/** One `output` entry: a JSON body schema, or a non-JSON contract (ADR-0022). */
+/** One `output` entry: a JSON body schema, or a non-JSON contract (ADR-0024). */
 export type OutputEntry = z.ZodTypeAny | RawOutput
 
-/** A response-body contract keyed by HTTP status code (ADR-0011, ADR-0022). */
+/** A response-body contract keyed by HTTP status code (ADR-0011, ADR-0024). */
 export type OutputMap = { readonly [status: number]: OutputEntry }
 
 /**
  * A route's `output` contract: a single entry for the success (200) body —
- * the ADR-0003 form, widened by ADR-0022 to also accept {@link raw} — or a
+ * the ADR-0003 form, widened by ADR-0024 to also accept {@link raw} — or a
  * map from HTTP status code to the entry for that status (ADR-0011), e.g.
  * `{ 200: UserSchema, 404: ErrorBodySchema }`.
  */
@@ -189,7 +189,7 @@ export type OutputSpec = OutputEntry | OutputMap
  * The body a handler may return as a *plain value* (not via `c.json` / `c.error`).
  * It is always the 200 body: `z.infer` of the single schema, or of `output[200]`
  * for a map. `never` when the success entry is a {@link RawOutput} — it has no
- * plain-value equivalent (ADR-0022) — or when a map has no `200` entry; either
+ * plain-value equivalent (ADR-0024) — or when a map has no `200` entry; either
  * way the route must return a `Response` (e.g. `c.json(body, 201)`), since a
  * plain return cannot express a non-200 status (ADR-0011).
  */
@@ -209,11 +209,11 @@ export type SuccessOutput<O extends OutputSpec> = O extends RawOutput
 
 /**
  * What a handler may return for a given `output` declaration (ADR-0011,
- * ADR-0022):
+ * ADR-0024):
  * - a single {@link RawOutput} entry — only a `Response` satisfies it.
  * - a single plain Zod schema — only the plain value. A bare `Response` no
  *   longer bypasses validation here: that escape hatch is what let a
- *   declared `output` lie about a non-JSON body (ADR-0022). A route that
+ *   declared `output` lie about a non-JSON body (ADR-0024). A route that
  *   needs `c.error`/`c.json(body, status)` for another status declares the
  *   map form instead — the same migration ADR-0011 already established.
  * - a status→schema map — a plain value for `output[200]` (if declared and
@@ -653,12 +653,12 @@ async function readInputs<I extends InputSchemas>(
 /** The status a plain (non-`Response`) handler return maps to (ADR-0011). */
 const SUCCESS_STATUS = 200
 
-/** True when `entry` is a {@link RawOutput} built by `raw()` (ADR-0022). */
+/** True when `entry` is a {@link RawOutput} built by `raw()` (ADR-0024). */
 function isRawOutput(entry: OutputEntry): entry is RawOutput {
   return (entry as { __kata?: unknown }).__kata === 'raw'
 }
 
-/** A route `output` is a single entry (ADR-0003/ADR-0022) or a status→entry map (ADR-0011). */
+/** A route `output` is a single entry (ADR-0003/ADR-0024) or a status→entry map (ADR-0011). */
 function isOutputEntry(output: OutputSpec): output is OutputEntry {
   return (
     typeof (output as { safeParse?: unknown }).safeParse === 'function' ||
@@ -668,10 +668,10 @@ function isOutputEntry(output: OutputSpec): output is OutputEntry {
 
 /**
  * The `output` entry declared for `status`, treating a single entry (ADR-0003
- * schema or ADR-0022 `raw`) as sugar for `{ 200: entry }` (ADR-0011) — the
+ * schema or ADR-0024 `raw`) as sugar for `{ 200: entry }` (ADR-0011) — the
  * single-entry and map forms are read through the same lookup, so a
  * `Response`'s body is validated identically regardless of which form the
- * route used (ADR-0022 unifies what ADR-0011 left as two disagreeing paths).
+ * route used (ADR-0024 unifies what ADR-0011 left as two disagreeing paths).
  */
 function entryForStatus(output: OutputSpec, status: number): OutputEntry | undefined {
   if (isOutputEntry(output)) return status === SUCCESS_STATUS ? output : undefined
@@ -681,7 +681,7 @@ function entryForStatus(output: OutputSpec, status: number): OutputEntry | undef
 /**
  * Build + validate the response for whatever the handler returned, honouring the
  * configured mode (ADR-0009) against the route's `output` contract (ADR-0003 single
- * entry, ADR-0011 status→entry map, ADR-0022 non-JSON `raw` entries):
+ * entry, ADR-0011 status→entry map, ADR-0024 non-JSON `raw` entries):
  * - a **plain value** is the 200 body — validated against the success entry.
  * - a **`Response`** carries its own status; its body is validated against
  *   `entryForStatus(output, response.status)` when that status is declared,
@@ -750,7 +750,7 @@ function buildOutputResponse<R extends Registry>(
  * set is preserved; `finalizeResponse` merges in app-level headers afterwards
  * (ADR-0020, issue #207), which is not this function's concern. Reached for
  * any declared status — single entry or map, unified by `entryForStatus`
- * (ADR-0022) — when the mode is not `off`.
+ * (ADR-0024) — when the mode is not `off`.
  */
 async function validateResponseBody<R extends Registry>(
   c: import('hono').Context,
@@ -780,7 +780,7 @@ async function validateResponseBody<R extends Registry>(
 
 /**
  * Validate a handler-returned `Response`'s body against a declared `raw`
- * entry (ADR-0022):
+ * entry (ADR-0024):
  * - the `content-type` header must match `entry.contentType` — cheap (a
  *   header read), so it runs whenever the mode is not `off`.
  * - the **text** body must match `entry.schema` — needs `clone().text()`,
@@ -826,7 +826,7 @@ function logOutputMismatch<R extends Registry>(
   logFrameworkError(options.logger, msg, { issues })
 }
 
-/** Server-side diagnostic for a `raw` output content-type mismatch (ADR-0022). */
+/** Server-side diagnostic for a `raw` output content-type mismatch (ADR-0024). */
 function logOutputContentTypeMismatch<R extends Registry>(
   route: Route<R>,
   status: number,
@@ -951,7 +951,7 @@ async function runMiddlewareChain<R extends Registry>(
 }
 
 /**
- * One-time startup diagnostic (ADR-0022): when a route declares a `raw`
+ * One-time startup diagnostic (ADR-0024): when a route declares a `raw`
  * output entry and the resolved mode is `log`, its body will never be
  * buffered to check it — say so once at registration instead of staying
  * silent about an unvalidated contract. `strict` needs no warning (the body
@@ -974,7 +974,7 @@ function warnUnvalidatedRawBodies<R extends Registry>(
   }
 }
 
-/** Every status a route's `output` declares as a `raw` entry (ADR-0022). */
+/** Every status a route's `output` declares as a `raw` entry (ADR-0024). */
 function rawStatusesOf(output: OutputSpec): number[] {
   if (isOutputEntry(output)) return isRawOutput(output) ? [SUCCESS_STATUS] : []
   return Object.entries(output)

@@ -25,9 +25,9 @@ export const requestIdRoute = defineRoute({
  * bodyLimit()]` chain never reached it. Demonstrates that it now does, plus
  * the correlation id and a handler-set `content-type` surviving alongside it.
  *
- * `output` declares `raw('text/csv', ...)` (ADR-0022, issue #208) instead of a
+ * `output` declares `raw('text/csv', ...)` (ADR-0024, issue #208) instead of a
  * plain schema: a plain `output: ExportCsvOutputSchema` would make the
- * `Response` return below a `tsc` error, and — before ADR-0022 — silently
+ * `Response` return below a `tsc` error, and — before ADR-0024 — silently
  * skipped validating it entirely, exactly the bug issue #208 fixed. Under
  * `strict` (the default outside production), the content-type and body are
  * now genuinely checked against this declaration.

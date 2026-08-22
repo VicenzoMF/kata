@@ -56,7 +56,7 @@ type KataToHonoInput<I extends InputSchemas> = {
 
 /**
  * One Hono `Schema` endpoint entry; response side uses `z.infer` (post-parse).
- * `outputFormat` follows the declared entry (ADR-0022): `'text'` for a
+ * `outputFormat` follows the declared entry (ADR-0024): `'text'` for a
  * `raw()` entry, so `hc` types `.text()` on the client response instead of
  * `.json()`; `'json'` for a plain Zod schema, unchanged from ADR-0003.
  */
@@ -67,7 +67,7 @@ type HonoEndpoint<I extends InputSchemas, Out, S extends number, F extends 'json
   status: S
 }
 
-/** The endpoint one map-form `output[S]` entry contributes (ADR-0011, ADR-0022). */
+/** The endpoint one map-form `output[S]` entry contributes (ADR-0011, ADR-0024). */
 type MapEntryEndpoint<I extends InputSchemas, E, S extends number> =
   E extends RawOutput<infer T extends z.ZodTypeAny>
     ? HonoEndpoint<I, z.infer<T>, S, 'text'>
@@ -78,7 +78,7 @@ type MapEntryEndpoint<I extends InputSchemas, E, S extends number> =
 /**
  * The endpoint(s) a Kata `output` contributes. A single entry → one `status: 200`
  * endpoint (ADR-0003, unchanged; `outputFormat: 'text'` when it is `raw()`,
- * ADR-0022). A status→entry map → a union of endpoints, one per declared
+ * ADR-0024). A status→entry map → a union of endpoints, one per declared
  * status (ADR-0011) — the exact shape Hono accumulates from chained
  * `c.json(body, status)` calls, so the client narrows with
  * `InferResponseType<call, Status>`.

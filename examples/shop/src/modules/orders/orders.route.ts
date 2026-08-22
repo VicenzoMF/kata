@@ -59,7 +59,7 @@ export const listOrdersRoute = defineRoute({
 /**
  * Multi-status output (ADR-0011): the 200 success body is `OrderSchema`; a miss
  * returns the unified error envelope at 404 (ADR-0008). A bare `Response`
- * against a plain Zod output no longer bypasses validation (ADR-0022), so the
+ * against a plain Zod output no longer bypasses validation (ADR-0024), so the
  * 404 status must be declared here for `c.error` to type-check.
  */
 export const getOrderRoute = defineRoute({

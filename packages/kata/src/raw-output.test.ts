@@ -46,7 +46,7 @@ function trackedResponse(
 }
 
 // ────────────────────────────────────────────────────────────────────────────
-// Runtime — raw() content-type + body validation (ADR-0022)
+// Runtime — raw() content-type + body validation (ADR-0024)
 // ────────────────────────────────────────────────────────────────────────────
 
 describe('raw() output: content-type + body validation', () => {
@@ -148,7 +148,7 @@ describe('raw() output: content-type + body validation', () => {
   })
 })
 
-describe('raw() output: the body is never buffered outside strict mode (ADR-0022)', () => {
+describe('raw() output: the body is never buffered outside strict mode (ADR-0024)', () => {
   it('log: content-type matches — the body is never cloned/buffered', async () => {
     const { response, wasCloned } = trackedResponse('a huge csv file', 'text/csv')
     const k = defineContext({})
@@ -192,7 +192,7 @@ describe('raw() output: the body is never buffered outside strict mode (ADR-0022
   })
 })
 
-describe('raw() output: startup diagnostic for unvalidated bodies (ADR-0022)', () => {
+describe('raw() output: startup diagnostic for unvalidated bodies (ADR-0024)', () => {
   it('warns once at registration (not per request) when the mode will never check the body', async () => {
     const logger = recordingLogger()
     const k = defineContext({ logger: singleton(logger) })
@@ -261,7 +261,7 @@ describe('raw() output: mixed with a JSON status in the map form', () => {
 })
 
 // ────────────────────────────────────────────────────────────────────────────
-// Type-level — RouteHandlerReturn + the RPC `Schema` derivation (ADR-0022)
+// Type-level — RouteHandlerReturn + the RPC `Schema` derivation (ADR-0024)
 // ────────────────────────────────────────────────────────────────────────────
 
 const proofCtx = defineContext({})
@@ -272,7 +272,7 @@ const rawRoute = proofCtx.defineRoute({
   input: {},
   output: raw('text/csv', z.string()),
   // @ts-expect-error — a raw() entry has no plain-value equivalent; only a
-  // Response satisfies it (ADR-0022).
+  // Response satisfies it (ADR-0024).
   handler: () => 'id,name\n1,Ada',
 })
 void rawRoute

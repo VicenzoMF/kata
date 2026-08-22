@@ -36,7 +36,7 @@ function post(use: UseChain, body: unknown, headers: Record<string, string> = {}
 
 // A route whose handler returns a raw `Response` — the case that used to drop
 // every app-level header (issue #207) because it never goes through `c.json`.
-// `output` declares a non-JSON `raw()` entry (ADR-0022, issue #208) — it must,
+// `output` declares a non-JSON `raw()` entry (ADR-0024, issue #208) — it must,
 // since a bare Response no longer type-checks against a plain Zod schema —
 // with output validation off: these tests exercise the header-merge seam, not
 // content-type/body validation, and the fixture's callers pass inconsistent
