@@ -43,7 +43,8 @@
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "start": "pnpm run copy-docs && tsx src/main.ts",
     "smoke-check": "node scripts/smoke-check.mjs",
-    "prepublishOnly": "pnpm run build && pnpm run typecheck"
+    "check-publish-ready": "node scripts/check-publish-ready.mjs",
+    "prepublishOnly": "pnpm run check-publish-ready && pnpm run build && pnpm run typecheck"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.30.0",
