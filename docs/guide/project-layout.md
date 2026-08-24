@@ -231,7 +231,7 @@ src/modules/users/
 ├── users.route.ts
 ├── users.schema.ts
 ├── users.service.ts
-├── users.service.test.ts
+├── users.test.ts
 └── users.hurl
 ```
 

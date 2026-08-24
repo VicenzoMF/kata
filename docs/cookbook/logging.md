@@ -152,7 +152,7 @@ Because the service still just takes an argument, the test passes a fake
 `requestId` in sight:
 
 ```ts
-// src/modules/orders/orders.service.test.ts
+// src/modules/orders/orders.test.ts
 import { describe, expect, it } from 'vitest'
 
 import type { ServiceLogger } from '../../logging'

@@ -234,12 +234,12 @@ route. See [Errors](/guide/errors) for the envelope.
 Everything above pays off here. Because a service imports no framework and takes its
 dependencies as arguments, a test just imports the functions and calls them — no app
 to boot, no request to fake, no mock of `c`. The test file is
-`<domain>.service.test.ts`, sitting right beside the service.
+`<domain>.test.ts`, sitting right beside the service.
 
 The `hello` service test calls the real functions directly:
 
 ```ts
-// src/modules/users/users.service.test.ts
+// src/modules/users/users.test.ts
 import { describe, expect, it } from 'vitest'
 
 import { createUser, getUser } from './users.service'
@@ -263,7 +263,7 @@ When a service takes a dependency, the test constructs a *real* one and passes i
 catalog, then asserts on both the returned union and the store's state:
 
 ```ts
-// src/modules/orders/orders.service.test.ts
+// src/modules/orders/orders.test.ts
 import { describe, expect, it } from 'vitest'
 
 import { createStore } from '../../store'
@@ -322,7 +322,7 @@ service signature and every route handler stays put. The full recipe is in
   dependencies as arguments and returns plain values or typed result unions.
 - Services are functions with named exports — no classes, no `this`
   ([ADR-0002](/adr/0002-no-classes-no-decorators)).
-- Every service has a sibling `<domain>.service.test.ts`. It should run without
+- Every service has a sibling `<domain>.test.ts`. It should run without
   booting the app.
 
 See also: [Routes & schemas](/guide/routes-schemas),

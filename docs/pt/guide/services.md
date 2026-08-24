@@ -234,12 +234,12 @@ route. Veja [Erros](/pt/guide/errors) para o envelope.
 Tudo acima compensa aqui. Como um service não importa framework nenhum e recebe suas
 dependências como argumentos, um teste apenas importa as funções e as chama — nenhum app
 para iniciar, nenhuma requisição para forjar, nenhum mock de `c`. O arquivo de teste é
-`<domain>.service.test.ts`, localizado bem ao lado do service.
+`<domain>.test.ts`, localizado bem ao lado do service.
 
 O teste do service `hello` chama as funções reais diretamente:
 
 ```ts
-// src/modules/users/users.service.test.ts
+// src/modules/users/users.test.ts
 import { describe, expect, it } from 'vitest'
 
 import { createUser, getUser } from './users.service'
@@ -263,7 +263,7 @@ adiante — sem necessidade de framework de mocking. O teste do `shop` monta um 
 um catálogo semente, depois faz asserções tanto sobre a união retornada quanto sobre o estado do store:
 
 ```ts
-// src/modules/orders/orders.service.test.ts
+// src/modules/orders/orders.test.ts
 import { describe, expect, it } from 'vitest'
 
 import { createStore } from '../../store'
@@ -322,7 +322,7 @@ em [Banco de dados](/pt/cookbook/database).
   dependências como argumentos e retorna valores comuns ou uniões de resultado tipadas.
 - Services são funções com named exports — sem classes, sem `this`
   ([ADR-0002](/adr/0002-no-classes-no-decorators)).
-- Todo service tem um `<domain>.service.test.ts` vizinho. Ele deve rodar sem
+- Todo service tem um `<domain>.test.ts` vizinho. Ele deve rodar sem
   iniciar o app.
 
 Veja também: [Rotas & schemas](/pt/guide/routes-schemas),
