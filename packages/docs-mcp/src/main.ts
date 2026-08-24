@@ -1,4 +1,4 @@
-#!/usr/bin/env tsx
+#!/usr/bin/env node
 /**
  * Executable entry for the `kata-docs-mcp` bin. Resolves the bundled
  * `data/docs` next to this file (ADR-0023) — a sibling of `src/` in dev and
