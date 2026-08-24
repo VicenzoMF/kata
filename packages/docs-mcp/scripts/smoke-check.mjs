@@ -17,6 +17,7 @@
  *                                                       for checking the
  *                                                       registry after publish
  */
+import { tmpdir } from 'node:os'
 import { fileURLToPath } from 'node:url'
 
 import { Client } from '@modelcontextprotocol/sdk/client/index.js'
@@ -25,8 +26,13 @@ import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js'
 const pkgArgIndex = process.argv.indexOf('--pkg')
 const pkgSpec = pkgArgIndex !== -1 ? process.argv[pkgArgIndex + 1] : undefined
 
+// `cwd: tmpdir()` for the --pkg case: run from inside packages/docs-mcp (its
+// own package.json is named @katajs-framework/docs-mcp), npx resolves the
+// spec against the local workspace package instead of fetching the registry
+// tarball and fails with "kata-docs-mcp: not found" — a false negative on the
+// exact check this script exists to run correctly.
 const serverParams = pkgSpec
-  ? { command: 'npx', args: ['-y', pkgSpec] }
+  ? { command: 'npx', args: ['-y', pkgSpec], cwd: tmpdir() }
   : { command: 'node', args: [fileURLToPath(new URL('../dist/main.js', import.meta.url))] }
 
 const fail = (message) => {
