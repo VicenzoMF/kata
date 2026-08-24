@@ -138,6 +138,70 @@ genuinely has none" can never look the same in the source.
 correlation id — both hang off the same context object `c` introduced in
 [Context & DI](/guide/context-di).)
 
+### Optional query filters: the `z.coerce.boolean()` trap
+
+A list endpoint with an optional boolean filter — `GET /todos?completed=true` — is
+one of the most common `query` shapes, and it hides a footgun. A query string is
+always text, whether present or not, so an optional boolean field has to parse
+`"true"` / `"false"` into a real `boolean` — and the obvious-looking spelling gets
+it wrong:
+
+```ts
+// Looks right, isn't:
+completed: z.coerce.boolean().optional()
+```
+
+`z.coerce.boolean()` runs `Boolean(value)` under the hood, and in JavaScript
+`Boolean("false")` is `true` — *any* non-empty string coerces to `true`, including
+the literal text `"false"`. That schema treats `?completed=false` and
+`?completed=true` as the same request, and there is no validation error to catch
+it — it just silently means "true" either way.
+
+The fix is to validate the two literal strings the query string can actually carry,
+then transform to a boolean, rather than coercing:
+
+```ts
+// src/modules/todos/todos.schema.ts
+import { z } from 'zod'
+
+export const ListTodosQuerySchema = z.object({
+  completed: z
+    .enum(['true', 'false'])
+    .optional()
+    .transform((v) => (v === undefined ? undefined : v === 'true')),
+})
+```
+
+```ts
+// src/modules/todos/todos.route.ts
+import { defineRoute } from '../../context'
+
+import { ListTodosQuerySchema, TodoListSchema } from './todos.schema'
+import { listTodos } from './todos.service'
+
+export const listTodosRoute = defineRoute({
+  method: 'GET',
+  path: '/todos',
+  input: { query: ListTodosQuerySchema },
+  output: TodoListSchema,
+  handler: (c) => listTodos(c.get('store'), c.input.query.completed),
+})
+```
+
+`c.input.query.completed` is typed `boolean | undefined` — omitting `?completed=`
+leaves the filter off, `?completed=true` / `?completed=false` set it correctly, and
+any other value (`?completed=yes`, `?completed=1`) fails input validation with the
+usual `422` instead of silently resolving to `true`.
+
+::: warning This is a Zod behavior, not a Kata one
+`z.coerce.boolean()` is documented to work exactly this way — it is `Boolean(...)`
+coercion, not a truthy/falsy string parser. It is a reasonable choice for a value
+you already trust to be `"true"`/`"false"`/absent (an internal config flag, say),
+but a query string is user input, so prefer the `z.enum(...).transform(...)`
+pattern above whenever the field's text is meant to be exactly `"true"` or
+`"false"`.
+:::
+
 ## `output` — single entry or status map
 
 `output` describes what the route is allowed to send back. Each entry is either a
