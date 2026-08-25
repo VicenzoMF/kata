@@ -521,6 +521,44 @@ function errorResponse(
   return c.json(buildErrorBody(code, message, extra) as never, (extra?.status ?? 400) as never)
 }
 
+/**
+ * Shared `get(key)` body for both {@link makeMiddlewareContext} and
+ * {@link makeRouteContext} (issue #162): slot lookup → singleton short-circuit
+ * → scoped-store presence check → scoped read. Kept generic-free (`key` as
+ * `string`) since both call sites already narrow the typed key before
+ * calling in and re-cast the result via `as never` on return.
+ */
+function registryGet<R extends Registry>(
+  registry: R,
+  store: Map<string, unknown>,
+  key: string,
+): unknown {
+  const slot = registry[key]
+  if (!slot) throw new Error(`kata: key '${key}' not registered in defineContext`)
+  // kata-allow: hono-boundary
+  if (slot.__kind === 'singleton') return (slot as Singleton<unknown>).__value
+  if (!store.has(key)) {
+    throw new Error(
+      `kata: scoped slot '${key}' read before being set. Did the providing middleware run?`,
+    )
+  }
+  // kata-allow: hono-boundary
+  return store.get(key)
+}
+
+/** Shared `json(value, status)` builder for both context shapes (issue #162). */
+function makeJson(c: import('hono').Context) {
+  return <T>(value: T, status?: number): Response =>
+    // kata-allow: hono-boundary
+    c.json(value as never, (status ?? 200) as never)
+}
+
+/** Shared `error(code, message, extra)` builder for both context shapes (issue #162). */
+function makeError(c: import('hono').Context) {
+  return (code: string, message: string, extra?: ErrorExtra): Response =>
+    errorResponse(c, code, message, extra)
+}
+
 function makeMiddlewareContext<R extends Registry>(
   registry: R,
   c: import('hono').Context,
@@ -529,17 +567,8 @@ function makeMiddlewareContext<R extends Registry>(
   const store = getScopedStore(c)
   return {
     get(key) {
-      const slot = registry[key as string]
-      if (!slot) throw new Error(`kata: key '${String(key)}' not registered in defineContext`)
       // kata-allow: hono-boundary
-      if (slot.__kind === 'singleton') return (slot as Singleton<unknown>).__value as never
-      if (!store.has(key as string)) {
-        throw new Error(
-          `kata: scoped slot '${String(key)}' read before being set. Did the providing middleware run?`,
-        )
-      }
-      // kata-allow: hono-boundary
-      return store.get(key as string) as never
+      return registryGet(registry, store, key as string) as never
     },
     set(key, value) {
       const slot = registry[key as string]
@@ -550,9 +579,8 @@ function makeMiddlewareContext<R extends Registry>(
     },
     raw: c,
     header: (name) => c.req.header(name),
-    // kata-allow: hono-boundary
-    json: (value, status) => c.json(value as never, (status ?? 200) as never),
-    error: (code, message, extra) => errorResponse(c, code, message, extra),
+    json: makeJson(c),
+    error: makeError(c),
     requestId,
   }
 }
@@ -566,23 +594,13 @@ function makeRouteContext<R extends Registry, I extends InputSchemas>(
   const store = getScopedStore(c)
   return {
     get(key) {
-      const slot = registry[key as string]
-      if (!slot) throw new Error(`kata: key '${String(key)}' not registered in defineContext`)
       // kata-allow: hono-boundary
-      if (slot.__kind === 'singleton') return (slot as Singleton<unknown>).__value as never
-      if (!store.has(key as string)) {
-        throw new Error(
-          `kata: scoped slot '${String(key)}' read before being set. Did the providing middleware run?`,
-        )
-      }
-      // kata-allow: hono-boundary
-      return store.get(key as string) as never
+      return registryGet(registry, store, key as string) as never
     },
     input,
     raw: c,
-    // kata-allow: hono-boundary
-    json: (value, status) => c.json(value as never, (status ?? 200) as never),
-    error: (code, message, extra) => errorResponse(c, code, message, extra),
+    json: makeJson(c),
+    error: makeError(c),
     requestId,
   }
 }
