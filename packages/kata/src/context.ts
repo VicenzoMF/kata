@@ -1108,11 +1108,13 @@ function registerRoute<R extends Registry>(
       //    schema (ADR-0003) or status→schema map (ADR-0011) — per the
       //    configured mode (ADR-0009).
       const onComplete = buildRouteOnComplete(registry, route, c, requestId, options)
-      const runDownstream = (): Promise<Response | undefined> =>
-        runMiddlewareChain(restChain, registry, c, requestId, onComplete)
       shortCircuit = transformHandler
-        ? await runTransformChain(transformHandler, runDownstream, c)
-        : await runDownstream()
+        ? await runTransformChain(
+            transformHandler,
+            () => runMiddlewareChain(restChain, registry, c, requestId, onComplete),
+            c,
+          )
+        : await runMiddlewareChain(restChain, registry, c, requestId, onComplete)
     } catch (err) {
       logFrameworkError(options.logger, `kata: unhandled error in ${route.method} ${route.path}`, {
         err: serializeError(err),
