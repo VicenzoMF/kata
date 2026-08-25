@@ -591,13 +591,32 @@ const middlewareContextProto = {
   },
 }
 
+/**
+ * `Object.create(proto)`, typed as both the internal state shape a caller is
+ * about to fill in (`S`) and the public shape it becomes once every field is
+ * set (`T`) — one cast, audited here, instead of one at every call site.
+ * Direct field assignment on the result, not
+ * `Object.assign(Object.create(proto), state)`: benchmarking showed it
+ * roughly halves construction time (no intermediate `state` object, no
+ * generic key enumeration), and each property a caller sets is a static
+ * identifier — unlike assigning from an object built from external data, it
+ * can never be redirected by a `__proto__` key.
+ */
+function newContext<S, T>(proto: object): S & T {
+  return Object.create(proto) as S & T
+}
+
 function makeMiddlewareContext<R extends Registry>(
   registry: R,
   c: import('hono').Context,
   requestId: string,
 ): MiddlewareContext<R> {
-  const state: BaseContextState = { registry, store: getScopedStore(c), raw: c, requestId }
-  return Object.assign(Object.create(middlewareContextProto), state) as MiddlewareContext<R>
+  const ctx = newContext<BaseContextState, MiddlewareContext<R>>(middlewareContextProto)
+  ctx.registry = registry
+  ctx.store = getScopedStore(c)
+  ctx.raw = c
+  ctx.requestId = requestId
+  return ctx
 }
 
 function makeRouteContext<R extends Registry, I extends InputSchemas>(
@@ -606,14 +625,15 @@ function makeRouteContext<R extends Registry, I extends InputSchemas>(
   input: InferInput<I>,
   requestId: string,
 ): RouteContext<R, I> {
-  const state: BaseContextState & { input: InferInput<I> } = {
-    registry,
-    store: getScopedStore(c),
-    raw: c,
-    requestId,
-    input,
-  }
-  return Object.assign(Object.create(baseContextProto), state) as RouteContext<R, I>
+  const ctx = newContext<BaseContextState & { input: InferInput<I> }, RouteContext<R, I>>(
+    baseContextProto,
+  )
+  ctx.registry = registry
+  ctx.store = getScopedStore(c)
+  ctx.raw = c
+  ctx.requestId = requestId
+  ctx.input = input
+  return ctx
 }
 
 async function readInputs<I extends InputSchemas>(
@@ -955,16 +975,20 @@ function finalizeResponse<R extends Registry>(
  * global-only chain.
  *
  * Index-driven dispatcher (issue #163): `dispatch(i)` handles `chain[i]` and
- * hands its handler `dispatch.bind(null, i + 1)` as `next` — a bound function
- * per step instead of a hand-threaded mutable index. This is still a
- * recursive continuation, not a flat loop — the onion model requires it,
- * since a middleware's own post-`next()` code (running the response back
- * *out* through every earlier layer) only exists because each layer is a
- * pending stack frame awaiting the one inside it. `next()`'s public type is
- * `() => Promise<void>` (an Express/Koa-style contract every middleware
- * author already knows), so the eventual short-circuit `Response` can't flow
- * back through its return value — `shortCircuit` is the side-channel that
- * carries it back out to the caller.
+ * hands its handler `() => dispatch(i + 1)` as `next` — a closure tied to
+ * this step's index instead of a hand-threaded mutable index shared across
+ * the whole chain. This is still a recursive continuation, not a flat loop —
+ * the onion model requires it, since a middleware's own post-`next()` code
+ * (running the response back *out* through every earlier layer) only exists
+ * because each layer is a pending stack frame awaiting the one inside it.
+ * `next()`'s public type is `() => Promise<void>` (an Express/Koa-style
+ * contract every middleware author already knows), so the eventual
+ * short-circuit `Response` can't flow back through its return value —
+ * `shortCircuit` is the side-channel that carries it back out to the caller.
+ * A plain arrow closure here, not `dispatch.bind(null, i + 1)`: benchmarking
+ * both (same semantics either way) showed `Function.prototype.bind`'s
+ * exotic bound-function object is measurably slower to create and call than
+ * a small closure over one captured number.
  */
 async function runMiddlewareChain<R extends Registry>(
   chain: readonly Middleware<R>[],
@@ -981,7 +1005,7 @@ async function runMiddlewareChain<R extends Registry>(
     }
     const mw = chain[i]!
     const mwCtx = makeMiddlewareContext(registry, c, requestId)
-    const result = await mw.handler(mwCtx, dispatch.bind(null, i + 1))
+    const result = await mw.handler(mwCtx, () => dispatch(i + 1))
     if (result instanceof Response) {
       shortCircuit = result
     }
