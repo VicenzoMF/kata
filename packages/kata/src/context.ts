@@ -480,6 +480,14 @@ function buildHonoApp<R extends Registry>(registry: R, config: AppConfig<R>): Ho
 /** The closed set of methods a route can declare — see {@link HttpMethod}. */
 const HTTP_METHODS: readonly HttpMethod[] = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE']
 
+/**
+ * A `next` for a Hono middleware kata always runs standalone (never followed
+ * by anything downstream) — the CORS preflight responder below. It captures
+ * nothing request-specific, so one shared instance avoids allocating a fresh
+ * no-op closure on every preflight request.
+ */
+const NOOP_NEXT = async (): Promise<void> => {}
+
 const SCOPED_STORE = Symbol('kata.scoped-store')
 
 function getScopedStore(c: import('hono').Context): Map<string, unknown> {
@@ -1139,12 +1147,15 @@ function registerPreflightRoutes<R extends Registry>(
     if (pathMethods.get(path)?.has('OPTIONS' as HttpMethod)) continue
     const allowMethods = entry.options.allowMethods ?? [...entry.methods]
     const preflightHandler = honoCors({ ...entry.options, allowMethods })
+    // Fixed for every request this responder serves — built once here, not
+    // re-allocated per request inside the closure below.
+    const routeDescriptor = { method: 'OPTIONS', path }
     app.options(path, async (c: import('hono').Context) => {
       const requestId = resolveRequestId(c.req.header(REQUEST_ID_HEADER))
       const startedAt = performance.now()
       let response: Response
       try {
-        const result = await preflightHandler(c, async () => {})
+        const result = await preflightHandler(c, NOOP_NEXT)
         response =
           result instanceof Response
             ? result
@@ -1158,8 +1169,7 @@ function registerPreflightRoutes<R extends Registry>(
         response = errorResponse(c, 'internal_error', 'Internal server error', { status: 500 })
       }
       return (
-        finalizeResponse(c, { method: 'OPTIONS', path }, requestId, startedAt, response, options) ??
-        response
+        finalizeResponse(c, routeDescriptor, requestId, startedAt, response, options) ?? response
       )
     })
   }
