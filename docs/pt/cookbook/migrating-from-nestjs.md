@@ -562,9 +562,9 @@ Os globais do `NestFactory` mapeiam de forma limpa:
   `middlewares: [cors(), secureHeaders(), bodyLimit()]`.
 - Um middleware Hono de terceiros arbitrário → `createApp` ainda retorna um app Hono
   simples, então `app.use('*', ...)` também funciona. CORS não precisa dessa válvula de
-  escape: um `cors()` global também responde ao preflight `OPTIONS` por conta própria
-  ([Preflight de CORS](/pt/guide/app-middleware#preflight-de-cors)) — não o registre
-  uma segunda vez nativamente.
+  escape: `cors()` também responde ao preflight `OPTIONS` por conta própria, por rota
+  ou global ([Preflight de CORS](/pt/guide/app-middleware#preflight-de-cors)) — não o
+  registre uma segunda vez nativamente.
 
 ## O que Kata intencionalmente NÃO tem
 

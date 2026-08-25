@@ -58,8 +58,10 @@ responde `405`, com um header `Allow` listando os métodos que o path aceita:
 { "error": "method_not_allowed", "message": "Method not allowed" }
 ```
 
-Ambas rodam primeiro a cadeia de middleware global (nível de app) — então um
-`cors()` global ainda responde um preflight `OPTIONS` por conta própria — e ambas
+Ambas rodam primeiro a cadeia de middleware global (nível de app) — o mesmo fallback
+que permite a um `cors()` global responder um preflight `OPTIONS` mesmo contra um path
+que nenhuma rota declara (veja [Preflight de CORS](/pt/guide/app-middleware#preflight-de-cors)
+para como o preflight de um path *registrado* é normalmente respondido) — e ambas
 passam pela mesma etapa final de toda resposta, então o header de correlação
 `X-Request-Id` está presente aqui também.
 

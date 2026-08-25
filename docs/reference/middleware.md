@@ -60,10 +60,10 @@ Called with no argument, `cors()` passes `undefined` to Hono — Hono's own defa
 policy applies (`Access-Control-Allow-Origin: *`).
 
 ::: info Preflight is answered automatically
-A `cors()` in the app-level `middlewares` chain also answers the browser
-preflight: kata has no implicit `OPTIONS` route, so the runtime runs the global
-chain on the unmatched `OPTIONS` request and `cors()` short-circuits it with a
-`204` + the `Access-Control-Allow-*` headers, on an auth-free path
+`cors()` also answers the browser preflight, wherever you declare it: kata has no
+implicit `OPTIONS` route, so the runtime auto-registers a synthetic one for every
+path whose effective chain carries a `cors()` — per route or app-level — running
+just that `cors()` on an auth-free path
 ([ADR-0020](/adr/0020-cors-preflight-and-response-transform-seam)). Do not
 register CORS a second time on the returned app. See
 [CORS preflight](/guide/app-middleware#cors-preflight).
