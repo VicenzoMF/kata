@@ -60,9 +60,12 @@ with an `Allow` header listing the methods the path accepts:
 { "error": "method_not_allowed", "message": "Method not allowed" }
 ```
 
-Both run the app-level (global) middleware chain first — so a global `cors()` still
-answers an `OPTIONS` preflight itself — and both pass through the same final step as
-every other response, so the `X-Request-Id` correlation header is present here too.
+Both run the app-level (global) middleware chain first — the same fallback that lets
+a global `cors()` answer an `OPTIONS` preflight even against a path no route
+declares (see [CORS preflight](/guide/app-middleware#cors-preflight) for how a
+*registered* path's preflight is normally answered) — and both pass through the
+same final step as every other response, so the `X-Request-Id` correlation header
+is present here too.
 
 ## The 422 validation envelope
 

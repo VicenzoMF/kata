@@ -110,9 +110,9 @@ createApp({
 ```
 
 ::: tip O preflight é respondido automaticamente
-Um `cors()` na cadeia global faz o trabalho inteiro: além de definir os headers
-`Access-Control-Allow-*` nas respostas reais, ele mesmo responde ao preflight de
-navegador (`OPTIONS`) com um `204`, conforme a
+`cors()` faz o trabalho inteiro onde quer que você o declare — por rota ou na cadeia
+global: além de definir os headers `Access-Control-Allow-*` nas respostas reais, o
+runtime auto-registra um responder `OPTIONS` sintético para o path dele, conforme a
 [ADR-0020](/adr/0020-cors-preflight-and-response-transform-seam). Não registre CORS
 uma segunda vez. Veja [Preflight de CORS](#preflight-de-cors) abaixo para entender como
 funciona.
@@ -214,16 +214,15 @@ para o padrão de preenchimento de slots e [Auth com JWT](/pt/guide/jwt) para o 
 Antes de qualquer requisição cross-origin não-simples, o navegador envia um preflight —
 `OPTIONS` no mesmo path, com `Access-Control-Request-Method`. O Kata registra um handler
 apenas para o método *declarado* de uma rota e não tem rota `OPTIONS` implícita, então
-um preflight nunca corresponde a uma rota — e o preflight é uma propriedade do path, não
-da cadeia de um único método, então nenhum middleware por rota conseguiria respondê-lo.
-O runtime fecha essa lacuna por conta própria
-([ADR-0020](/adr/0020-cors-preflight-and-response-transform-seam)): uma requisição sem
-correspondência roda a cadeia global `middlewares` antes da decisão de 404/405, e o
-`cors()` nessa cadeia reconhece a requisição `OPTIONS` e a curto-circuita com um `204`
-carregando os headers `Access-Control-Allow-*` (e `Access-Control-Max-Age`, se você
-definir `maxAge`).
+um preflight nunca corresponderia — e o preflight é uma propriedade do *path*, não
+da cadeia de um único método, então nenhum middleware por rota sozinho conseguiria
+respondê-lo. O runtime fecha essa lacuna por conta própria
+([ADR-0020](/adr/0020-cors-preflight-and-response-transform-seam)): ao construir o app,
+ele percorre a cadeia efetiva de cada rota — os `middlewares` globais mais o `use:`
+próprio da rota — e, para cada path cuja cadeia carrega um `cors()` em qualquer ponto,
+auto-registra uma rota `OPTIONS <path>` real que roda *apenas* aquele `cors()`.
 
-Um único `cors()` na cadeia global é, portanto, a história completa de CORS:
+Declarar `cors()` é, portanto, a história completa de CORS, seja global ou por rota:
 
 ```ts
 const app = createApp({
@@ -233,20 +232,34 @@ const app = createApp({
 // OPTIONS /users → 204 + Access-Control-Allow-* — nada mais a registrar.
 ```
 
-Três propriedades decorrem de *onde* o preflight é respondido:
+```ts
+defineRoute({
+  method: 'POST',
+  path: '/items',
+  use: [cors()],
+  // ...
+})
+// OPTIONS /items → também 204, mesmo que cors() esteja declarado só nesta rota.
+```
 
-- **Livre de auth.** Nenhuma rota correspondeu, então nenhuma cadeia `use:` de rota
-  roda — um guard de JWT numa rota protegida nunca responde 401 ao preflight sem
-  credenciais. Dentro da cadeia global, só rodam as entradas declaradas *antes* do
-  `cors()`; seu curto-circuito pula o resto.
+Se mais de uma rota compartilha um path — `GET /items` e `POST /items`, ambas com
+`cors()` — o kata registra um único responder `OPTIONS /items` e reporta os dois
+métodos em `Access-Control-Allow-Methods`, a menos que você já tenha fixado
+`allowMethods` você mesmo nas `CorsOptions`.
+
+Três propriedades decorrem de *como* o preflight é respondido:
+
+- **Livre de auth.** O responder sintético roda *apenas* o `cors()` que o disparou —
+  nunca a cadeia `use:` própria da rota, nunca nenhum outro global. Um guard de JWT
+  na rota protegida nunca vê, e portanto nunca responde 401 ao, preflight sem
+  credenciais.
 - **Observável.** O `204` passa pelo mesmo pipeline de resposta que qualquer outro
   desfecho: ecoa o `x-request-id` e produz a linha de log por requisição.
-- **Opt-in.** Sem um `cors()` global, `OPTIONS` cai na decisão normal de requisição sem
+- **Opt-in.** Um path sem nenhum `cors()` em sua cadeia efetiva não recebe rota
+  `OPTIONS` sintética; um preflight contra ele cai na decisão normal de requisição sem
   correspondência — `405` com header `Allow` num path declarado, `404` caso contrário.
 
-Note o qualificador *global*: um `use: [cors()]` por rota continua apenas decorando as
-respostas reais daquela rota — só um `cors()` no `middlewares` do `createApp` responde
-ao preflight. E **não** registre também o `cors` do Hono nativamente no app retornado
+E **não** registre também o `cors` do Hono nativamente no app retornado
 (`app.use('*', honoCors(...))`) — uma versão anterior deste guia mostrava isso como
 contorno, mas hoje isso registra CORS duas vezes e divide sua política de borda em dois
 lugares sem ganho algum: a resposta de preflight é idêntica sem ele.

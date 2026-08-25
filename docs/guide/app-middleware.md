@@ -109,9 +109,9 @@ createApp({
 ```
 
 ::: tip Preflight is answered automatically
-A `cors()` in the global chain does the whole job: besides setting the
-`Access-Control-Allow-*` headers on actual responses, it answers the browser preflight
-(`OPTIONS`) itself with a `204`, per
+`cors()` does the whole job wherever you declare it — per route or in the global
+chain: besides setting the `Access-Control-Allow-*` headers on actual responses, the
+runtime auto-registers a synthetic `OPTIONS` responder for its path, per
 [ADR-0020](/adr/0020-cors-preflight-and-response-transform-seam). Do not register CORS
 a second time. See [CORS preflight](#cors-preflight) below for how it works.
 :::
@@ -211,15 +211,17 @@ for the slot-filling pattern and [JWT auth](/guide/jwt) for the auth-specific pa
 
 Before any non-simple cross-origin request, a browser sends a preflight — `OPTIONS` on
 the same path, with `Access-Control-Request-Method`. Kata registers a handler only for a
-route's *declared* method and has no implicit `OPTIONS` route, so a preflight never
-matches a route — and preflight is a property of the path, not of any one method's
-chain, so no per-route middleware could answer it. The runtime closes that gap itself
-([ADR-0020](/adr/0020-cors-preflight-and-response-transform-seam)): an unmatched request
-runs the global `middlewares` chain before the 404/405 decision, and `cors()` in that
-chain recognizes the `OPTIONS` request and short-circuits it with a `204` carrying the
-`Access-Control-Allow-*` headers (and `Access-Control-Max-Age`, if you set `maxAge`).
+route's *declared* method and has no implicit `OPTIONS` route, so a preflight would
+otherwise never match — and preflight is a property of the *path*, not of any one
+method's chain, so no per-route middleware alone could answer it. The runtime closes
+that gap itself ([ADR-0020](/adr/0020-cors-preflight-and-response-transform-seam)):
+while building the app, it walks every route's effective chain — the global
+`middlewares` plus that route's own `use:` — and for every path whose chain carries a
+`cors()` anywhere in it, auto-registers a real `OPTIONS <path>` route that runs *just*
+that `cors()`.
 
-A single `cors()` in the global chain is therefore the complete CORS story:
+Declaring `cors()` is therefore the complete CORS story, whether it is global or
+per-route:
 
 ```ts
 const app = createApp({
@@ -229,20 +231,33 @@ const app = createApp({
 // OPTIONS /users → 204 + Access-Control-Allow-* — nothing else to register.
 ```
 
-Three properties follow from *where* the preflight is answered:
+```ts
+defineRoute({
+  method: 'POST',
+  path: '/items',
+  use: [cors()],
+  // ...
+})
+// OPTIONS /items → 204 too, even though cors() is declared on this one route only.
+```
 
-- **Auth-free.** No route matched, so no route `use:` chain runs — a JWT guard on a
-  protected route never 401s the credential-less preflight. Within the global chain,
-  only entries declared *before* `cors()` run; its short-circuit skips the rest.
+If more than one route shares a path — `GET /items` and `POST /items`, both carrying
+`cors()` — kata registers a single `OPTIONS /items` responder and reports both methods
+in `Access-Control-Allow-Methods`, unless you already pinned `allowMethods` yourself in
+the `CorsOptions`.
+
+Three properties follow from *how* the preflight is answered:
+
+- **Auth-free.** The synthetic responder runs *only* the `cors()` that triggered it —
+  never the route's own `use:` chain, never any other global. A JWT guard on the
+  protected route never sees, and so never 401s, the credential-less preflight.
 - **Observable.** The `204` funnels through the same response pipeline as every other
   outcome: it echoes `x-request-id` and produces the per-request log line.
-- **Opt-in.** With no global `cors()`, `OPTIONS` falls through to the normal
-  unmatched-request decision — `405` with an `Allow` header on a declared path, `404`
-  otherwise.
+- **Opt-in.** A path with no `cors()` anywhere in its effective chain gets no synthetic
+  `OPTIONS` route; a preflight against it falls through to the normal unmatched-request
+  decision — `405` with an `Allow` header on a declared path, `404` otherwise.
 
-Note the *global* qualifier: a per-route `use: [cors()]` still only decorates that
-route's actual responses — only a `cors()` in `createApp`'s `middlewares` answers the
-preflight. And do **not** also register Hono's `cors` natively on the returned app
+Do **not** also register Hono's `cors` natively on the returned app
 (`app.use('*', honoCors(...))`) — an earlier version of this guide showed that as a
 workaround, but today it registers CORS twice and splits your edge policy across two
 places for zero gain: the preflight response is identical without it.

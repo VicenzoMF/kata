@@ -62,11 +62,11 @@ Chamado sem argumento, `cors()` passa `undefined` ao Hono — a política padrã
 próprio Hono se aplica (`Access-Control-Allow-Origin: *`).
 
 ::: info O preflight é respondido automaticamente
-Um `cors()` na cadeia `middlewares` do app também responde ao preflight de
-navegador: o kata não tem route `OPTIONS` implícita, então o runtime roda a
-cadeia global na requisição `OPTIONS` sem correspondência e o `cors()` a
-curto-circuita com um `204` + os headers `Access-Control-Allow-*`, num caminho
-livre de auth ([ADR-0020](/adr/0020-cors-preflight-and-response-transform-seam)).
+`cors()` também responde ao preflight de navegador, onde quer que você o declare: o
+kata não tem rota `OPTIONS` implícita, então o runtime auto-registra uma sintética
+para cada path cuja cadeia efetiva carrega um `cors()` — por rota ou a nível de app —
+rodando apenas aquele `cors()` num caminho livre de auth
+([ADR-0020](/adr/0020-cors-preflight-and-response-transform-seam)).
 Não registre CORS uma segunda vez no app retornado. Veja
 [Preflight de CORS](/pt/guide/app-middleware#preflight-de-cors).
 :::

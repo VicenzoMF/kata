@@ -562,8 +562,8 @@ The `NestFactory` globals map cleanly:
   store, and short-circuit semantics. The hardening built-ins live here —
   `middlewares: [cors(), secureHeaders(), bodyLimit()]`.
 - An arbitrary third-party Hono middleware → `createApp` still returns a plain
-  Hono app, so `app.use('*', ...)` works too. CORS needs no such escape hatch: a
-  global `cors()` also answers the `OPTIONS` preflight itself
+  Hono app, so `app.use('*', ...)` works too. CORS needs no such escape hatch:
+  `cors()` also answers the `OPTIONS` preflight itself, per-route or global
   ([CORS preflight](../guide/app-middleware.md#cors-preflight)) — do not register
   it a second time natively.
 
