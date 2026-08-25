@@ -273,14 +273,15 @@ export function jwtAuth<R extends Registry, S extends z.ZodTypeAny>(
         return c.error('unauthorized', 'No such user', { status: 401 })
       }
     }
-
     // ADR-0013 §4: `slot` is a runtime string and `R` is opaque here, so widen
     // `set` to its string-keyed form. The slot's membership in `ScopedKeys<R>`
     // and that the value matches its declared type are enforced at the call site
     // (`provides` + lint), exactly as ADR-0004 documents for scoped reads.
+    // Called inline rather than through an intermediate variable (issue #163):
+    // `set` now reads its per-request state off `this`, so a detached
+    // reference would call it with `this` unbound.
     // kata-allow: hono-boundary
-    const setSlot = c.set as unknown as (key: string, value: unknown) => void
-    setSlot(slot, value)
+    ;(c.set as unknown as (key: string, value: unknown) => void)(slot, value)
     await next()
   }
 }
@@ -361,9 +362,14 @@ export function guard<R extends Registry, const S extends ScopedKeys<R> = Defaul
   const code = options.code ?? DEFAULT_FORBIDDEN_CODE
   const message = options.message ?? DEFAULT_FORBIDDEN_MESSAGE
   return async (c, next) => {
+    // Called inline rather than through an intermediate variable (issue
+    // #163): `get` now reads its per-request state off `this`, so a detached
+    // reference would call it with `this` unbound.
     // kata-allow: hono-boundary
-    const getSlot = c.get as unknown as (key: string) => SlotValue<R, S>
-    const allowed = await options.authorize(getSlot(slot), c)
+    const allowed = await options.authorize(
+      (c.get as unknown as (key: string) => SlotValue<R, S>)(slot),
+      c,
+    )
     if (!allowed) {
       return c.error(code, message, { status: 403 })
     }
