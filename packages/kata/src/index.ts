@@ -26,7 +26,13 @@ export {
 } from './errors'
 export type { LogExtra, Logger, RequestLogFields } from './logger'
 export type { BodyLimitOptions, CorsOptions, SecureHeadersOptions } from './middlewares'
-export { bodyLimit, cors, DEFAULT_MAX_BODY_SIZE, secureHeaders } from './middlewares'
+export {
+  bodyLimit,
+  cors,
+  DEFAULT_MAX_BODY_SIZE,
+  fromHonoTransform,
+  secureHeaders,
+} from './middlewares'
 export type { OutputValidationMode } from './output-validation'
 export { REQUEST_ID_HEADER } from './request-id'
 export type { KataApp, ModulesToHonoSchema, RpcModule } from './rpc'
