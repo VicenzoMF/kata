@@ -1,5 +1,6 @@
 import type { Hono } from 'hono'
 import { Hono as HonoApp } from 'hono'
+import { cors as honoCors } from 'hono/cors'
 import type { z } from 'zod'
 
 import type { ErrorExtra, FieldIssue } from './errors'
@@ -82,6 +83,15 @@ export type MiddlewareContext<R extends Registry> = {
   requestId: string
 }
 
+/**
+ * The CORS options shape Hono's own `cors` middleware accepts, re-derived
+ * here (rather than imported from `./middlewares/cors`) so this core module
+ * has no dependency on the middlewares layer — see the `preflight` field
+ * below (ADR-0020). Structurally identical to `middlewares/cors.ts`'s own
+ * `CorsOptions`, which is derived the same way.
+ */
+type CorsPreflightOptions = NonNullable<Parameters<typeof honoCors>[0]>
+
 export type Middleware<R extends Registry> = {
   readonly __kata: 'middleware'
   readonly provides: readonly ScopedKeys<R>[]
@@ -89,6 +99,14 @@ export type Middleware<R extends Registry> = {
     c: MiddlewareContext<R>,
     next: () => Promise<void>,
   ) => Promise<void | Response> | void | Response
+  /**
+   * ADR-0020: present only on `cors()`'s output — the `CorsOptions` it was
+   * built with. `buildHonoApp` looks for this to recognise CORS middleware
+   * in an otherwise-opaque chain and auto-synthesize an `OPTIONS` preflight
+   * responder for any path whose effective chain carries one. Inert for
+   * every other middleware.
+   */
+  readonly preflight?: CorsPreflightOptions
 }
 
 export type InputSchemas = {
@@ -431,11 +449,18 @@ function buildHonoApp<R extends Registry>(registry: R, config: AppConfig<R>): Ho
   // registers, so `notFound` can answer 404 vs 405 with a single Map lookup
   // instead of walking `config.modules` per unmatched request.
   const pathMethods = new Map<string, Set<HttpMethod>>()
+  // path → CORS preflight source (ADR-0020, issue #158): every route whose
+  // effective chain carries a `cors()` records itself here, deduplicated by
+  // path and aggregating declared methods; `registerPreflightRoutes` turns
+  // each entry into one synthetic `OPTIONS <path>` responder once every route
+  // has registered.
+  const preflightPaths = new Map<string, PreflightEntry>()
   for (const mod of config.modules) {
     for (const route of Object.values(mod)) {
-      registerRoute(app, registry, route, options, pathMethods)
+      registerRoute(app, registry, route, options, pathMethods, preflightPaths)
     }
   }
+  registerPreflightRoutes(app, options, preflightPaths, pathMethods)
   // Global fallback (#62): anything that escapes the route pipeline — a raw
   // Hono handler, or an error thrown while building the kata response itself —
   // still serialises through the unified envelope instead of Hono's default
@@ -988,6 +1013,7 @@ function registerRoute<R extends Registry>(
   route: Route<R>,
   options: RuntimeOptions<R>,
   pathMethods: Map<string, Set<HttpMethod>>,
+  preflightPaths: Map<string, PreflightEntry>,
 ): void {
   const method = route.method.toLowerCase() as Lowercase<HttpMethod>
   // Hono router: app.get(path, ...handlers)
@@ -1016,6 +1042,7 @@ function registerRoute<R extends Registry>(
   // short-circuit capture, shared scoped store, request-id, logging, and 5xx
   // boundary below all cover it for free. Skip the concat when there are no globals.
   const chain = options.middlewares.length > 0 ? [...options.middlewares, ...route.use] : route.use
+  recordPreflight(chain, route.path, route.method, preflightPaths)
   register.call(app, route.path, async (c: import('hono').Context) => {
     const requestId = resolveRequestId(c.req.header(REQUEST_ID_HEADER))
     const startedAt = performance.now()
@@ -1053,6 +1080,89 @@ function registerRoute<R extends Registry>(
     // 5. Merge app-level headers, echo the correlation id, and log (#63, #207).
     return finalizeResponse(c, route, requestId, startedAt, shortCircuit, options)
   })
+}
+
+/** One path's collected CORS preflight source (ADR-0020, issue #158). */
+type PreflightEntry = {
+  readonly options: CorsPreflightOptions
+  readonly methods: Set<HttpMethod>
+}
+
+/**
+ * Record that `path` needs a synthetic `OPTIONS` preflight responder because
+ * `chain` — this route's effective middleware chain — carries a `cors()`
+ * (ADR-0020, issue #158). Dedupes by path: the first route to declare `cors()`
+ * for a path wins its `CorsOptions`, and every route sharing that path just
+ * contributes its declared method to the aggregated `Access-Control-Allow-Methods`
+ * (a documented cost of this design — see ADR-0020's Negative consequences —
+ * rather than something worth reconciling divergent per-route CORS configs for).
+ */
+function recordPreflight<R extends Registry>(
+  chain: readonly Middleware<R>[],
+  path: string,
+  method: HttpMethod,
+  preflightPaths: Map<string, PreflightEntry>,
+): void {
+  const corsEntry = chain.find((mw) => mw.preflight !== undefined)
+  if (!corsEntry?.preflight) return
+  const existing = preflightPaths.get(path)
+  if (existing) {
+    existing.methods.add(method)
+    return
+  }
+  preflightPaths.set(path, { options: corsEntry.preflight, methods: new Set([method]) })
+}
+
+/**
+ * Turn every path `recordPreflight` collected into one real `app.options(path,
+ * ...)` responder (ADR-0020, issue #158) — registered once every route has
+ * registered, so `preflightPaths` and `pathMethods` are both complete. Each
+ * responder runs ONLY a fresh `honoCors(...)` built from that path's collected
+ * options — never the route's own chain — so a preflight (which carries no
+ * credentials by spec) is never subjected to auth or any other short-circuiting
+ * entry. `allowMethods` defaults to the path's aggregated declared methods
+ * unless the author already pinned it in their `cors()` call.
+ *
+ * Yields to an explicit `OPTIONS <path>` route (`pathMethods` already has an
+ * `'OPTIONS'` entry for it): the author's route wins. This is presently dead
+ * code — `HttpMethod` is a closed union without `'OPTIONS'`, so `defineRoute`
+ * cannot declare one — but it documents and defends the ADR-0020 contract in
+ * case that ever changes, cheaply, at registration time rather than per request.
+ */
+function registerPreflightRoutes<R extends Registry>(
+  app: Hono,
+  options: RuntimeOptions<R>,
+  preflightPaths: Map<string, PreflightEntry>,
+  pathMethods: Map<string, Set<HttpMethod>>,
+): void {
+  for (const [path, entry] of preflightPaths) {
+    if (pathMethods.get(path)?.has('OPTIONS' as HttpMethod)) continue
+    const allowMethods = entry.options.allowMethods ?? [...entry.methods]
+    const preflightHandler = honoCors({ ...entry.options, allowMethods })
+    app.options(path, async (c: import('hono').Context) => {
+      const requestId = resolveRequestId(c.req.header(REQUEST_ID_HEADER))
+      const startedAt = performance.now()
+      let response: Response
+      try {
+        const result = await preflightHandler(c, async () => {})
+        response =
+          result instanceof Response
+            ? result
+            : errorResponse(c, 'internal_error', 'Internal server error', { status: 500 })
+      } catch (err) {
+        logFrameworkError(
+          options.logger,
+          `kata: unhandled error in OPTIONS ${path} (CORS preflight)`,
+          { err: serializeError(err) },
+        )
+        response = errorResponse(c, 'internal_error', 'Internal server error', { status: 500 })
+      }
+      return (
+        finalizeResponse(c, { method: 'OPTIONS', path }, requestId, startedAt, response, options) ??
+        response
+      )
+    })
+  }
 }
 
 /**

@@ -13,8 +13,8 @@ const app = createApp({
   // runs before every route's own `use:`, so CORS, secure response headers, and
   // an 8 KiB body-size limit apply app-wide — declared once here instead of
   // copy-pasted onto each route. They `provides: []`, so no route has to list
-  // them. (Full CORS preflight `OPTIONS` handling still wants `app.use('*',
-  // cors())` on the returned Hono app — see the note in kata's cors.ts.)
+  // them. `cors()` here also auto-answers browser `OPTIONS` preflight for
+  // every registered path (ADR-0020, issue #158) — no extra route to write.
   middlewares: [cors(), secureHeaders(), bodyLimit({ maxSize: 8 * 1024 })],
   // Per-request logging through the registered `logger` singleton (issue #63):
   // every request logs method, path, status, duration, and its request id, and

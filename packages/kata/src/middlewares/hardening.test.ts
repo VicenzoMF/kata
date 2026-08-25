@@ -80,6 +80,84 @@ describe('cors()', () => {
   })
 })
 
+describe('CORS preflight (ADR-0020, issue #158)', () => {
+  it('answers a per-route cors() preflight with 204 + CORS headers, echoing the requested method/headers', async () => {
+    const app = buildApp([cors({ origin: 'https://example.com' })])
+    const res = await app.request('/echo', {
+      method: 'OPTIONS',
+      headers: {
+        origin: 'https://example.com',
+        'access-control-request-method': 'POST',
+        'access-control-request-headers': 'X-Custom-Header',
+      },
+    })
+    expect(res.status).toBe(204)
+    expect(res.headers.get('access-control-allow-origin')).toBe('https://example.com')
+    expect(res.headers.get('access-control-allow-methods')).toBe('POST')
+    expect(res.headers.get('access-control-allow-headers')).toBe('X-Custom-Header')
+    expect(res.headers.get('x-request-id')).not.toBeNull()
+  })
+
+  it('a normal request to the same route is unchanged', async () => {
+    const res = await post([cors()], { msg: 'hi' })
+    expect(res.status).toBe(200)
+    expect(await res.json()).toEqual({ msg: 'hi' })
+  })
+
+  it('a route without cors() gets no synthetic OPTIONS — falls through to 405', async () => {
+    const app = buildApp([])
+    const res = await app.request('/echo', { method: 'OPTIONS' })
+    expect(res.status).toBe(405)
+    expect(res.headers.get('allow')).toBe('POST')
+  })
+
+  it('aggregates Access-Control-Allow-Methods across routes sharing a path', async () => {
+    const list = defineRoute({
+      method: 'GET',
+      path: '/items',
+      use: [cors()],
+      input: {},
+      output: z.array(z.string()),
+      handler: () => [],
+    })
+    const create = defineRoute({
+      method: 'POST',
+      path: '/items',
+      use: [cors()],
+      input: { body: z.object({ name: z.string() }) },
+      output: z.object({ name: z.string() }),
+      handler: (c) => c.input.body,
+    })
+    const app = createApp({ modules: [{ list, create }] })
+    const res = await app.request('/items', { method: 'OPTIONS' })
+    expect(res.status).toBe(204)
+    expect((res.headers.get('access-control-allow-methods') ?? '').split(',').sort()).toEqual([
+      'GET',
+      'POST',
+    ])
+  })
+
+  it('respects an explicitly pinned allowMethods over aggregation', async () => {
+    const app = buildApp([cors({ allowMethods: ['POST', 'OPTIONS'] })])
+    const res = await app.request('/echo', { method: 'OPTIONS' })
+    expect(res.headers.get('access-control-allow-methods')).toBe('POST,OPTIONS')
+  })
+
+  it('an app-level (ADR-0012) global cors() also gets a synthetic OPTIONS per route', async () => {
+    const echo = defineRoute({
+      method: 'POST',
+      path: '/echo',
+      input: { body: z.object({ msg: z.string() }) },
+      output: z.object({ msg: z.string() }),
+      handler: (c) => c.input.body,
+    })
+    const app = createApp({ modules: [{ echo }], middlewares: [cors()] })
+    const res = await app.request('/echo', { method: 'OPTIONS' })
+    expect(res.status).toBe(204)
+    expect(res.headers.get('access-control-allow-origin')).toBe('*')
+  })
+})
+
 describe('secureHeaders()', () => {
   it('applies the hardened baseline headers', async () => {
     const res = await post([secureHeaders()], { msg: 'hi' })

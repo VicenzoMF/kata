@@ -65,11 +65,14 @@ jsonpath "$.error" == "method_not_allowed"
 
 
 # 6. OPTIONS /request-id — a browser CORS preflight. main.ts's global `cors()`
-#    (ADR-0012) answers it itself before the 404/405 decision ever runs, so
-#    preflight keeps working with no per-path OPTIONS route to hand-write.
+#    (ADR-0012) makes `buildHonoApp` auto-register a synthetic `OPTIONS`
+#    responder for every path (ADR-0020, issue #158) — no per-path OPTIONS
+#    route to hand-write, and Access-Control-Allow-Methods names the one
+#    method this path declares.
 OPTIONS http://localhost:3000/request-id
 Origin: https://example.com
 Access-Control-Request-Method: GET
 HTTP 204
 [Asserts]
 header "Access-Control-Allow-Origin" == "*"
+header "Access-Control-Allow-Methods" == "GET"
