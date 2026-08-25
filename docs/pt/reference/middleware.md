@@ -231,11 +231,22 @@ preflight de CORS `204`), essa resposta é retornada e a cadeia para.
 
 Isso torna o adapter correto para middleware que **apenas define response headers
 ou rejeita uma requisição** — não para transformadores de resposta (compressão,
-ETag) que precisam observar o body final. O adapter é interno: para encapsular
-seu próprio middleware do Hono você recorre a
-[`defineMiddleware`](/pt/reference/define-middleware) e escreve no scoped store
-com `c.set`. Veja [Middleware no nível do app](/pt/guide/app-middleware) para a
+ETag) que precisam observar o body final. Para esses, use o `fromHonoTransform`:
+
+```ts
+function fromHonoTransform<R extends Registry = Registry>(mw: MiddlewareHandler): Middleware<R>
+```
+
+Ele conecta um `next` *real*, para que o código pós-`next` do `mw` possa ler e
+substituir a `Response` final do kata. Precisa ser a primeira entrada da sua cadeia
+efetiva — o kata lança um erro na inicialização caso contrário. Veja
+[Middleware no nível do app](/pt/guide/app-middleware#fromhonotransform) para a
 explicação completa.
+
+Os dois adapters são internos para encapsular um middleware *Hono cru*. Para
+escrever seu próprio middleware diretamente contra o contexto do kata, recorra a
+[`defineMiddleware`](/pt/reference/define-middleware) e escreva no scoped store
+com `c.set` em vez disso.
 
 ## Request id
 

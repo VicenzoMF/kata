@@ -70,8 +70,10 @@ Em um middleware, `c.header(name)` é um **getter** de header da requisição. N
 `c.set` para headers de resposta nem pós-processamento de corpo: o Kata constrói
 sua resposta desacoplada de `c.res`, então uma cadeia `use`/global prepara a
 requisição e pode fazer short-circuit, mas não pode reescrever o corpo final.
-Transformadores de resposta (compressão, ETag) não pertencem aqui. Se você
-precisa definir um header de resposta, faça-o em `c.raw` antes de retornar, ou
+Transformadores de resposta (compressão, ETag) não pertencem aqui — encapsule um
+middleware do Hono com o
+[`fromHonoTransform`](/pt/guide/app-middleware#fromhonotransform) em vez disso. Se
+você precisa definir um header de resposta, faça-o em `c.raw` antes de retornar, ou
 construa a `Response` você mesmo.
 :::
 

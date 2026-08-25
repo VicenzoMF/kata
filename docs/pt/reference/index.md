@@ -58,6 +58,7 @@ Valores:
 | `cors` | função | Middleware de CORS embutido. |
 | `secureHeaders` | função | Middleware de headers de segurança embutido. |
 | `bodyLimit` | função | Middleware embutido de limite de tamanho do corpo da request. |
+| `fromHonoTransform` | função | Adapta um middleware do Hono que transforma a resposta (`compress`, `etag`) para que ele possa reescrever o corpo final da resposta do kata. |
 | `DEFAULT_MAX_BODY_SIZE` | const | O teto de bytes padrão que `bodyLimit` aplica quando nenhum `maxBytes` é informado. |
 | `buildErrorBody` | função | Constrói o error envelope unificado (ADR-0008) como um objeto plano — `{ error, message, issues? }`. |
 | `formatZodIssues` | função | Converte um `ZodError` no formato `FieldIssue[]` usado nos error envelopes. |

@@ -135,8 +135,10 @@ type MiddlewareContext<R extends Registry> = {
 headers and no body post-processing: Kata builds its response detached from
 `c.res`, so a chain prepares the request and may short-circuit, but cannot
 rewrite the final body. Response transformers (compression, ETag) do not belong
-in a middleware. To set a response header, do it on `c.raw` before returning, or
-build the `Response` yourself.
+in a `defineMiddleware`-authored middleware — wrap a Hono middleware with
+[`fromHonoTransform`](/guide/app-middleware#fromhonotransform) instead. To set a
+response header, do it on `c.raw` before returning, or build the `Response`
+yourself.
 :::
 
 ## Short-circuiting

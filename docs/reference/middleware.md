@@ -226,10 +226,22 @@ wrapped middleware short-circuits with a `Response` (a `413`, a CORS preflight
 
 This makes the adapter correct for middleware that **only set response headers or
 reject a request** — not for response-transformers (compression, ETag) that must
-observe the final body. The adapter is internal: to wrap your own Hono middleware
-you reach for [`defineMiddleware`](/reference/define-middleware) and write to the
-scoped store with `c.set`. See [App-level middleware](/guide/app-middleware) for
-the full explanation.
+observe the final body. For those, use `fromHonoTransform` instead:
+
+```ts
+function fromHonoTransform<R extends Registry = Registry>(mw: MiddlewareHandler): Middleware<R>
+```
+
+It wires a *real* `next`, so `mw`'s post-`next` code can read and replace kata's
+final `Response`. It must be the first entry of its effective chain — kata throws at
+startup otherwise. See
+[App-level middleware](/guide/app-middleware#fromhonotransform)
+for the full explanation.
+
+Both adapters are internal to wrapping a *raw Hono* middleware. To write your own
+middleware directly against kata's context, reach for
+[`defineMiddleware`](/reference/define-middleware) and write to the scoped store
+with `c.set` instead.
 
 ## Request id
 
