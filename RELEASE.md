@@ -221,34 +221,89 @@ publishing).
 ```sh
 # 0. Bump packages/docs-mcp/package.json version if needed.
 
-# 1. Build (copies docs/ fresh, then bundles) and smoke-check the local build.
+# 1. Guard: fail fast if the checkout can't legitimately be published from
+#    (dirty working tree, or HEAD doesn't contain the latest katajs-v* tag —
+#    issue #280). prepublishOnly also runs this, so step 3 re-checks it.
+pnpm --filter=@katajs-framework/docs-mcp run check-publish-ready
+
+# 2. Build (copies docs/ fresh, then bundles) and smoke-check the local build.
 pnpm --filter=@katajs-framework/docs-mcp build
 pnpm --filter=@katajs-framework/docs-mcp smoke-check
 
-# 2. Publish (same manual, passkey-gated flow as core — see above;
-#    prepublishOnly re-runs build + typecheck).
+# 3. Publish (same manual, passkey-gated flow as core — see above;
+#    prepublishOnly re-runs check-publish-ready + build + typecheck).
 cd packages/docs-mcp
 npm publish --access public
 
-# 3. Tag the release in git
+# 4. Tag the release in git
 git tag docs-mcp-v0.1.0 && git push origin docs-mcp-v0.1.0
 
-# 4. Post-publish smoke check against the real registry artifact, not just
+# 5. Post-publish smoke check against the real registry artifact, not just
 #    the local build — confirms `npx -y` resolves and serves the published
 #    snapshot.
 node scripts/smoke-check.mjs --pkg @katajs-framework/docs-mcp@0.1.0
 ```
 
+`check-publish-ready.mjs` (issue #280) is what catches the exact failure mode
+that shipped `0.1.0`/`0.1.1` stale: it fails if the working tree is dirty, or
+if `HEAD` does not contain the latest `katajs-v*` tag — i.e. this checkout's
+`docs/` predates the core release it's supposed to document. It is wired into
+`prepublishOnly`, so a bare `npm publish` from a stale checkout now fails
+before it ever reaches the registry.
+
 `smoke-check.mjs` speaks real MCP protocol to the running server (spawned via
 stdio) and asserts two things a stale snapshot breaks silently:
 `search_docs("npm install")` surfaces `@katajs-framework/core` (not a stale
 unscoped `katajs`), and every indexed ADR has a unique number. Run it after
-step 1 against the local build, and again after step 2 against the published
+step 2 against the local build, and again after step 3 against the published
 package — a green local check with a red registry check means the publish
 itself went wrong (wrong tag, stale `npm pack`, etc.), not the docs.
 
-CI automation for this (rebuild + republish + smoke-check on a `docs-mcp-v*`
-tag, mirroring core's release workflow above) is not wired yet — same
-constraint as core: the harness blocks agent edits to
-`.github/workflows/*`, so that workflow is an owner action from a
-non-Claude shell.
+## CI release flow (recommended, optional)
+
+Publish on a `docs-mcp-v*` tag so a release is never a laptop-only action,
+mirroring core's release workflow above. This is **not** wired yet — adding a
+workflow is an owner action (the harness blocks agent edits to
+`.github/workflows/`, and CI config is an L3 guardrail). Reuse the same
+`NPM_TOKEN` repo secret as core (or migrate both to trusted publishing
+together — see the deprecation note under core's CI flow above), then create
+`.github/workflows/release-docs-mcp.yml`:
+
+```yaml
+name: release-docs-mcp
+on:
+  push:
+    tags: ['docs-mcp-v*']
+permissions:
+  contents: read
+  id-token: write          # required for npm provenance
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          registry-url: https://registry.npmjs.org
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm typecheck && pnpm test
+      - run: pnpm --filter=@katajs-framework/docs-mcp run check-publish-ready
+      - run: pnpm --filter=@katajs-framework/docs-mcp build
+      - run: pnpm --filter=@katajs-framework/docs-mcp smoke-check
+      - run: npm publish --access public --provenance
+        working-directory: packages/docs-mcp
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+      - run: |
+          VERSION="${GITHUB_REF_NAME#docs-mcp-v}"
+          node scripts/smoke-check.mjs --pkg "@katajs-framework/docs-mcp@$VERSION"
+        working-directory: packages/docs-mcp
+```
+
+`check-publish-ready` running in CI is somewhat belt-and-suspenders (a
+tag-triggered checkout is already pinned to one commit), but it stays useful
+as the same fast-fail if someone tags `docs-mcp-v*` from a branch that hasn't
+picked up the latest `katajs-v*` release yet.
