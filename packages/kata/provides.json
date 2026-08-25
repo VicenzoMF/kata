@@ -8,6 +8,9 @@
       "cors": {
         "provides": []
       },
+      "fromHonoTransform": {
+        "provides": []
+      },
       "secureHeaders": {
         "provides": []
       }

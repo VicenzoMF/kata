@@ -58,6 +58,7 @@ Values:
 | `cors` | function | Built-in CORS middleware. |
 | `secureHeaders` | function | Built-in security-headers middleware. |
 | `bodyLimit` | function | Built-in request-body size limit middleware. |
+| `fromHonoTransform` | function | Adapt a response-transforming Hono middleware (`compress`, `etag`) so it can rewrite kata's final response body. |
 | `DEFAULT_MAX_BODY_SIZE` | const | The default byte cap `bodyLimit` enforces when no `maxBytes` is given. |
 | `buildErrorBody` | function | Build the unified error envelope (ADR-0008) as a plain object — `{ error, message, issues? }`. |
 | `formatZodIssues` | function | Convert a `ZodError` into the `FieldIssue[]` shape used in error envelopes. |

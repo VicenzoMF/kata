@@ -43,7 +43,12 @@ describe('provides.json', () => {
 
   it('declares every first-party middleware as providing no scoped slot', () => {
     const manifest = generateManifest(ENTRY_POINTS, readFile)
-    expect(Object.keys(manifest.exports['.'] ?? {})).toEqual(['bodyLimit', 'cors', 'secureHeaders'])
+    expect(Object.keys(manifest.exports['.'] ?? {})).toEqual([
+      'bodyLimit',
+      'cors',
+      'fromHonoTransform',
+      'secureHeaders',
+    ])
     for (const entry of Object.values(manifest.exports['.'] ?? {})) {
       expect(entry.provides).toEqual([])
     }

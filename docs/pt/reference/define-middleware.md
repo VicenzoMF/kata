@@ -135,8 +135,10 @@ type MiddlewareContext<R extends Registry> = {
 resposta nem pós-processamento de body: o Kata constrói sua resposta desacoplada de
 `c.res`, então uma cadeia prepara a requisição e pode fazer short-circuit, mas não pode
 reescrever o body final. Transformadores de resposta (compressão, ETag) não pertencem
-a um middleware. Para setar um header de resposta, faça-o em `c.raw` antes de retornar, ou
-construa o `Response` você mesmo.
+a um middleware escrito com `defineMiddleware` — encapsule um middleware do Hono com o
+[`fromHonoTransform`](/pt/guide/app-middleware#fromhonotransform) em vez disso. Para
+setar um header de resposta, faça-o em `c.raw` antes de retornar, ou construa o
+`Response` você mesmo.
 :::
 
 ## Short-circuiting

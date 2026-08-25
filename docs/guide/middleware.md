@@ -93,8 +93,10 @@ In a middleware, `c.header(name)` is a request-header **getter**. There is no
 `c.set` for response headers and no body post-processing: Kata builds its response
 detached from `c.res`, so a `use`/global chain prepares the request and may
 short-circuit, but cannot rewrite the final body. Response transformers
-(compression, ETag) do not belong here. If you must set a response header, do it on
-`c.raw` before returning, or build the `Response` yourself.
+(compression, ETag) do not belong here — wrap a Hono middleware with
+[`fromHonoTransform`](/guide/app-middleware#fromhonotransform) instead. If you
+must set a response header, do it on `c.raw` before returning, or build the
+`Response` yourself.
 :::
 
 ## Filling a scoped slot

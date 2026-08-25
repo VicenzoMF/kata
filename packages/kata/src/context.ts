@@ -1,4 +1,4 @@
-import type { Hono } from 'hono'
+import type { Hono, MiddlewareHandler } from 'hono'
 import { Hono as HonoApp } from 'hono'
 import { cors as honoCors } from 'hono/cors'
 import type { z } from 'zod'
@@ -107,6 +107,16 @@ export type Middleware<R extends Registry> = {
    * every other middleware.
    */
   readonly preflight?: CorsPreflightOptions
+  /**
+   * ADR-0020: present only on `fromHonoTransform()`'s output — the raw Hono
+   * middleware to wire with a REAL `next`, so it can observe and replace
+   * kata's final response body (`compress()`, `etag()`). `registerRoute`
+   * recognises this and runs it through the response-transform seam instead
+   * of the normal chain; it must be the first entry of its effective chain,
+   * which `registerRoute` enforces at registration time. Inert for every
+   * other middleware.
+   */
+  readonly transform?: MiddlewareHandler
 }
 
 export type InputSchemas = {
@@ -1069,6 +1079,19 @@ function registerRoute<R extends Registry>(
   // boundary below all cover it for free. Skip the concat when there are no globals.
   const chain = options.middlewares.length > 0 ? [...options.middlewares, ...route.use] : route.use
   recordPreflight(chain, route.path, route.method, preflightPaths)
+  // Response-transform seam (ADR-0020, issue #159): a `fromHonoTransform()`
+  // entry must wrap every downstream middleware and the handler to observe the
+  // final body, so it is only valid as the first entry of the effective chain.
+  // Caught here, at registration, rather than left to run — silently wrong —
+  // at request time.
+  const transformIndex = chain.findIndex((mw) => mw.transform !== undefined)
+  if (transformIndex > 0) {
+    throw new Error(
+      `kata: fromHonoTransform() must be the first entry of the effective middleware chain for ${route.method} ${route.path} (found at position ${transformIndex}) — it has to wrap every downstream middleware and the handler to observe the final response`,
+    )
+  }
+  const transformHandler = transformIndex === 0 ? chain[0]!.transform : undefined
+  const restChain = transformHandler ? chain.slice(1) : chain
   register.call(app, route.path, async (c: import('hono').Context) => {
     const requestId = resolveRequestId(c.req.header(REQUEST_ID_HEADER))
     const startedAt = performance.now()
@@ -1084,19 +1107,14 @@ function registerRoute<R extends Registry>(
       //    validate the response against the route's output contract — single
       //    schema (ADR-0003) or status→schema map (ADR-0011) — per the
       //    configured mode (ADR-0009).
-      shortCircuit = await runMiddlewareChain(chain, registry, c, requestId, async () => {
-        const inputResult = await readInputs(route.input, c)
-        if (!inputResult.ok) {
-          if ('response' in inputResult) return inputResult.response
-          return errorResponse(c, 'validation_failed', 'Request input validation failed', {
-            status: 422,
-            issues: inputResult.issues,
-          })
-        }
-        const handlerCtx = makeRouteContext(registry, c, inputResult.value, requestId)
-        const result = await route.handler(handlerCtx)
-        return buildResponse(c, route, result, options)
-      })
+      const onComplete = buildRouteOnComplete(registry, route, c, requestId, options)
+      shortCircuit = transformHandler
+        ? await runTransformChain(
+            transformHandler,
+            () => runMiddlewareChain(restChain, registry, c, requestId, onComplete),
+            c,
+          )
+        : await runMiddlewareChain(restChain, registry, c, requestId, onComplete)
     } catch (err) {
       logFrameworkError(options.logger, `kata: unhandled error in ${route.method} ${route.path}`, {
         err: serializeError(err),
@@ -1191,6 +1209,55 @@ function registerPreflightRoutes<R extends Registry>(
       )
     })
   }
+}
+
+/** The route's input→handler→output pipeline, run once the middleware chain completes (#62, ADR-0003/0009/0011). */
+function buildRouteOnComplete<R extends Registry>(
+  registry: R,
+  route: Route<R>,
+  c: import('hono').Context,
+  requestId: string,
+  options: RuntimeOptions<R>,
+): () => Promise<Response> {
+  return async () => {
+    const inputResult = await readInputs(route.input, c)
+    if (!inputResult.ok) {
+      if ('response' in inputResult) return inputResult.response
+      return errorResponse(c, 'validation_failed', 'Request input validation failed', {
+        status: 422,
+        issues: inputResult.issues,
+      })
+    }
+    const handlerCtx = makeRouteContext(registry, c, inputResult.value, requestId)
+    const result = await route.handler(handlerCtx)
+    return buildResponse(c, route, result, options)
+  }
+}
+
+/**
+ * Wire a `fromHonoTransform()`-wrapped Hono middleware with a REAL `next`
+ * (ADR-0020, issue #159): calling it runs kata's remaining chain + handler
+ * (`runDownstream`) to completion, places the resulting `Response` on `c.res`
+ * so the wrapped middleware's post-`next` code can read and replace it —
+ * `compress()` and `etag()` both do exactly this — then reads back whatever
+ * `c.res` holds afterwards as kata's response; this is how a transformed body
+ * reaches the client despite kata otherwise building its response detached
+ * from `c.res`. If the wrapped middleware short-circuits with a `Response` of
+ * its own instead of calling `next()`, that response is used as-is and
+ * `runDownstream` never runs — the same short-circuit semantics `fromHono`
+ * gives a header-setter/request-rejecter.
+ */
+async function runTransformChain(
+  transformHandler: MiddlewareHandler,
+  runDownstream: () => Promise<Response | undefined>,
+  c: import('hono').Context,
+): Promise<Response | undefined> {
+  const short = await transformHandler(c, async () => {
+    const built = await runDownstream()
+    if (built) c.res = built
+  })
+  if (short instanceof Response) return short
+  return c.res
 }
 
 /**

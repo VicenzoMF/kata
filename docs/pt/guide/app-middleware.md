@@ -198,16 +198,47 @@ define caia em `c.res` *antes* de o Kata construir a resposta — então ele con
 do Kata. E se o middleware envolvido der curto-circuito com uma `Response` (um `413`, um
 preflight de CORS `204`), essa resposta é retornada e a cadeia para.
 
-O porém: isso é correto apenas para middlewares que **definem headers de resposta ou rejeitam uma
-requisição**. Um *transformador* de resposta — compressão, ETag — precisa observar o corpo
-final, o que ele nunca consegue aqui, então ele não pertence a um `use:` ou a uma cadeia global de
-forma alguma. (Esta é a mesma restrição sob a qual o middleware de rota vive; veja o aviso de `c.header`
-em [Middleware](/pt/guide/middleware).)
+O porém: esse adaptador — `fromHono`, usado internamente pelos três built-ins — é
+correto apenas para middlewares que **definem headers de resposta ou rejeitam uma
+requisição**. Um *transformador* de resposta — compressão, ETag — precisa observar o
+corpo *final*, o que ele nunca consegue de um `next()` inerte rodado antes da própria
+cadeia do Kata. (Esta é a mesma restrição sob a qual o middleware de rota vive; veja o
+aviso de `c.header` em [Middleware](/pt/guide/middleware).)
+
+### `fromHonoTransform`
+
+Para esse caso mais restrito — um middleware do Hono que transforma a resposta — existe
+um segundo adaptador, opt-in
+([ADR-0020](/adr/0020-cors-preflight-and-response-transform-seam)):
+
+```ts
+import { fromHonoTransform } from '@katajs-framework/core'
+import { compress } from 'hono/compress'
+
+defineRoute({
+  method: 'GET',
+  path: '/report',
+  use: [fromHonoTransform(compress())],
+  // ...
+})
+```
+
+Diferente do `fromHono`, ele conecta um `next` *real*: chamá-lo deixa a própria cadeia
+e o handler do Kata rodarem até o fim primeiro, coloca a `Response` resultante onde o
+middleware envolvido a lê e — quando o middleware a substitui, como `compress()` e
+`etag()` fazem — envia essa substituição de volta como a resposta do Kata. O
+trade-off é uma restrição: para ver o corpo final, a entrada precisa envolver *tudo*
+o que vem depois dela, então precisa ser a primeira entrada da sua cadeia efetiva —
+um global anterior, ou outra entrada de `use:` antes dela, e o kata lança um erro na
+inicialização em vez de silenciosamente descartar a transformação. O `fromHono`
+continua sendo o padrão para todo o resto — middlewares que definem headers e que
+rejeitam requisições.
 
 Para middlewares que você escreve por conta própria — populando um scoped slot a partir de um cookie de
-sessão ou API key, adicionando camadas de autorização — não envolva um middleware do Hono. Use `defineMiddleware`
-e escreva no store scoped com `c.set` diretamente. Veja [Middleware](/pt/guide/middleware)
-para o padrão de preenchimento de slots e [Auth com JWT](/pt/guide/jwt) para o caminho específico de auth.
+sessão ou API key, adicionando camadas de autorização — não envolva um middleware do Hono com nenhum
+dos dois adaptadores. Use `defineMiddleware` e escreva no store scoped com `c.set`
+diretamente. Veja [Middleware](/pt/guide/middleware) para o padrão de preenchimento de
+slots e [Auth com JWT](/pt/guide/jwt) para o caminho específico de auth.
 
 ## Preflight de CORS
 
@@ -273,4 +304,5 @@ lugares sem ganho algum: a resposta de preflight é idêntica sem ele.
 - [ADR-0012](/adr/0012-app-level-middleware) — por que a cadeia global estende a
   cadeia manual de rotas em vez de `app.use`.
 - [ADR-0020](/adr/0020-cors-preflight-and-response-transform-seam) — por que o
-  framework responde ao preflight de CORS por conta própria.
+  framework responde ao preflight de CORS por conta própria e como funciona a costura
+  do `fromHonoTransform`.
