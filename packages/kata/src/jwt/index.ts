@@ -14,6 +14,7 @@ import type { z } from 'zod'
 import type { Middleware, MiddlewareContext } from '../context'
 import type { FieldIssue } from '../errors'
 import { formatZodIssues } from '../errors'
+import { typedGet, typedSet } from '../hono-bridge'
 import type { Registry, ScopedKeys, SlotValue } from '../types'
 
 /** Algorithms supported by the underlying `hono/jwt` (HS / RS / PS / ES + EdDSA). */
@@ -273,15 +274,13 @@ export function jwtAuth<R extends Registry, S extends z.ZodTypeAny>(
         return c.error('unauthorized', 'No such user', { status: 401 })
       }
     }
-    // ADR-0013 §4: `slot` is a runtime string and `R` is opaque here, so widen
-    // `set` to its string-keyed form. The slot's membership in `ScopedKeys<R>`
-    // and that the value matches its declared type are enforced at the call site
-    // (`provides` + lint), exactly as ADR-0004 documents for scoped reads.
-    // Called inline rather than through an intermediate variable (issue #163):
-    // `set` now reads its per-request state off `this`, so a detached
-    // reference would call it with `this` unbound.
-    // kata-allow: hono-boundary
-    ;(c.set as unknown as (key: string, value: unknown) => void)(slot, value)
+    // ADR-0013 §4 / ADR-0025: `slot` is a runtime string and `R` is opaque
+    // here, so `set` is written through the `typedSet` boundary shim rather
+    // than its own strict `ScopedKeys<R>`-typed signature. The slot's
+    // membership in `ScopedKeys<R>` and that the value matches its declared
+    // type are enforced at the call site (`provides` + lint), exactly as
+    // ADR-0004 documents for scoped reads.
+    typedSet(c, slot, value)
     await next()
   }
 }
@@ -362,14 +361,11 @@ export function guard<R extends Registry, const S extends ScopedKeys<R> = Defaul
   const code = options.code ?? DEFAULT_FORBIDDEN_CODE
   const message = options.message ?? DEFAULT_FORBIDDEN_MESSAGE
   return async (c, next) => {
-    // Called inline rather than through an intermediate variable (issue
-    // #163): `get` now reads its per-request state off `this`, so a detached
-    // reference would call it with `this` unbound.
-    // kata-allow: hono-boundary
-    const allowed = await options.authorize(
-      (c.get as unknown as (key: string) => SlotValue<R, S>)(slot),
-      c,
-    )
+    // ADR-0025: `slot` is a runtime string and `R`/`S` are opaque here, so
+    // `get` is read through the `typedGet` boundary shim rather than its own
+    // strict `keyof R`-typed signature — the *type* of what it reads is
+    // still projected off `R` itself, via the explicit `SlotValue<R, S>`.
+    const allowed = await options.authorize(typedGet<SlotValue<R, S>>(c, slot), c)
     if (!allowed) {
       return c.error(code, message, { status: 403 })
     }

@@ -5,6 +5,7 @@ import type { z } from 'zod'
 
 import type { ErrorExtra, FieldIssue } from './errors'
 import { buildErrorBody, formatZodIssues, serializeError } from './errors'
+import { typedGet, typedJson, typedSet } from './hono-bridge'
 import { type Logger, logFrameworkError, logRequest, resolveLogger } from './logger'
 import { type OutputValidationMode, resolveOutputValidationMode } from './output-validation'
 import { REQUEST_ID_HEADER, resolveRequestId } from './request-id'
@@ -501,12 +502,10 @@ const NOOP_NEXT = async (): Promise<void> => {}
 const SCOPED_STORE = Symbol('kata.scoped-store')
 
 function getScopedStore(c: import('hono').Context): Map<string, unknown> {
-  // kata-allow: hono-boundary
-  let store = c.get(SCOPED_STORE as never) as Map<string, unknown> | undefined
+  let store = typedGet<Map<string, unknown> | undefined>(c, SCOPED_STORE)
   if (!store) {
     store = new Map<string, unknown>()
-    // kata-allow: hono-boundary
-    c.set(SCOPED_STORE as never, store as never)
+    typedSet(c, SCOPED_STORE, store)
   }
   return store
 }
@@ -521,13 +520,11 @@ const CONTEXT_HEADERS_TOUCHED = Symbol('kata.context-headers-touched')
  * Response, so a request with no app-level middleware must not pay for it.
  */
 export function markContextHeadersTouched(c: import('hono').Context): void {
-  // kata-allow: hono-boundary
-  c.set(CONTEXT_HEADERS_TOUCHED as never, true as never)
+  typedSet(c, CONTEXT_HEADERS_TOUCHED, true)
 }
 
 function contextHeadersTouched(c: import('hono').Context): boolean {
-  // kata-allow: hono-boundary
-  return c.get(CONTEXT_HEADERS_TOUCHED as never) === true
+  return typedGet<boolean | undefined>(c, CONTEXT_HEADERS_TOUCHED) === true
 }
 
 /**
@@ -550,9 +547,8 @@ function mergeContextHeaders(target: Headers, source: Headers): void {
 
 /**
  * Single funnel for every Kata 4xx/5xx response (ADR-0008). Builds the unified
- * envelope via `buildErrorBody` and wraps it in a Hono JSON response. The
- * `as never` casts are the same Hono-boundary casts used by the `json` helpers
- * above — they localise Hono's strict status/body typing, not an `any` escape.
+ * envelope via `buildErrorBody` and wraps it in a Hono JSON response through
+ * the `typedJson` boundary shim (ADR-0025).
  */
 function errorResponse(
   c: import('hono').Context,
@@ -560,16 +556,15 @@ function errorResponse(
   message: string,
   extra?: ErrorExtra,
 ): Response {
-  // kata-allow: hono-boundary
-  return c.json(buildErrorBody(code, message, extra) as never, (extra?.status ?? 400) as never)
+  return typedJson(c, buildErrorBody(code, message, extra), extra?.status ?? 400)
 }
 
 /**
  * Shared `get(key)` body for both context prototypes (issue #162): slot
  * lookup → singleton short-circuit → scoped-store presence check → scoped
  * read. Kept generic-free (`key` as `string`) since both call sites already
- * narrow the typed key before calling in and re-cast the result via
- * `as never` on return.
+ * narrow the typed key before calling in; the widening back to the caller's
+ * typed result happens once, in `newContext` below.
  */
 function registryGet<R extends Registry>(
   registry: R,
@@ -611,8 +606,7 @@ const baseContextProto = {
     return registryGet(this.registry, this.store, key)
   },
   json<T>(this: BaseContextState, value: T, status?: number): Response {
-    // kata-allow: hono-boundary
-    return this.raw.json(value as never, (status ?? 200) as never)
+    return typedJson(this.raw, value, status)
   },
   error(this: BaseContextState, code: string, message: string, extra?: ErrorExtra): Response {
     return errorResponse(this.raw, code, message, extra)
@@ -817,21 +811,18 @@ function buildOutputResponse<R extends Registry>(
   options: RuntimeOptions<R>,
 ): Response {
   if (options.outputValidation === 'off' || !schema) {
-    // kata-allow: hono-boundary
-    return c.json(result as never)
+    return typedJson(c, result)
   }
   const parsed = schema.safeParse(result)
   if (parsed.success) {
-    // kata-allow: hono-boundary
-    return c.json(parsed.data as never)
+    return typedJson(c, parsed.data)
   }
   logOutputMismatch(route, SUCCESS_STATUS, parsed.error.issues, options)
   if (options.outputValidation === 'strict') {
     return outputMismatchResponse(c)
   }
   // mode === 'log': keep serving — send the handler's data through unchanged.
-  // kata-allow: hono-boundary
-  return c.json(result as never)
+  return typedJson(c, result)
 }
 
 /**
