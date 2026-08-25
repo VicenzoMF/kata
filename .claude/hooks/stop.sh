@@ -15,10 +15,30 @@
 # Honors `stop_hook_active`: if Claude is already iterating because of us,
 # exit 0 so we don't ping-pong past the 8-block cap.
 #
+# Skips the ladder entirely when the working tree hasn't changed since the
+# last full pass (see the cache-signature check below) — no point re-running
+# typecheck/tests/E2E against code that was already verified.
+#
 # Required CLI: hurl (system pkg). Missing hurl is treated as a hard block
 # with an install hint — agents should not declare done with no E2E layer.
 
 set -uo pipefail
+
+# Hook subprocesses don't source the user's shell profile, so a
+# version-manager-installed pnpm (nvm, fnm) can be missing from PATH here
+# even though it resolves fine in an interactive/login shell. Look under
+# both managers' install dirs and use whichever bin dir's pnpm was touched
+# most recently (best available proxy for "currently active version").
+if ! command -v pnpm >/dev/null 2>&1; then
+  vm_bin="$(
+    { ls -d "$HOME"/.nvm/versions/node/*/bin 2>/dev/null
+      ls -d "$HOME"/.local/share/fnm/node-versions/*/installation/bin 2>/dev/null
+    } | while read -r dir; do
+      [ -x "$dir/pnpm" ] && printf '%s\t%s\n' "$(stat -c %Y "$dir/pnpm" 2>/dev/null || echo 0)" "$dir"
+    done | sort -rn | head -1 | cut -f2
+  )"
+  [ -n "$vm_bin" ] && export PATH="$vm_bin:$PATH"
+fi
 
 input="$(cat)"
 
@@ -28,6 +48,24 @@ fi
 
 ROOT="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
 cd "$ROOT"
+
+# Skip the whole ladder when the working tree is byte-identical to the last
+# state that passed it in full — nothing that could break typecheck, tests,
+# or the E2E suite has changed since. Keyed on HEAD + working-tree status
+# (tracked diff + untracked files), so any real edit or branch switch
+# invalidates it. Cache lives under the git dir so each worktree (this repo
+# runs many, per its worktree-lane workflow) gets its own.
+GIT_DIR="$(git rev-parse --git-dir)"
+CACHE_FILE="$GIT_DIR/kata-stop-hook-last-pass"
+sig="$(
+  {
+    git rev-parse HEAD
+    git status --porcelain=v1 --ignore-submodules 2>/dev/null | grep -v '\.claude/worktrees/'
+  } | sha256sum | cut -d' ' -f1
+)"
+if [ -f "$CACHE_FILE" ] && [ "$(cat "$CACHE_FILE" 2>/dev/null)" = "$sig" ]; then
+  exit 0
+fi
 
 block() {
   jq -Rn --arg reason "$1" '{decision: "block", reason: $reason}'
@@ -109,4 +147,5 @@ server log:
 $(cat "$SERVER_LOG")"
 fi
 
+echo "$sig" >"$CACHE_FILE"
 exit 0
