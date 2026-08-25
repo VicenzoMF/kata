@@ -141,6 +141,71 @@ genuinamente não tem nenhum" nunca pareçam iguais no código fonte.
 por requisição — ambos ficam pendurados no mesmo objeto de contexto `c` introduzido em
 [Context & DI](/pt/guide/context-di).)
 
+### Filtros opcionais em query: a armadilha do `z.coerce.boolean()`
+
+Uma rota de listagem com um filtro booleano opcional — `GET /todos?completed=true` —
+é uma das formas mais comuns de `query`, e ela esconde uma armadilha. Uma query
+string é sempre texto, esteja presente ou não, então um campo booleano opcional
+precisa converter `"true"` / `"false"` em um `boolean` de verdade — e a forma óbvia
+de escrever isso está errada:
+
+```ts
+// Parece certo, não é:
+completed: z.coerce.boolean().optional()
+```
+
+`z.coerce.boolean()` executa `Boolean(value)` por baixo dos panos, e em JavaScript
+`Boolean("false")` é `true` — *qualquer* string não vazia converte para `true`,
+incluindo o texto literal `"false"`. Esse schema trata `?completed=false` e
+`?completed=true` como a mesma requisição, e não há erro de validação para pegar
+isso — simplesmente significa "true" silenciosamente, nos dois casos.
+
+A correção é validar as duas strings literais que a query string pode de fato
+carregar, e então transformar em boolean, em vez de coagir:
+
+```ts
+// src/modules/todos/todos.schema.ts
+import { z } from 'zod'
+
+export const ListTodosQuerySchema = z.object({
+  completed: z
+    .enum(['true', 'false'])
+    .optional()
+    .transform((v) => (v === undefined ? undefined : v === 'true')),
+})
+```
+
+```ts
+// src/modules/todos/todos.route.ts
+import { defineRoute } from '../../context'
+
+import { ListTodosQuerySchema, TodoListSchema } from './todos.schema'
+import { listTodos } from './todos.service'
+
+export const listTodosRoute = defineRoute({
+  method: 'GET',
+  path: '/todos',
+  input: { query: ListTodosQuerySchema },
+  output: TodoListSchema,
+  handler: (c) => listTodos(c.get('store'), c.input.query.completed),
+})
+```
+
+`c.input.query.completed` é tipado como `boolean | undefined` — omitir
+`?completed=` deixa o filtro desligado, `?completed=true` / `?completed=false`
+o definem corretamente, e qualquer outro valor (`?completed=yes`,
+`?completed=1`) falha na validação de input com o `422` de sempre, em vez de
+silenciosamente resolver para `true`.
+
+::: warning Isso é comportamento do Zod, não do Kata
+`z.coerce.boolean()` é documentado para funcionar exatamente assim — é coerção via
+`Boolean(...)`, não um parser de strings truthy/falsy. É uma escolha razoável para
+um valor que você já confia ser `"true"`/`"false"`/ausente (uma flag de config
+interna, por exemplo), mas uma query string é input do usuário, então prefira o
+padrão `z.enum(...).transform(...)` acima sempre que o texto do campo deva ser
+exatamente `"true"` ou `"false"`.
+:::
+
 ## `output` — schema único ou map de status
 
 `output` descreve o que a rota tem permissão para enviar de volta. Ele assume uma de duas
