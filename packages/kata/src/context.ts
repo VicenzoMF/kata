@@ -565,11 +565,11 @@ function errorResponse(
 }
 
 /**
- * Shared `get(key)` body for both {@link makeMiddlewareContext} and
- * {@link makeRouteContext} (issue #162): slot lookup → singleton short-circuit
- * → scoped-store presence check → scoped read. Kept generic-free (`key` as
- * `string`) since both call sites already narrow the typed key before
- * calling in and re-cast the result via `as never` on return.
+ * Shared `get(key)` body for both context prototypes (issue #162): slot
+ * lookup → singleton short-circuit → scoped-store presence check → scoped
+ * read. Kept generic-free (`key` as `string`) since both call sites already
+ * narrow the typed key before calling in and re-cast the result via
+ * `as never` on return.
  */
 function registryGet<R extends Registry>(
   registry: R,
@@ -589,17 +589,64 @@ function registryGet<R extends Registry>(
   return store.get(key)
 }
 
-/** Shared `json(value, status)` builder for both context shapes (issue #162). */
-function makeJson(c: import('hono').Context) {
-  return <T>(value: T, status?: number): Response =>
-    // kata-allow: hono-boundary
-    c.json(value as never, (status ?? 200) as never)
+/**
+ * Per-request state a context object carries (issue #163). This is the only
+ * thing allocated per `makeMiddlewareContext` / `makeRouteContext` call — the
+ * `get` / `json` / `error` (and, for middleware, `set` / `header`) methods
+ * live once on {@link baseContextProto} / {@link middlewareContextProto} and
+ * are shared across every request via `Object.create`, instead of being
+ * rebuilt as fresh closures on every call the way `makeJson` / `makeError`
+ * (issue #162) did.
+ */
+type BaseContextState = {
+  registry: Registry
+  store: Map<string, unknown>
+  raw: import('hono').Context
+  requestId: string
 }
 
-/** Shared `error(code, message, extra)` builder for both context shapes (issue #162). */
-function makeError(c: import('hono').Context) {
-  return (code: string, message: string, extra?: ErrorExtra): Response =>
-    errorResponse(c, code, message, extra)
+/** `get` / `json` / `error` — shared by both {@link MiddlewareContext} and {@link RouteContext}. */
+const baseContextProto = {
+  get(this: BaseContextState, key: string): unknown {
+    return registryGet(this.registry, this.store, key)
+  },
+  json<T>(this: BaseContextState, value: T, status?: number): Response {
+    // kata-allow: hono-boundary
+    return this.raw.json(value as never, (status ?? 200) as never)
+  },
+  error(this: BaseContextState, code: string, message: string, extra?: ErrorExtra): Response {
+    return errorResponse(this.raw, code, message, extra)
+  },
+}
+
+/** {@link baseContextProto} plus `set` / `header`, the two {@link MiddlewareContext}-only methods. */
+const middlewareContextProto = {
+  ...baseContextProto,
+  set(this: BaseContextState, key: string, value: unknown): void {
+    const slot = this.registry[key]
+    if (!slot || slot.__kind !== 'scoped') {
+      throw new Error(`kata: cannot set '${key}' — not a scoped slot`)
+    }
+    this.store.set(key, value)
+  },
+  header(this: BaseContextState, name: string): string | undefined {
+    return this.raw.req.header(name)
+  },
+}
+
+/**
+ * `Object.create(proto)`, typed as both the internal state shape a caller is
+ * about to fill in (`S`) and the public shape it becomes once every field is
+ * set (`T`) — one cast, audited here, instead of one at every call site.
+ * Direct field assignment on the result, not
+ * `Object.assign(Object.create(proto), state)`: benchmarking showed it
+ * roughly halves construction time (no intermediate `state` object, no
+ * generic key enumeration), and each property a caller sets is a static
+ * identifier — unlike assigning from an object built from external data, it
+ * can never be redirected by a `__proto__` key.
+ */
+function newContext<S, T>(proto: object): S & T {
+  return Object.create(proto) as S & T
 }
 
 function makeMiddlewareContext<R extends Registry>(
@@ -607,25 +654,12 @@ function makeMiddlewareContext<R extends Registry>(
   c: import('hono').Context,
   requestId: string,
 ): MiddlewareContext<R> {
-  const store = getScopedStore(c)
-  return {
-    get(key) {
-      // kata-allow: hono-boundary
-      return registryGet(registry, store, key as string) as never
-    },
-    set(key, value) {
-      const slot = registry[key as string]
-      if (!slot || slot.__kind !== 'scoped') {
-        throw new Error(`kata: cannot set '${String(key)}' — not a scoped slot`)
-      }
-      store.set(key as string, value)
-    },
-    raw: c,
-    header: (name) => c.req.header(name),
-    json: makeJson(c),
-    error: makeError(c),
-    requestId,
-  }
+  const ctx = newContext<BaseContextState, MiddlewareContext<R>>(middlewareContextProto)
+  ctx.registry = registry
+  ctx.store = getScopedStore(c)
+  ctx.raw = c
+  ctx.requestId = requestId
+  return ctx
 }
 
 function makeRouteContext<R extends Registry, I extends InputSchemas>(
@@ -634,18 +668,15 @@ function makeRouteContext<R extends Registry, I extends InputSchemas>(
   input: InferInput<I>,
   requestId: string,
 ): RouteContext<R, I> {
-  const store = getScopedStore(c)
-  return {
-    get(key) {
-      // kata-allow: hono-boundary
-      return registryGet(registry, store, key as string) as never
-    },
-    input,
-    raw: c,
-    json: makeJson(c),
-    error: makeError(c),
-    requestId,
-  }
+  const ctx = newContext<BaseContextState & { input: InferInput<I> }, RouteContext<R, I>>(
+    baseContextProto,
+  )
+  ctx.registry = registry
+  ctx.store = getScopedStore(c)
+  ctx.raw = c
+  ctx.requestId = requestId
+  ctx.input = input
+  return ctx
 }
 
 async function readInputs<I extends InputSchemas>(
@@ -985,6 +1016,22 @@ function finalizeResponse<R extends Registry>(
  * through to the end, and supplies whatever response follows — a route's
  * input+handler+output pipeline for `registerRoute`, or nothing for a bare
  * global-only chain.
+ *
+ * Index-driven dispatcher (issue #163): `dispatch(i)` handles `chain[i]` and
+ * hands its handler `() => dispatch(i + 1)` as `next` — a closure tied to
+ * this step's index instead of a hand-threaded mutable index shared across
+ * the whole chain. This is still a recursive continuation, not a flat loop —
+ * the onion model requires it, since a middleware's own post-`next()` code
+ * (running the response back *out* through every earlier layer) only exists
+ * because each layer is a pending stack frame awaiting the one inside it.
+ * `next()`'s public type is `() => Promise<void>` (an Express/Koa-style
+ * contract every middleware author already knows), so the eventual
+ * short-circuit `Response` can't flow back through its return value —
+ * `shortCircuit` is the side-channel that carries it back out to the caller.
+ * A plain arrow closure here, not `dispatch.bind(null, i + 1)`: benchmarking
+ * both (same semantics either way) showed `Function.prototype.bind`'s
+ * exotic bound-function object is measurably slower to create and call than
+ * a small closure over one captured number.
  */
 async function runMiddlewareChain<R extends Registry>(
   chain: readonly Middleware<R>[],
@@ -993,21 +1040,20 @@ async function runMiddlewareChain<R extends Registry>(
   requestId: string,
   onComplete: () => Promise<Response | undefined>,
 ): Promise<Response | undefined> {
-  let i = 0
   let shortCircuit: Response | undefined
-  const step = async (): Promise<void> => {
+  const dispatch = async (i: number): Promise<void> => {
     if (i >= chain.length) {
       shortCircuit = await onComplete()
       return
     }
-    const mw = chain[i++]!
+    const mw = chain[i]!
     const mwCtx = makeMiddlewareContext(registry, c, requestId)
-    const result = await mw.handler(mwCtx, step)
+    const result = await mw.handler(mwCtx, () => dispatch(i + 1))
     if (result instanceof Response) {
       shortCircuit = result
     }
   }
-  await step()
+  await dispatch(0)
   return shortCircuit
 }
 
