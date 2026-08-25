@@ -20,6 +20,15 @@
 
 set -uo pipefail
 
+# Hook subprocesses don't source the user's shell profile, so nvm-managed
+# binaries (pnpm, node) can be missing from PATH here even though they're
+# available in an interactive/login shell. Widen PATH with the newest nvm
+# node bin dir before anything below shells out to pnpm.
+if ! command -v pnpm >/dev/null 2>&1; then
+  nvm_bin="$(ls -d "$HOME"/.nvm/versions/node/*/bin 2>/dev/null | sort -V | tail -1)"
+  [ -n "$nvm_bin" ] && export PATH="$nvm_bin:$PATH"
+fi
+
 input="$(cat)"
 
 if [ "$(jq -r '.stop_hook_active // false' <<<"$input")" = "true" ]; then
