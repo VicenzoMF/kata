@@ -109,7 +109,7 @@ The rules `kata verify` enforces, each anchored to the ADR that justifies it:
 | `kata/middleware-provides-mismatch` | `provides[]` matches the handler's `c.set` (warns when a `c.set` slot is omitted from `provides`) | ADR-0004 |
 | `kata/jwt-auth-provides-slot` | a `jwtAuth({ slot })` middleware declares `provides: [slot]` | ADR-0013 |
 | `kata/no-adhoc-error-shape` | errors use `c.error(...)`, not inline `c.json({ error }, 4xx/5xx)` | ADR-0008 |
-| `kata/no-raw-boundary-cast` | a raw `as unknown`/`as never` boundary cast carries a `// kata-allow: hono-boundary` marker | ADR-0019 |
+| `kata/no-raw-boundary-cast` | `as never` boundary casts are contained to `hono-bridge.ts`; a raw `as unknown` cast elsewhere carries a `// kata-allow: hono-boundary` marker | ADR-0025 |
 | `kata/schema-file-naming` | files in a module are named `<domain>.{route,service,schema}.ts` | ADR-0018 |
 | `kata/no-decorator` | no `@decorator` syntax under `src/` | ADR-0002 |
 | `kata/no-class` | no `class` declarations under `src/` | ADR-0002 |

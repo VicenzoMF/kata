@@ -1,6 +1,6 @@
 # ADR-0019: Hono Type Boundary Casts
 
-- **Status:** Accepted
+- **Status:** Superseded by ADR-0025
 - **Date:** 2026-06-20
 - **Deciders:** Agent
 
