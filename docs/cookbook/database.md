@@ -128,10 +128,10 @@ export const createUserRoute = defineRoute({
 
 Because the service takes `db` as a parameter, a unit test passes a hand-rolled
 fake — no network, no context, no Hono. This mirrors
-[`users.service.test.ts`](https://github.com/VicenzoMF/kata/blob/main/examples/hello/src/modules/users/users.service.test.ts).
+[`users.test.ts`](https://github.com/VicenzoMF/kata/blob/main/examples/hello/src/modules/users/users.test.ts).
 
 ```ts
-// src/modules/users/users.service.test.ts
+// src/modules/users/users.test.ts
 import { describe, expect, it } from 'vitest'
 
 import type { Db } from '../../db'

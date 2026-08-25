@@ -128,10 +128,10 @@ export const createUserRoute = defineRoute({
 
 Como o serviço recebe `db` como parâmetro, um teste unitário passa um fake feito à
 mão — sem rede, sem contexto, sem Hono. Isso espelha
-[`users.service.test.ts`](https://github.com/VicenzoMF/kata/blob/main/examples/hello/src/modules/users/users.service.test.ts).
+[`users.test.ts`](https://github.com/VicenzoMF/kata/blob/main/examples/hello/src/modules/users/users.test.ts).
 
 ```ts
-// src/modules/users/users.service.test.ts
+// src/modules/users/users.test.ts
 import { describe, expect, it } from 'vitest'
 
 import type { Db } from '../../db'

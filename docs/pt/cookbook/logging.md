@@ -155,7 +155,7 @@ Como o service continua apenas recebendo um argumento, o teste passa um
 `requestId` de verdade à vista:
 
 ```ts
-// src/modules/orders/orders.service.test.ts
+// src/modules/orders/orders.test.ts
 import { describe, expect, it } from 'vitest'
 
 import type { ServiceLogger } from '../../logging'
