@@ -6,13 +6,16 @@ This document covers how the framework is published. The npm package is
 `@katajs-framework/verify` is `private` and is **bundled into the CLI at build time** (it is
 never a runtime dependency and is never published).
 
-**Published.** `@katajs-framework/core@0.3.0` went out on 2026-08-20; `0.3.1`
-follows with the `kata init` fix (0.3.0 shipped a CLI bundle that imported
-`typescript` eagerly, so the documented bootstrap crashed — deprecate it).
-Publishing is a manual action by the owner. The npm account has 2FA set to `auth-and-writes`
-via **passkey**, not TOTP — `--otp=<code>` does not apply. `npm publish` prints
-an auth URL to approve in the browser, so it needs a real TTY; a non-interactive
-shell fails with `EOTP` before ever reaching the registry.
+**Published.** `@katajs-framework/core@0.4.1` and `@katajs-framework/docs-mcp@0.1.4`
+are the latest releases as of 2026-08-26. The npm account has 2FA set to
+`auth-and-writes` via **passkey**, not TOTP — `--otp=<code>` does not apply, and
+`npm login`/`npm publish` run interactively need a real TTY to open the browser
+approval; a non-interactive shell fails with `EOTP` before ever reaching the
+registry. That constraint only touches the one-time setup steps below (`npm
+login`, `npm trust github`) — day-to-day releases go through the automated
+flow and need no interactive npm auth at all. See "Automated release flow"
+below for the recommended path; "Manual release flow" under each package is
+the fallback for a one-off or emergency publish.
 
 ---
 
@@ -92,6 +95,61 @@ Sourcemaps are intentionally **off** in `tsup.config.ts`: esbuild inlines
 
 ---
 
+## Automated release flow (recommended)
+
+This is the default path — it needs no interactive npm auth once the
+one-time setup below is done, and covers both `@katajs-framework/core` and
+`@katajs-framework/docs-mcp` from one mechanism. Three pieces, in order:
+
+1. **A PR that should ship a release adds a changeset**, describing which
+   package(s) bump and by how much:
+   ```sh
+   pnpm changeset add
+   ```
+   Pick `@katajs-framework/core` and/or `@katajs-framework/docs-mcp` (patch
+   for a docs-only or bugfix change — see `.changeset/config.json`'s `ignore`
+   list for the packages that never version: `@katajs-framework/verify` and
+   the example apps). The prompt's summary becomes the `CHANGELOG.md` entry.
+   A PR that touches `docs/{guide,cookbook,reference,adr}` needs a
+   `@katajs-framework/docs-mcp` changeset too — the same staleness risk
+   described under docs-mcp's release notes below applies whether the version
+   bump happens by hand or through this flow.
+
+2. **Merging that PR into `main` triggers `changesets-version.yml`.** If
+   unreleased changesets exist, it opens (or updates) a single "Version
+   Packages" PR that bumps every affected `package.json` + `CHANGELOG.md` —
+   no publish yet, just the version bump, so it's a normal PR to review.
+
+3. **Merging the "Version Packages" PR triggers `auto-tag-release.yml`.** It
+   runs `scripts/tag-release-if-version-bumped.mjs`, which tags
+   `katajs-v$VERSION` / `docs-mcp-v$VERSION` for whichever package(s) just
+   changed version and pushes the tag(s) — idempotent, so it's a no-op on any
+   push where the version didn't change. That tag push is what triggers
+   `release.yml` / `release-docs-mcp.yml` (below), which actually publish via
+   OIDC trusted publishing.
+
+No `npm login`, no browser approval, no `NPM_TOKEN` anywhere in this chain —
+the only credential involved is the PAT `auto-tag-release.yml` uses to push
+the tag (see below for why).
+
+**One-time setup (owner):**
+
+- `npm trust github` for each package — **done** for both
+  `@katajs-framework/core` (→ `release.yml`) and
+  `@katajs-framework/docs-mcp` (→ `release-docs-mcp.yml`); see each package's
+  "CI release flow" section below for the exact command.
+- Add `.github/workflows/changesets-version.yml` and
+  `.github/workflows/auto-tag-release.yml` — owner action, the harness blocks
+  agent edits to `.github/workflows/`.
+- Create a fine-grained **GitHub PAT** scoped to this repo only, `Contents:
+  Read and write`, and store it as the repo secret `RELEASE_TAG_PAT`.
+  `auto-tag-release.yml` needs this instead of the default `GITHUB_TOKEN`
+  because GitHub does not let a `GITHUB_TOKEN`-authored push trigger other
+  workflows (loop prevention) — a tag pushed that way would silently never
+  reach `release.yml`.
+
+---
+
 ## Proof (pre-publish tarball checks)
 
 `pnpm --filter=@katajs-framework/core build && cd packages/kata && npm pack --dry-run` →
@@ -119,7 +177,11 @@ zod@^3`):
 
 ---
 
-## Manual release flow
+## Manual release flow (fallback)
+
+Prefer the automated flow above. Use this only for a one-off or emergency
+publish that can't go through a PR (e.g. `changesets-version.yml` or
+`auto-tag-release.yml` is broken).
 
 ```sh
 # 0. Bump version if needed.
@@ -148,11 +210,12 @@ node -e "import('@katajs-framework/core').then(m => console.log(Object.keys(m)))
 
 ---
 
-## CI release flow (recommended, optional)
+## CI release flow (wired)
 
-Publish on a `katajs-v*` tag so a release is never a laptop-only action. This is
-**not** wired yet — adding the workflow file is an owner action (the harness
-blocks agent edits to `.github/workflows/`, and CI config is an L3 guardrail).
+Publishes on a `katajs-v*` tag push — `auto-tag-release.yml` creates that tag
+automatically once the Changesets flow above bumps `packages/kata/package.json`,
+so this is not normally triggered by hand. `.github/workflows/release.yml`
+itself is live on `main`.
 
 Auth is **npm trusted publishing (OIDC)** — no stored token, so no rotation
 and no exposure to the January 2027 cutoff for 2FA-bypassing automation
@@ -160,7 +223,7 @@ tokens. `@katajs-framework/core` couldn't use it for the very first release (a
 trusted publisher is configured against an existing package), but the package
 is live now, so this is the path from here on.
 
-One-time setup (owner, needs `npm login` — passkey-gated, real TTY):
+One-time setup (owner, needs `npm login` — passkey-gated, real TTY) — **done**:
 
 ```sh
 # npm CLI >= 11.5.1 required (`npm -v` to check).
@@ -203,8 +266,7 @@ jobs:
 No `NODE_AUTH_TOKEN` / `NPM_TOKEN` secret — the `id-token: write` permission
 lets npm CLI mint an OIDC token against the trust relationship configured
 above. `--provenance` needs `id-token: write`, npm ≥ 9.5, and a public repo;
-drop it otherwise. For multi-package releases later, consider Changesets —
-overkill while there are only two published packages.
+drop it otherwise.
 
 ---
 
@@ -223,11 +285,16 @@ rebuilt against current docs).
 - `docs/{guide,cookbook,reference,adr}` changed since the last docs-mcp release, **or**
 - `@katajs-framework/core` shipped a new version.
 
-There is no automatic trigger for this yet — check it by hand (or eyeball
-`git log --oneline <last-docs-mcp-tag>..HEAD -- docs/ packages/kata` before
-publishing).
+There is no automatic *detection* of this — a PR touching `docs/` still needs
+a `@katajs-framework/docs-mcp` changeset added by hand (`pnpm changeset add`,
+see "Automated release flow" above) for the Changesets flow to bump it. If in
+doubt, eyeball `git log --oneline <last-docs-mcp-tag>..HEAD -- docs/
+packages/kata` before deciding whether one's needed.
 
-## Manual release flow
+## Manual release flow (fallback)
+
+Prefer the automated flow described near the top of this document. Use this
+only for a one-off or emergency publish.
 
 ```sh
 # 0. Bump packages/docs-mcp/package.json version if needed.
@@ -270,16 +337,16 @@ step 2 against the local build, and again after step 3 against the published
 package — a green local check with a red registry check means the publish
 itself went wrong (wrong tag, stale `npm pack`, etc.), not the docs.
 
-## CI release flow (recommended, optional)
+## CI release flow (wired)
 
-Publish on a `docs-mcp-v*` tag so a release is never a laptop-only action,
-mirroring core's release workflow above. This is **not** wired yet — adding
-the workflow file is an owner action (the harness blocks agent edits to
-`.github/workflows/`, and CI config is an L3 guardrail).
+Publishes on a `docs-mcp-v*` tag push, mirroring core's release workflow
+above — `auto-tag-release.yml` creates that tag automatically once the
+Changesets flow bumps `packages/docs-mcp/package.json`.
+`.github/workflows/release-docs-mcp.yml` itself is live on `main`.
 
 Same OIDC trusted-publishing auth as core — see the rationale under core's CI
 flow above. One-time setup (owner, needs `npm login` — passkey-gated, real
-TTY):
+TTY) — **done**:
 
 ```sh
 npm trust github @katajs-framework/docs-mcp \
