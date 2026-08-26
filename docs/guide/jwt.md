@@ -77,6 +77,17 @@ export const UserClaimsSchema = z.object({
 export type UserClaims = z.infer<typeof UserClaimsSchema>
 ```
 
+::: tip No dedicated `users` domain? Colocate the claims there
+Not every app has a `users` domain. When your only identity concept is a
+minimal login/ownership identity — no user CRUD, no dedicated `users`
+module — don't create one just to hold a type. Declare `User` and
+`UserClaimsSchema` in the schema file of whichever module already owns the
+token-mint route instead, e.g. `src/modules/auth/auth.schema.ts`. This is a
+supported, endorsed layout, not a workaround: everything else on this page
+(the scoped slot, `jwtAuth`, `resolve`) works unchanged — only the import
+path for `User`/`UserClaimsSchema` moves.
+:::
+
 ## Sign a token: `signJwt`
 
 `signJwt` is a thin functional wrapper over `hono/jwt`'s `sign`. It always stamps
