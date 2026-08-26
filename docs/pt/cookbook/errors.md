@@ -204,6 +204,77 @@ error boundary em si; use um mock de dependência falha quando estiver testando
 o modo de falha específico de um handler.
 :::
 
+## Testando o error boundary sobre HTTP real (Hurl/curl)
+
+**Problema:** a seção acima resolve o caso do Vitest, mas uma suíte E2E que
+exercita a app sobre **HTTP real** — Hurl, curl, Playwright, qualquer
+ferramenta fora do processo — não consegue reaproveitá-la. `createApp({
+modules: [{ crashRoute }] })` em `error-boundary.test.ts` constrói um objeto
+de app `Hono` de verdade, mas o teste nunca chama `serve()` sobre ele: nada
+abre uma porta, então não existe um `http://localhost` para um arquivo
+`.hurl` (ou qualquer outra ferramenta externa) enviar uma requisição. A route
+só existe durante a chamada a `app.request(...)`, em processo, dentro do
+`vitest run`.
+
+Não há como contornar isso mantendo a route de crash inalcançável: uma
+ferramenta fora do processo só consegue acessar uma route que faça parte do
+servidor que o `main.ts` de fato inicializa — ou seja, algo no array `modules`
+real. Tornar o envelope `500`/`internal_error` exercitável a partir de HTTP
+real exige, portanto, inevitavelmente, uma route que lança e que *é*
+alcançável em produção.
+
+**Solução:** aceitar esse trade-off explicitamente, uma vez, em vez de deixar
+cada consumidor reinventá-lo. O `examples/hello` já tem exatamente isso: uma
+route `GET /boom` permanente no seu module
+[`users`](https://github.com/VicenzoMF/kata/blob/main/examples/hello/src/modules/users/users.route.ts)
+(já ligado ao array `modules: [users, auth, echo, diag]` do `main.ts`):
+
+```ts
+// examples/hello/src/modules/users/users.route.ts
+export const boomRoute = defineRoute({
+  method: 'GET',
+  path: '/boom',
+  input: {},
+  output: BoomResponseSchema, // nunca é de fato retornado — o handler sempre lança
+  handler: () => {
+    throw new Error('intentional handler explosion')
+  },
+})
+```
+
+Verificada de ponta a ponta em
+[`users.hurl`](https://github.com/VicenzoMF/kata/blob/main/examples/hello/src/modules/users/users.hurl)
+contra o servidor de fato em execução (`pnpm --filter=hello start`, depois
+`pnpm --filter=hello hurl`):
+
+```hurl
+GET http://localhost:3000/boom
+HTTP 500
+[Asserts]
+header "Content-Type" contains "application/json"
+jsonpath "$.error" == "internal_error"
+jsonpath "$.message" exists
+```
+
+::: warning
+Não crie uma segunda `/boom` em outro module (por exemplo, um module com cara
+de `diag`) para "isolar" isso. O Kata registra as routes na ordem do array
+`modules`, e uma route do Kata nunca chama `next()` — então o primeiro
+handler registrado para um dado método+path sempre vence. Uma route duplicada
+no mesmo path é código morto inalcançável, não uma rede de segurança extra.
+:::
+
+**Isso é um endpoint permanente de "derrubar o servidor de propósito",
+acessível em produção** — exatamente o que a route só-de-teste da seção
+anterior foi construída para evitar. Isso é um trade-off deliberado e aceito
+em troca de cobertura E2E sobre HTTP real, não um descuido: mantenha-o como um
+único throw incondicional, sem lógica de negócio, e não se surpreenda quando
+uma varredura de segurança ou um colega sinalizar `GET /boom` — esse é o
+custo dessa cobertura, pago conscientemente. Se esse custo for inaceitável
+para o seu deployment, proteja a route atrás de uma checagem de ambiente (por
+exemplo, só a registre quando `NODE_ENV !== 'production'`) e rode a
+verificação de HTTP real contra um build que não seja de produção.
+
 ## O que é automático vs. o que você escreve
 
 | Situação | Status | Quem produz |

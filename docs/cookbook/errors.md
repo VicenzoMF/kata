@@ -204,6 +204,75 @@ boundary itself; reach for a failing-dependency mock when you're testing one
 handler's specific failure mode instead.
 :::
 
+## Testing the error boundary over real HTTP (Hurl/curl)
+
+**Problem:** the section above solves the Vitest case, but an E2E suite that
+drives the app over **real HTTP** — Hurl, curl, Playwright, anything
+out-of-process — can't reuse it. `createApp({ modules: [{ crashRoute }] })` in
+`error-boundary.test.ts` builds a real `Hono` app object, but the test never
+calls `serve()` on it: nothing binds a port, so there is no `http://localhost`
+for a `.hurl` file (or any other external tool) to send a request to. The
+route only exists for the duration of `app.request(...)`, in-process, inside
+`vitest run`.
+
+There is no way around this that keeps the crash route unreachable: an
+out-of-process tool can only hit a route that is part of the server
+`main.ts` actually boots — i.e. something in the real `modules` array. Making
+the `500`/`internal_error` envelope exercisable from real HTTP therefore
+requires, unavoidably, a route that throws and *is* reachable in production.
+
+**Solution:** accept that trade-off explicitly, once, instead of leaving each
+consumer to reinvent it. `examples/hello` already has exactly this: a standing
+`GET /boom` route in its
+[`users`](https://github.com/VicenzoMF/kata/blob/main/examples/hello/src/modules/users/users.route.ts)
+module (already wired into `main.ts`'s `modules: [users, auth, echo, diag]`
+array):
+
+```ts
+// examples/hello/src/modules/users/users.route.ts
+export const boomRoute = defineRoute({
+  method: 'GET',
+  path: '/boom',
+  input: {},
+  output: BoomResponseSchema, // never actually returned — the handler always throws
+  handler: () => {
+    throw new Error('intentional handler explosion')
+  },
+})
+```
+
+Asserted end to end in
+[`users.hurl`](https://github.com/VicenzoMF/kata/blob/main/examples/hello/src/modules/users/users.hurl)
+against the actually-listening server (`pnpm --filter=hello start`, then
+`pnpm --filter=hello hurl`):
+
+```hurl
+GET http://localhost:3000/boom
+HTTP 500
+[Asserts]
+header "Content-Type" contains "application/json"
+jsonpath "$.error" == "internal_error"
+jsonpath "$.message" exists
+```
+
+::: warning
+Don't add a second `/boom` to another module (e.g. a `diag`-flavored one) to
+"isolate" this. Kata registers routes in `modules` array order and a Kata
+route never calls `next()`, so the first-registered handler for a given
+method+path always wins — a duplicate route on the same path is unreachable
+dead code, not a redundant safety net.
+:::
+
+**This is a standing, production-reachable "crash the server on purpose"
+endpoint** — the exact thing the previous section's Vitest-only route was
+built to avoid. That's a deliberate, accepted trade-off for real-HTTP E2E
+coverage, not an oversight: keep it to a single unconditional throw with no
+business logic, and don't be surprised when a security scan or a teammate
+flags `GET /boom` — that's the cost of this coverage, paid knowingly. If that
+cost is unacceptable for your deployment, gate the route behind an
+environment check (e.g. only register it when `NODE_ENV !== 'production'`)
+and run the real-HTTP assertion against a non-production build instead.
+
 ## What's automatic vs. what you write
 
 | Situation | Status | Who produces it |
