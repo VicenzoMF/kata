@@ -1,6 +1,6 @@
 {
   "name": "@katajs-framework/core",
-  "version": "0.4.1",
+  "version": "0.4.2",
   "description": "An opinionated, type-safe web framework on Hono — static DI, mandatory Zod input/output schemas, no-codegen RPC, and a verifiable folder layout.",
   "keywords": [
     "hono",
