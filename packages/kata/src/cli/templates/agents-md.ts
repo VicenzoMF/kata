@@ -7,7 +7,7 @@
 // document is dense with Markdown inline-code, and a template literal would
 // need every one of those backticks escaped.
 
-import { KATA_VERSION } from './version'
+import { KATA_ADR_TAG } from './version'
 
 const LINES: readonly string[] = [
   '# Agent Instructions',
@@ -25,7 +25,7 @@ const LINES: readonly string[] = [
   '## Architectural decisions',
   "This app's own decisions live as ADRs under `docs/adr/`; read the relevant",
   "one before deviating. Kata's framework ADRs (why the framework itself works",
-  `this way) are at https://github.com/VicenzoMF/kata/tree/v${KATA_VERSION}/docs/adr.`,
+  `this way) are at https://github.com/VicenzoMF/kata/tree/${KATA_ADR_TAG}/docs/adr.`,
   '',
   '## Mandatory folder layout',
   '```',

@@ -5,7 +5,7 @@
 // links to the framework's ADRs instead (see `agents-md.ts`); this directory
 // is where the app records its own.
 
-import { KATA_VERSION } from './version'
+import { KATA_ADR_TAG } from './version'
 
 /** `docs/adr/_template.md` — the same ADR skeleton Kata itself uses, copied
  *  for the app's own decisions. Blocked from Claude edits by the generated
@@ -64,6 +64,6 @@ domain, your infrastructure, your APIs. Copy \`_template.md\` to \`NNNN-slug.md\
 Kata's own framework ADRs — why the framework itself works the way it does —
 are not duplicated here. They live in the Kata repo, pinned to the version
 this app depends on:
-https://github.com/VicenzoMF/kata/tree/v${KATA_VERSION}/docs/adr
+https://github.com/VicenzoMF/kata/tree/${KATA_ADR_TAG}/docs/adr
 `
 }

@@ -5,3 +5,10 @@
 import pkg from '../../../package.json' with { type: 'json' }
 
 export const KATA_VERSION: string = pkg.version
+
+/** The git tag Kata's own releases are actually cut under — `katajs-v0.4.0`,
+ *  not `v0.4.0` (that ref doesn't exist on the repo). Every generated doc that
+ *  links to Kata's framework ADRs pinned to a version must build the URL from
+ *  this constant rather than reconstructing the tag by string convention, so
+ *  the two can't drift apart again (issue #301). */
+export const KATA_ADR_TAG: string = `katajs-v${KATA_VERSION}`
