@@ -247,7 +247,9 @@ describe('renderAgentsMd() / renderClaudeMd() — issue #31', () => {
   it("distinguishes this app's own ADRs from a version-pinned framework link (issue #213)", () => {
     const md = renderAgentsMd()
     expect(md).toContain("This app's own decisions live as ADRs under `docs/adr/`")
-    expect(md).toMatch(/https:\/\/github\.com\/VicenzoMF\/kata\/tree\/v\d+\.\d+\.\d+\/docs\/adr/)
+    expect(md).toMatch(
+      /https:\/\/github\.com\/VicenzoMF\/kata\/tree\/katajs-v\d+\.\d+\.\d+\/docs\/adr/,
+    )
     // Never a relative path into a directory the consumer's project doesn't have.
     expect(md).not.toMatch(/`docs\/adr\/\d{4}-/)
   })
@@ -402,7 +404,7 @@ describe('renderExample* — `kata init` app skeleton (issue #200)', () => {
     const readme = renderExampleAdrReadme()
     expect(readme).toContain("this app's own")
     expect(readme).toMatch(
-      /https:\/\/github\.com\/VicenzoMF\/kata\/tree\/v\d+\.\d+\.\d+\/docs\/adr/,
+      /https:\/\/github\.com\/VicenzoMF\/kata\/tree\/katajs-v\d+\.\d+\.\d+\/docs\/adr/,
     )
     // Never a relative path into a directory the consumer's project doesn't have.
     expect(readme).not.toMatch(/`docs\/adr\/\d{4}-/)

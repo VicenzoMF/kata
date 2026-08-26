@@ -160,7 +160,7 @@ describe('init() — full project scaffold (issue #200)', () => {
     }
     expect(await readFile(join(dir, ENV_EXAMPLE), 'utf8')).toContain('JWT_SECRET=')
     expect(await readFile(join(dir, ADR_README), 'utf8')).toMatch(
-      /github\.com\/VicenzoMF\/kata\/tree\/v\d+\.\d+\.\d+\/docs\/adr/,
+      /github\.com\/VicenzoMF\/kata\/tree\/katajs-v\d+\.\d+\.\d+\/docs\/adr/,
     )
   })
 
