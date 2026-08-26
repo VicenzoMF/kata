@@ -78,6 +78,17 @@ export const UserClaimsSchema = z.object({
 export type UserClaims = z.infer<typeof UserClaimsSchema>
 ```
 
+::: tip Sem um domínio `users` dedicado? Coloque os claims junto
+Nem todo app tem um domínio `users`. Quando o único conceito de identidade é
+uma identidade mínima de login/posse — sem CRUD de usuário, sem um módulo
+`users` dedicado — não crie um só para guardar um tipo. Declare `User` e
+`UserClaimsSchema` no arquivo de schema do módulo que já possui a rota de
+emissão do token, por exemplo `src/modules/auth/auth.schema.ts`. Este é um
+layout suportado e endossado, não uma solução alternativa: tudo mais nesta
+página (o scoped slot, `jwtAuth`, `resolve`) funciona sem mudanças — só o
+caminho de import de `User`/`UserClaimsSchema` muda.
+:::
+
 ## Assine um token: `signJwt`
 
 `signJwt` é um wrapper funcional fino sobre o `sign` do `hono/jwt`. Ele sempre
