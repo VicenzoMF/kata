@@ -1,0 +1,36 @@
+name: auto-tag-release
+
+# Closes the merge -> publish loop: when the "Version Packages" PR (opened by
+# changesets-version.yml) is merged into main, package.json versions are
+# bumped but no tag exists yet. This creates + pushes the katajs-v* /
+# docs-mcp-v* tag for whichever package(s) changed version -- that tag push
+# is what triggers release.yml / release-docs-mcp.yml. Idempotent: a push to
+# main with no version bump (e.g. a docs-only PR without a changeset) is a
+# no-op, since the tag for the current version already exists.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'packages/kata/package.json'
+      - 'packages/docs-mcp/package.json'
+
+concurrency:
+  group: auto-tag-release-${{ github.ref }}
+
+jobs:
+  tag:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          # A fine-grained PAT, NOT the default GITHUB_TOKEN: tags pushed
+          # with GITHUB_TOKEN don't trigger other workflows (GitHub's
+          # loop-prevention), which would silently break the
+          # tag -> release.yml chain. Repo secret, scoped to this repo only,
+          # Contents: Read and write.
+          token: ${{ secrets.RELEASE_TAG_PAT }}
+
+      - run: node scripts/tag-release-if-version-bumped.mjs

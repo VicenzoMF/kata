@@ -1,0 +1,47 @@
+name: changesets
+
+# Opens/updates a "Version Packages" PR whenever unreleased changesets exist
+# on main (see RELEASE.md). Merging that PR bumps package.json versions +
+# CHANGELOG.md -- it does NOT publish. auto-tag-release.yml (triggered by
+# that same merge, since it's a push to main) creates the katajs-v* /
+# docs-mcp-v* tag, which is what actually triggers release.yml /
+# release-docs-mcp.yml (OIDC trusted publishing).
+
+on:
+  push:
+    branches: [main]
+
+concurrency:
+  group: changesets-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  version:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Create/update the Version Packages PR
+        uses: changesets/action@v1
+        with:
+          version: pnpm changeset version
+          commit: 'chore: version packages'
+          title: 'chore: version packages'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
