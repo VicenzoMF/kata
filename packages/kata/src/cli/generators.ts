@@ -61,14 +61,16 @@ export function renderAgentsHooks(pm: PackageManager): string {
   return serialize(agentsHooksTemplate(pm))
 }
 
-/** Render `AGENTS.md` — the canonical agent instructions (issue #31). */
-export function renderAgentsMd(): string {
-  return agentsMd
+/** Render `AGENTS.md` — the canonical agent instructions (issue #31). `pm` is
+ *  the detected package manager (issue #302) so the printed commands match
+ *  what the project was actually installed with. */
+export function renderAgentsMd(pm: PackageManager): string {
+  return agentsMd(pm)
 }
 
 /** Render `CLAUDE.md` — the Claude entrypoint that imports AGENTS.md (#31). */
-export function renderClaudeMd(): string {
-  return claudeMd
+export function renderClaudeMd(pm: PackageManager): string {
+  return claudeMd(pm)
 }
 
 /** Render `.mcp.json` — registers the docs-search MCP server (ADR-0023),
@@ -77,9 +79,11 @@ export function renderMcpJson(): string {
   return serialize(mcpJsonTemplate)
 }
 
-/** Render `lefthook.yml` — the local feedback layer (#130). */
-export function renderLefthookYml(): string {
-  return lefthookYmlTemplate
+/** Render `lefthook.yml` — the local feedback layer (#130). `pm` is the
+ *  detected package manager (issue #302) so the pre-commit commands resolve
+ *  the actual toolchain instead of assuming pnpm. */
+export function renderLefthookYml(pm: PackageManager): string {
+  return lefthookYmlTemplate(pm)
 }
 
 /** Render `biome.json` — the formatter config the generated lefthook runs (#200). */
@@ -138,9 +142,10 @@ export function renderExampleHealthTest(): string {
   return exampleHealthTestSource
 }
 
-/** Render `src/modules/health/health.hurl` — the API E2E. */
-export function renderExampleHealthHurl(): string {
-  return exampleHealthHurlSource
+/** Render `src/modules/health/health.hurl` — the API E2E. `pm` is the
+ *  detected package manager (issue #302). */
+export function renderExampleHealthHurl(pm: PackageManager): string {
+  return exampleHealthHurlSource(pm)
 }
 
 /** Render `src/modules/greetings/greetings.schema.ts` — the greetings DTOs (ADR-0005). */
@@ -163,9 +168,10 @@ export function renderExampleGreetingsTest(): string {
   return exampleGreetingsTestSource
 }
 
-/** Render `src/modules/greetings/greetings.hurl` — the end-to-end API E2E. */
-export function renderExampleGreetingsHurl(): string {
-  return exampleGreetingsHurlSource
+/** Render `src/modules/greetings/greetings.hurl` — the end-to-end API E2E.
+ *  `pm` is the detected package manager (issue #302). */
+export function renderExampleGreetingsHurl(pm: PackageManager): string {
+  return exampleGreetingsHurlSource(pm)
 }
 
 /** Render `.gitignore` for the generated app. */
@@ -191,9 +197,10 @@ export function renderExampleAdrReadme(): string {
   return exampleAdrReadme()
 }
 
-/** Render the generated app's `README.md`, titled after the project (#200). */
-export function renderExampleReadme(name: string): string {
-  return exampleReadme(name)
+/** Render the generated app's `README.md`, titled after the project (#200).
+ *  `pm` is the detected package manager (issue #302). */
+export function renderExampleReadme(name: string, pm: PackageManager): string {
+  return exampleReadme(name, pm)
 }
 
 /** Render the generated app's `package.json` (emitted only-if-absent), named

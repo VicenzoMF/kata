@@ -6,21 +6,32 @@
 //
 // Newline-joined line array, same reasoning as `agents-md.ts`.
 
-const LINES: readonly string[] = [
-  '# Claude Code Instructions',
-  '',
-  'See @AGENTS.md for the canonical instructions (shared with Codex and other',
-  'agents).',
-  '',
-  'Claude-specific notes:',
-  '- `.claude/settings.json` wires the harness hooks (PreToolUse / PostToolUse /',
-  '  Stop) and the config-tampering `permissions.deny` bans.',
-  '- PreToolUse / PostToolUse run `kata verify --json`; the PostToolUse hook',
-  '  injects remaining findings as `hookSpecificOutput.additionalContext` so the',
-  '  fix lands on the next turn.',
-  '- Stop runs `pnpm test` — a red suite blocks ending the session.',
-]
+import { type PackageManager, pmCommands } from '../package-manager'
+
+/** `pm` is the package manager detected for the target project (issue #302) —
+ *  the Stop-hook line names the actual test command instead of assuming pnpm,
+ *  matching the harness hooks (issue #231) and `agents-md.ts`. */
+function lines(pm: PackageManager): readonly string[] {
+  const { run } = pmCommands(pm)
+  return [
+    '# Claude Code Instructions',
+    '',
+    'See @AGENTS.md for the canonical instructions (shared with Codex and other',
+    'agents).',
+    '',
+    'Claude-specific notes:',
+    '- `.claude/settings.json` wires the harness hooks (PreToolUse / PostToolUse /',
+    '  Stop) and the config-tampering `permissions.deny` bans.',
+    '- PreToolUse / PostToolUse run `kata verify --json`; the PostToolUse hook',
+    '  injects remaining findings as `hookSpecificOutput.additionalContext` so the',
+    '  fix lands on the next turn.',
+    `- Stop runs \`${run('test')}\` — a red suite blocks ending the session.`,
+  ]
+}
 
 /** The exact `CLAUDE.md` bytes (newline-joined, trailing newline) `kata init`
- *  writes. Exported pre-rendered, symmetric with {@link agentsMd}. */
-export const claudeMd = `${LINES.join('\n')}\n`
+ *  writes for the given package manager (issue #302), symmetric with
+ *  {@link agentsMd}. */
+export function claudeMd(pm: PackageManager): string {
+  return `${lines(pm).join('\n')}\n`
+}

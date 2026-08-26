@@ -38,7 +38,7 @@ import {
   renderOxlintrc,
   serialize,
 } from './generators'
-import type { PackageManager } from './package-manager'
+import { type PackageManager, pmCommands } from './package-manager'
 import type { ClaudeSettings, CodexHooks } from './templates/types'
 import { KATA_VERSION } from './templates/version'
 
@@ -233,11 +233,11 @@ describe('renderBiomeJson() / renderOxlintrc() — issue #200', () => {
 
 describe('renderAgentsMd() / renderClaudeMd() — issue #31', () => {
   it('keeps AGENTS.md under 50 lines (pointer-style per the article)', () => {
-    expect(renderAgentsMd().trimEnd().split('\n').length).toBeLessThan(50)
+    expect(renderAgentsMd('npm').trimEnd().split('\n').length).toBeLessThan(50)
   })
 
   it('documents verify commands, conventions and prohibitions', () => {
-    const md = renderAgentsMd()
+    const md = renderAgentsMd('npm')
     expect(md).toContain('# Agent Instructions')
     expect(md).toContain('kata verify')
     expect(md).toContain('`any` is forbidden')
@@ -245,7 +245,7 @@ describe('renderAgentsMd() / renderClaudeMd() — issue #31', () => {
   })
 
   it("distinguishes this app's own ADRs from a version-pinned framework link (issue #213)", () => {
-    const md = renderAgentsMd()
+    const md = renderAgentsMd('npm')
     expect(md).toContain("This app's own decisions live as ADRs under `docs/adr/`")
     expect(md).toMatch(
       /https:\/\/github\.com\/VicenzoMF\/kata\/tree\/katajs-v\d+\.\d+\.\d+\/docs\/adr/,
@@ -255,17 +255,44 @@ describe('renderAgentsMd() / renderClaudeMd() — issue #31', () => {
   })
 
   it('CLAUDE.md imports AGENTS.md via the @-include directive', () => {
-    expect(renderClaudeMd()).toContain('@AGENTS.md')
+    expect(renderClaudeMd('npm')).toContain('@AGENTS.md')
+  })
+
+  it.each(
+    PACKAGE_MANAGERS,
+  )("names the detected package manager's test/typecheck commands for %s (issue #302)", (pm) => {
+    const { run } = pmCommands(pm)
+    expect(renderAgentsMd(pm)).toContain(`\`${run('test')}\``)
+    expect(renderAgentsMd(pm)).toContain(`\`${run('typecheck')}\``)
+    expect(renderClaudeMd(pm)).toContain(`\`${run('test')}\``)
+  })
+
+  it('never hardcodes pnpm when a different package manager is detected (issue #302)', () => {
+    for (const pm of ['npm', 'yarn', 'bun'] as const) {
+      expect(renderAgentsMd(pm)).not.toContain('pnpm')
+      expect(renderClaudeMd(pm)).not.toContain('pnpm')
+    }
   })
 })
 
 describe('renderLefthookYml() — issue #130', () => {
   it('renders the lefthook pre-commit configuration with kata verify', () => {
-    const yml = renderLefthookYml()
+    const yml = renderLefthookYml('npm')
     expect(yml).toContain('pre-commit:')
-    expect(yml).toContain('pnpm exec kata verify')
-    expect(yml).toContain('pnpm exec biome check')
-    expect(yml).toContain('pnpm exec oxlint')
+    expect(yml).toContain('npx kata verify')
+    expect(yml).toContain('npx biome check')
+    expect(yml).toContain('npx oxlint')
+  })
+
+  it.each(
+    PACKAGE_MANAGERS,
+  )('resolves the local kata/biome/oxlint bins and typecheck script for %s (issue #302)', (pm) => {
+    const { exec, run } = pmCommands(pm)
+    const yml = renderLefthookYml(pm)
+    expect(yml).toContain(exec('kata verify --strict-coverage'))
+    expect(yml).toContain(exec('biome check --write --no-errors-on-unmatched {staged_files}'))
+    expect(yml).toContain(exec('oxlint {staged_files}'))
+    expect(yml).toContain(run('typecheck'))
   })
 })
 
@@ -324,7 +351,7 @@ describe('renderExample* — `kata init` app skeleton (issue #200)', () => {
     expect(route).not.toMatch(/\bz\./) // schemas imported by name (ADR-0005)
     expect(renderExampleHealthTest()).toContain("import { describe, expect, it } from 'vitest'")
     expect(renderExampleHealthTest()).toContain('checkHealth()')
-    const hurl = renderExampleHealthHurl()
+    const hurl = renderExampleHealthHurl('npm')
     expect(hurl).toContain('GET {{host}}/health')
     expect(hurl).toContain('jsonpath "$.status" == "ok"')
   })
@@ -350,7 +377,7 @@ describe('renderExample* — `kata init` app skeleton (issue #200)', () => {
     expect(route).toContain("c.error('not_found', 'Greeting not found', { status: 404 })")
     expect(route).not.toMatch(/\bz\./)
     expect(renderExampleGreetingsTest()).toContain("import { describe, expect, it } from 'vitest'")
-    const hurl = renderExampleGreetingsHurl()
+    const hurl = renderExampleGreetingsHurl('npm')
     expect(hurl).toContain('POST {{host}}/greetings')
     expect(hurl).toContain('greeting_id: jsonpath "$.id"')
     expect(hurl).toContain('GET {{host}}/greetings/{{greeting_id}}')
@@ -366,12 +393,12 @@ describe('renderExample* — `kata init` app skeleton (issue #200)', () => {
       renderExampleHealthService(),
       renderExampleHealthRoute(),
       renderExampleHealthTest(),
-      renderExampleHealthHurl(),
+      renderExampleHealthHurl('npm'),
       renderExampleGreetingsSchema(),
       renderExampleGreetingsService(),
       renderExampleGreetingsRoute(),
       renderExampleGreetingsTest(),
-      renderExampleGreetingsHurl(),
+      renderExampleGreetingsHurl('npm'),
       renderExampleGitignore(),
       renderExampleEnvExample(),
       renderExampleAdrTemplate(),
@@ -459,11 +486,23 @@ describe('renderExample* — `kata init` app skeleton (issue #200)', () => {
   })
 
   it('README.md is titled after the app and documents the example endpoints', () => {
-    const readme = renderExampleReadme('my-app')
+    const readme = renderExampleReadme('my-app', 'npm')
     expect(readme).toContain('# my-app')
     expect(readme).toContain('/health')
     expect(readme).toContain('/greetings')
     expect(readme).toContain('kata new')
+  })
+
+  it.each(
+    PACKAGE_MANAGERS,
+  )("README.md names the detected package manager's commands, not pnpm, for %s (issue #302)", (pm) => {
+    const { install, run } = pmCommands(pm)
+    const readme = renderExampleReadme('my-app', pm)
+    expect(readme).toContain(install)
+    expect(readme).toContain(run('test'))
+    expect(readme).toContain(run('typecheck'))
+    expect(readme).toContain(run('hurl'))
+    if (pm !== 'pnpm') expect(readme).not.toContain('pnpm')
   })
 })
 
@@ -528,7 +567,7 @@ describe('determinism', () => {
     expect(renderClaudeSettings('npm')).toBe(renderClaudeSettings('npm'))
     expect(renderCodexHooks('npm')).toBe(renderCodexHooks('npm'))
     expect(renderAgentsHooks('npm')).toBe(renderAgentsHooks('npm'))
-    expect(renderAgentsMd()).toBe(renderAgentsMd())
+    expect(renderAgentsMd('npm')).toBe(renderAgentsMd('npm'))
     expect(renderBiomeJson()).toBe(renderBiomeJson())
     expect(renderOxlintrc()).toBe(renderOxlintrc())
   })
