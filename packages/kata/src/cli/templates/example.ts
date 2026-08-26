@@ -29,6 +29,7 @@
 // instead), so each template below is a clean backtick literal needing no
 // escaping — the same convention the original example templates used.
 
+import { type PackageManager, pmCommands } from '../package-manager'
 import { KATA_VERSION } from './version'
 
 /** `src/context.ts` — the typed DI surface (ADR-0004); re-exports the bound factory. */
@@ -144,16 +145,21 @@ describe('checkHealth', () => {
 })
 `
 
-/** `src/modules/health/health.hurl` — API E2E ({{host}}; run against a live server). */
-export const exampleHealthHurlSource = `# API E2E for the health module. Run with the server already listening:
-#   pnpm start    # in another terminal
-#   pnpm hurl
+/** `src/modules/health/health.hurl` — API E2E ({{host}}; run against a live
+ *  server). `pm` is the detected package manager (issue #302) — the run-it
+ *  comment names the actual `start`/`hurl` commands instead of assuming pnpm. */
+export function exampleHealthHurlSource(pm: PackageManager): string {
+  const { run } = pmCommands(pm)
+  return `# API E2E for the health module. Run with the server already listening:
+#   ${run('start')}    # in another terminal
+#   ${run('hurl')}
 
 GET {{host}}/health
 HTTP 200
 [Asserts]
 jsonpath "$.status" == "ok"
 `
+}
 
 // ── greetings module — POST /greetings + GET /greetings/:id (create/read) ────
 
@@ -257,10 +263,14 @@ describe('greetings.service', () => {
 })
 `
 
-/** `src/modules/greetings/greetings.hurl` — end-to-end POST then GET by captured id. */
-export const exampleGreetingsHurlSource = `# API E2E for the greetings module. Run with the server already listening:
-#   pnpm start    # in another terminal
-#   pnpm hurl
+/** `src/modules/greetings/greetings.hurl` — end-to-end POST then GET by
+ *  captured id. `pm` is the detected package manager (issue #302), same
+ *  reasoning as {@link exampleHealthHurlSource}. */
+export function exampleGreetingsHurlSource(pm: PackageManager): string {
+  const { run } = pmCommands(pm)
+  return `# API E2E for the greetings module. Run with the server already listening:
+#   ${run('start')}    # in another terminal
+#   ${run('hurl')}
 
 # Create a greeting, capture the returned id, then read it back.
 POST {{host}}/greetings
@@ -277,6 +287,7 @@ HTTP 200
 [Asserts]
 jsonpath "$.message" == "Hello, Ada!"
 `
+}
 
 /** `.gitignore` for the generated app — node_modules, common build output, app
  *  state (`data/`), and the real `.env` (only `.env.example` is committed). */
@@ -298,8 +309,13 @@ export const exampleEnvExampleSource = `# Secret used to sign/verify JWTs (see A
 JWT_SECRET=
 `
 
-/** `README.md` for the generated app — quickstart + the example endpoints. */
-export function exampleReadme(name: string): string {
+/** `README.md` for the generated app — quickstart + the example endpoints.
+ *  `pm` is the package manager detected for the target project (issue #302):
+ *  every command below resolves through it instead of assuming pnpm, so the
+ *  docs never contradict what the project was actually installed with or
+ *  what its own generated hooks invoke. */
+export function exampleReadme(name: string, pm: PackageManager): string {
+  const { install, run, exec } = pmCommands(pm)
   return `# ${name}
 
 A new [Kata](https://github.com/VicenzoMF/kata) app, scaffolded with \`kata init\`.
@@ -307,8 +323,8 @@ A new [Kata](https://github.com/VicenzoMF/kata) app, scaffolded with \`kata init
 ## Run it
 
 \`\`\`bash
-pnpm install
-pnpm dev        # tsx watch src/main.ts -> http://localhost:3000
+${install}
+${run('dev')}        # tsx watch src/main.ts -> http://localhost:3000
 \`\`\`
 
 ## Endpoints
@@ -326,29 +342,29 @@ curl -X POST localhost:3000/greetings -H 'content-type: application/json' -d '{"
 
 ## Verify your work
 
-- \`pnpm test\`      — unit tests (Vitest).
-- \`pnpm typecheck\` — \`tsc --noEmit\`.
+- \`${run('test')}\`      — unit tests (Vitest).
+- \`${run('typecheck')}\` — \`tsc --noEmit\`.
 - \`kata verify\`    — fast deterministic lint rules (ADR-0003/0004/0005).
-- \`pnpm hurl\`      — API E2E (needs [Hurl](https://hurl.dev) installed and the
-  server running: \`pnpm start\` in another terminal). Unlike \`pnpm test\`,
+- \`${run('hurl')}\`      — API E2E (needs [Hurl](https://hurl.dev) installed and the
+  server running: \`${run('start')}\` in another terminal). Unlike \`${run('test')}\`,
   this is **not** run by the Stop hook or any local git hook — wire it into CI
   yourself (see below) so it is not the only suite nobody automates.
 
 ## Continuous integration
 
-\`pnpm hurl\` expects a server already listening, so a CI job needs a scripted
-boot / wait / run / teardown sequence, not just \`pnpm hurl\` on its own. This is
-the exact recipe Kata's own CI runs against \`examples/hello\` and
+\`${run('hurl')}\` expects a server already listening, so a CI job needs a scripted
+boot / wait / run / teardown sequence, not just \`${run('hurl')}\` on its own. This is
+the same recipe Kata's own CI runs against \`examples/hello\` and
 \`examples/shop\`
 ([\`.github/workflows/ci.yml\`](https://github.com/VicenzoMF/kata/blob/main/.github/workflows/ci.yml)),
-trimmed to one server:
+adapted to this project's package manager and trimmed to one server:
 
 \`\`\`yaml
 # .github/workflows/ci.yml
-- run: pnpm install --frozen-lockfile
-- run: pnpm test
-- run: pnpm typecheck
-- run: pnpm exec kata verify --strict-coverage
+- run: ${install}
+- run: ${run('test')}
+- run: ${run('typecheck')}
+- run: ${exec('kata verify --strict-coverage')}
 - name: Install hurl
   run: |
     curl -fsSL -o /tmp/hurl.deb \\
@@ -356,16 +372,16 @@ trimmed to one server:
     sudo dpkg -i /tmp/hurl.deb
 - name: Run hurl E2E
   run: |
-    pnpm start &
+    ${run('start')} &
     SERVER_PID=$!
     trap 'kill "$SERVER_PID" 2>/dev/null || true' EXIT
     npx --yes wait-on tcp:3000 --timeout 30000
-    pnpm hurl
+    ${run('hurl')}
 \`\`\`
 
 The last step is plain shell, not GitHub-Actions-specific: start the server in
 the background, \`wait-on\` its port instead of a fixed \`sleep\`, run
-\`pnpm hurl\`, and the \`trap\` kills the server on exit whether the suite passed
+\`${run('hurl')}\`, and the \`trap\` kills the server on exit whether the suite passed
 or failed. Run those four lines verbatim in any other CI, or as a local
 pre-push script.
 

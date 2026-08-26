@@ -108,17 +108,17 @@ type Target = {
  *  runs): Claude settings (#27, #29), Codex hooks (#28), the vendor-neutral
  *  `.agents` mirror (#200), the AGENTS.md / CLAUDE.md instruction pair (#31), and
  *  the lefthook pre-commit config (#130). Takes the detected package manager
- *  (#231) so the hook commands in the three generated hook files resolve the
- *  local `kata` bin / test script instead of assuming a global `kata` and a
- *  pnpm toolchain. */
+ *  (#231, #302) so every one of these — the three hook JSONs *and* the docs and
+ *  lefthook.yml — resolve the local `kata` bin / test script instead of
+ *  assuming a global `kata` and a pnpm toolchain. */
 function harnessTargets(pm: PackageManager): readonly Target[] {
   return [
     { path: '.claude/settings.json', render: () => renderClaudeSettings(pm) },
     { path: '.codex/hooks.json', render: () => renderCodexHooks(pm) },
     { path: '.agents/hooks.json', render: () => renderAgentsHooks(pm) },
-    { path: 'AGENTS.md', render: renderAgentsMd },
-    { path: 'CLAUDE.md', render: renderClaudeMd },
-    { path: 'lefthook.yml', render: renderLefthookYml },
+    { path: 'AGENTS.md', render: () => renderAgentsMd(pm) },
+    { path: 'CLAUDE.md', render: () => renderClaudeMd(pm) },
+    { path: 'lefthook.yml', render: () => renderLefthookYml(pm) },
   ]
 }
 
@@ -135,8 +135,10 @@ const DOCS_MCP_TARGET: Target = {
  *  the canonical `src/` layout plus the manifests/configs that make it boot,
  *  typecheck, test, and pass the harness from commit 1. The `src/` files honour
  *  `--force`; the manifests/configs are `onlyIfAbsent`. `name` titles the
- *  generated `package.json` / `README.md`. */
-function appTargets(name: string): readonly Target[] {
+ *  generated `package.json` / `README.md`; `pm` is the detected package manager
+ *  (#302) so README.md and the two example `.hurl` run-it comments name the
+ *  actual toolchain instead of assuming pnpm. */
+function appTargets(name: string, pm: PackageManager): readonly Target[] {
   return [
     // Lint/format configs the generated lefthook.yml runs (onlyIfAbsent).
     { path: 'biome.json', render: renderBiomeJson, onlyIfAbsent: true },
@@ -151,19 +153,19 @@ function appTargets(name: string): readonly Target[] {
     { path: 'src/modules/health/health.service.ts', render: renderExampleHealthService },
     { path: 'src/modules/health/health.route.ts', render: renderExampleHealthRoute },
     { path: 'src/modules/health/health.test.ts', render: renderExampleHealthTest },
-    { path: 'src/modules/health/health.hurl', render: renderExampleHealthHurl },
+    { path: 'src/modules/health/health.hurl', render: () => renderExampleHealthHurl(pm) },
     // greetings module (POST + GET).
     { path: 'src/modules/greetings/greetings.schema.ts', render: renderExampleGreetingsSchema },
     { path: 'src/modules/greetings/greetings.service.ts', render: renderExampleGreetingsService },
     { path: 'src/modules/greetings/greetings.route.ts', render: renderExampleGreetingsRoute },
     { path: 'src/modules/greetings/greetings.test.ts', render: renderExampleGreetingsTest },
-    { path: 'src/modules/greetings/greetings.hurl', render: renderExampleGreetingsHurl },
+    { path: 'src/modules/greetings/greetings.hurl', render: () => renderExampleGreetingsHurl(pm) },
     // Manifests + docs (onlyIfAbsent).
     { path: 'package.json', render: () => renderExamplePackageJson(name), onlyIfAbsent: true },
     { path: 'tsconfig.json', render: renderExampleTsconfig, onlyIfAbsent: true },
     { path: '.gitignore', render: renderExampleGitignore, onlyIfAbsent: true },
     { path: '.env.example', render: renderExampleEnvExample, onlyIfAbsent: true },
-    { path: 'README.md', render: () => renderExampleReadme(name), onlyIfAbsent: true },
+    { path: 'README.md', render: () => renderExampleReadme(name, pm), onlyIfAbsent: true },
     // This app's own ADRs (issue #213), separate from Kata's framework ADRs
     // (linked from AGENTS.md instead of duplicated here).
     { path: 'docs/adr/_template.md', render: renderExampleAdrTemplate, onlyIfAbsent: true },
@@ -226,7 +228,7 @@ export async function init(options: InitOptions = {}): Promise<InitResult> {
   const targets = [
     ...(minimal
       ? harnessTargets(packageManager)
-      : [...harnessTargets(packageManager), ...appTargets(appNameFromDir(cwd))]),
+      : [...harnessTargets(packageManager), ...appTargets(appNameFromDir(cwd), packageManager)]),
     ...(options.docsMcp ? [DOCS_MCP_TARGET] : []),
   ]
   const files = await Promise.all(targets.map((target) => writeTarget(cwd, force, target)))
