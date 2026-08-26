@@ -18,7 +18,7 @@ ADR before deviating. Statuses: `Accepted | Superseded by ADR-NNNN | Deprecated`
 ## Mandatory folder layout
 ```
 src/
-├── app.ts                # createApp({ context, modules })
+├── app.ts                # createApp({ modules })
 ├── context.ts            # defineContext({ ... })
 ├── middlewares/
 └── modules/<domain>/
