@@ -224,28 +224,26 @@ real exige, portanto, inevitavelmente, uma route que lança e que *é*
 alcançável em produção.
 
 **Solução:** aceitar esse trade-off explicitamente, uma vez, em vez de deixar
-cada consumidor reinventá-lo — e contê-lo em um module com cara de
-diagnóstico, em vez de espalhá-lo pela app. O `examples/hello` faz isso com
-uma route `GET /boom` no seu module
-[`diag`](https://github.com/VicenzoMF/kata/blob/main/examples/hello/src/modules/diag/diag.route.ts)
-já existente (já ligado ao array `modules: [users, auth, echo, diag]` do
-`main.ts`, ao lado das routes de diagnóstico de request-id e export CSV):
+cada consumidor reinventá-lo. O `examples/hello` já tem exatamente isso: uma
+route `GET /boom` permanente no seu module
+[`users`](https://github.com/VicenzoMF/kata/blob/main/examples/hello/src/modules/users/users.route.ts)
+(já ligado ao array `modules: [users, auth, echo, diag]` do `main.ts`):
 
 ```ts
-// examples/hello/src/modules/diag/diag.route.ts
+// examples/hello/src/modules/users/users.route.ts
 export const boomRoute = defineRoute({
   method: 'GET',
   path: '/boom',
   input: {},
-  output: BoomOutputSchema, // nunca é de fato retornado — o handler sempre lança
+  output: BoomResponseSchema, // nunca é de fato retornado — o handler sempre lança
   handler: () => {
-    throw new Error('forced failure — diag.boom is a standing crash route for real-HTTP E2E coverage')
+    throw new Error('intentional handler explosion')
   },
 })
 ```
 
 Verificada de ponta a ponta em
-[`diag.hurl`](https://github.com/VicenzoMF/kata/blob/main/examples/hello/src/modules/diag/diag.hurl)
+[`users.hurl`](https://github.com/VicenzoMF/kata/blob/main/examples/hello/src/modules/users/users.hurl)
 contra o servidor de fato em execução (`pnpm --filter=hello start`, depois
 `pnpm --filter=hello hurl`):
 
@@ -253,22 +251,29 @@ contra o servidor de fato em execução (`pnpm --filter=hello start`, depois
 GET http://localhost:3000/boom
 HTTP 500
 [Asserts]
+header "Content-Type" contains "application/json"
 jsonpath "$.error" == "internal_error"
-jsonpath "$.message" == "Internal server error"
+jsonpath "$.message" exists
 ```
+
+::: warning
+Não crie uma segunda `/boom` em outro module (por exemplo, um module com cara
+de `diag`) para "isolar" isso. O Kata registra as routes na ordem do array
+`modules`, e uma route do Kata nunca chama `next()` — então o primeiro
+handler registrado para um dado método+path sempre vence. Uma route duplicada
+no mesmo path é código morto inalcançável, não uma rede de segurança extra.
+:::
 
 **Isso é um endpoint permanente de "derrubar o servidor de propósito",
 acessível em produção** — exatamente o que a route só-de-teste da seção
 anterior foi construída para evitar. Isso é um trade-off deliberado e aceito
 em troca de cobertura E2E sobre HTTP real, não um descuido: mantenha-o como um
-único throw incondicional, sem lógica de negócio, isole-o em um module com
-cara de diagnóstico (para que se leia como infraestrutura, não como
-funcionalidade), e não se surpreenda quando uma varredura de segurança ou um
-colega sinalizar `GET /boom` — esse é o custo dessa cobertura, pago
-conscientemente. Se esse custo for inaceitável para o seu deployment, proteja
-a route atrás de uma checagem de ambiente (por exemplo, só a registre quando
-`NODE_ENV !== 'production'`) e rode a verificação de HTTP real contra um build
-que não seja de produção.
+único throw incondicional, sem lógica de negócio, e não se surpreenda quando
+uma varredura de segurança ou um colega sinalizar `GET /boom` — esse é o
+custo dessa cobertura, pago conscientemente. Se esse custo for inaceitável
+para o seu deployment, proteja a route atrás de uma checagem de ambiente (por
+exemplo, só a registre quando `NODE_ENV !== 'production'`) e rode a
+verificação de HTTP real contra um build que não seja de produção.
 
 ## O que é automático vs. o que você escreve
 
