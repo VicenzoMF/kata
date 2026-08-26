@@ -1,0 +1,52 @@
+name: release-docs-mcp
+
+# Publishes @katajs-framework/docs-mcp to npm on a docs-mcp-v* tag push.
+# Auth is npm trusted publishing (OIDC) -- no stored token. The trust
+# relationship for this exact repo + workflow file must be configured once
+# via `npm trust github` (see RELEASE.md) before the first tagged run.
+#
+# node-version is pinned to 22 here (not the repo's usual 20, see ci.yml)
+# because npm trusted publishing requires npm CLI >=11.5.1 / Node >=22.14.0.
+# engines.node is ">=20" so this is within the supported range.
+
+on:
+  push:
+    tags: ['docs-mcp-v*']
+
+permissions:
+  contents: read
+  id-token: write # required for OIDC trusted publishing + provenance
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          registry-url: https://registry.npmjs.org
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - run: pnpm typecheck && pnpm test
+
+      - run: pnpm --filter=@katajs-framework/docs-mcp run check-publish-ready
+
+      - run: pnpm --filter=@katajs-framework/docs-mcp build
+
+      - run: pnpm --filter=@katajs-framework/docs-mcp smoke-check
+
+      - run: npm publish --access public --provenance
+        working-directory: packages/docs-mcp
+
+      - name: Post-publish smoke check against the registry
+        run: |
+          VERSION="${GITHUB_REF_NAME#docs-mcp-v}"
+          node scripts/smoke-check.mjs --pkg "@katajs-framework/docs-mcp@$VERSION"
+        working-directory: packages/docs-mcp
