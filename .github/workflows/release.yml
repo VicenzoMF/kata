@@ -8,6 +8,12 @@ name: release
 # node-version is pinned to 22 here (not the repo's usual 20, see ci.yml)
 # because npm trusted publishing requires npm CLI >=11.5.1 / Node >=22.14.0.
 # engines.node is ">=20" so this is within the supported range.
+#
+# Node 22's own bundled npm lags behind that (10.9.8 as of this writing) --
+# without the explicit upgrade below, npm silently skips the OIDC trusted-
+# publishing handshake and attempts an unauthenticated publish, which fails
+# with a misleading E404 "is not in this registry" on an already-published
+# package (confirmed via a failed run: npm-v0.4.2, 2026-08-26).
 
 on:
   push:
@@ -31,6 +37,8 @@ jobs:
           node-version: 22
           registry-url: https://registry.npmjs.org
           cache: pnpm
+
+      - run: npm install -g npm@11 # bundled npm is too old for trusted publishing -- see note above
 
       - run: pnpm install --frozen-lockfile
 
