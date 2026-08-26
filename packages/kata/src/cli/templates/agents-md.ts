@@ -30,7 +30,7 @@ const LINES: readonly string[] = [
   '## Mandatory folder layout',
   '```',
   'src/',
-  '├── app.ts                # createApp({ context, modules })',
+  '├── app.ts                # createApp({ modules })',
   '├── context.ts            # defineContext({ ... })',
   '├── middlewares/',
   '└── modules/<domain>/',
