@@ -92,8 +92,9 @@ id de requisição — através dele. É um no-op quando nenhum `logger` utiliz�
 const app = createApp({ modules: [users], requestLogging: false })
 ```
 
-O id de requisição também é ecoado no header de resposta `x-request-id`
-(`REQUEST_ID_HEADER`).
+Independentemente de `requestLogging`, o id de requisição é ecoado
+incondicionalmente no header de resposta `x-request-id` (`REQUEST_ID_HEADER`)
+— veja [Request id](/pt/reference/middleware#request-id).
 
 #### O que torna um logger "utilizável"
 
