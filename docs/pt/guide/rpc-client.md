@@ -102,6 +102,25 @@ const list = await all.json() // { id: string; name: string; email: string }[]
 Os tipos de requisição são derivados de `z.input` — o formato que o chamador envia, antes de quaisquer
 transforms do Zod. Os tipos de resposta são derivados de `z.infer` — o formato depois do parsing.
 
+::: warning Um input todo opcional ainda exige o alvo, escrito por extenso
+O argumento da chamada só é opcional quando a rota declara `input: {}` — nenhuma
+chave. A partir do momento em que a rota declara uma seção, a chave dessa seção é
+**obrigatória na chamada mesmo que todo campo dentro dela seja opcional**:
+
+```ts
+// GET /todos com input: { query: ListQuerySchema }, cujos campos são todos opcionais
+await client.todos.$get()              // ✗ TS2554: Expected 1-2 arguments, but got 0
+await client.todos.$get({ query: {} }) // ✓ lista tudo
+
+await client.health.$get()             // ✓ essa rota declara input: {}
+```
+
+Isso é a tipagem do RPC do Hono aflorando, não uma regra do Kata — mas o Kata torna
+o caso comum: `input` é obrigatório em toda rota, então "um filtro legitimamente
+ausente" é uma forma do dia a dia. Use `{ query: {} }` em vez de tornar o campo
+obrigatório só para calar o `tsc`.
+:::
+
 ## Chamadas erradas são erros de compilação
 
 Como os inputs vêm dos seus schemas, uma chamada que os viola não passa na checagem de tipos.

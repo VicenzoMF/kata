@@ -54,7 +54,7 @@ helper:
 
 ```ts
 import { serve } from '@hono/node-server'
-import { gracefulShutdown } from 'kata/node'
+import { gracefulShutdown } from '@katajs-framework/core/node'
 
 const server = serve({ fetch: app.fetch, port })
 

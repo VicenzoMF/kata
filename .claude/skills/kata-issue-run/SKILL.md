@@ -62,7 +62,7 @@ The layout is mandatory (`AGENTS.md`), not a suggestion:
 
 ```
 src/
-├── app.ts                # createApp({ context, modules })
+├── app.ts                # createApp({ modules })
 ├── context.ts            # defineContext({ ... })
 ├── middlewares/
 └── modules/<domain>/

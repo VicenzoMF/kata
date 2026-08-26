@@ -115,6 +115,25 @@ const list = await all.json() // { id: string; name: string; email: string }[]
 Request types are derived from `z.input` — the shape the caller sends, before any Zod
 transforms. Response types are derived from `z.infer` — the shape after parsing.
 
+::: warning An all-optional input still needs its target, spelled out
+The call argument is optional only when the route declares `input: {}` — no keys at
+all. The moment a route declares a section, that section's key is **required at the
+call site even when every field inside it is optional**:
+
+```ts
+// GET /todos with input: { query: ListQuerySchema }, whose every field is optional
+await client.todos.$get()              // ✗ TS2554: Expected 1-2 arguments, but got 0
+await client.todos.$get({ query: {} }) // ✓ list everything
+
+await client.health.$get()             // ✓ this route declares input: {}
+```
+
+This surfaces Hono's RPC typing, not a Kata rule, but Kata makes it common: `input`
+is mandatory on every route, so "a filter that is legitimately absent" is an everyday
+shape. Reach for `{ query: {} }` rather than making the field required to appease
+`tsc`.
+:::
+
 ## Wrong calls are compile errors
 
 Because inputs come from your schemas, a call that violates them does not type-check.

@@ -129,8 +129,9 @@ function nextSteps(result: InitResult): string[] {
   steps.push(`  ${pm.run('test')}         # unit tests`)
   if (result.docsMcp) {
     steps.push('')
-    steps.push('.mcp.json registers @katajs-framework/docs-mcp via `npx` — requires it to be')
-    steps.push('published to npm first (see the Kata repo for current status).')
+    steps.push('.mcp.json registers the published @katajs-framework/docs-mcp via `npx`,')
+    steps.push('unpinned — your MCP client fetches the latest snapshot when it starts the')
+    steps.push('server. Pin a version there to tie the docs to one core release.')
   }
   return steps
 }

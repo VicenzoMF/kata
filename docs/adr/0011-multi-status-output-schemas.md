@@ -116,7 +116,7 @@ its `404`/`409`/`422` typed and validated needs a schema that *describes that
 envelope*. Kata now ships one:
 
 ```ts
-import { ErrorBodySchema } from 'kata'
+import { ErrorBodySchema } from '@katajs-framework/core'
 
 output: { 200: UserSchema, 404: ErrorBodySchema }
 ```

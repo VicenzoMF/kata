@@ -282,6 +282,30 @@ então um header ou content type que você definiu é preservado. O cliente RPC
 faz o narrow por status: `InferResponseType<call, 404>`. Veja
 [`defineRoute`](/pt/reference/define-route) para o contrato completo de `output`.
 
+::: danger O schema errado atrás de um status de erro quebra aquele erro em silêncio
+Declarar um status o inscreve na validação, e o `c.error(...)` sempre emite o
+envelope unificado `{ error, message }`. Então, se o schema sob uma chave `4xx` for
+qualquer outra coisa — o DTO de sucesso, copiado da linha de cima por descuido —, o
+envelope falha no próprio schema declarado, e o que quem chamou recebe passa a
+depender do [modo](#validação-de-output-e-internal-output-shape-mismatch), não do seu
+handler:
+
+```ts
+output: { 200: TodoSchema, 400: TodoSchema }   // ← 400 não é o envelope
+handler: (c) => c.error('invalid_filter', 'Filtro desconhecido', { status: 400 }),
+```
+
+- **`strict`** (o padrão fora de produção) — seu `400` é trocado por
+  `500 { "error": "internal_output_shape_mismatch", … }`. O erro de domínio nunca
+  chega a quem chamou.
+- **`log`** (o padrão *em* produção) — o `400` malformado vai para quem chamou como
+  está, e só uma linha de log no servidor registra o descasamento.
+
+Nenhum dos dois modos é o comportamento que você queria, e justamente o que esconde
+o problema é o que roda em produção. Coloque o `ErrorBodySchema` — ou um refinamento
+dele — atrás de todo `4xx`/`5xx` declarado, e o descasamento vira problema de
+compilação em vez de problema de runtime.
+:::
 ## O que é automático vs. o que você escreve
 
 | Situação | Status | Quem produz |

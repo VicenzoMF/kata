@@ -29,6 +29,27 @@ kata init my-app      # faz o scaffold em ./my-app
 kata init             # …ou faz o scaffold no diretório atual
 ```
 
+::: warning Bootstrap: não existe `kata` no PATH antes de o projeto existir
+O resto desta página escreve `kata …` direto — a forma que funciona *depois* do
+`kata init`, porque o `package.json` gerado depende de `@katajs-framework/core` e a
+instalação coloca o binário em `node_modules/.bin`. O primeiro comando não tem de
+onde resolver isso, então passa pelo nome do pacote:
+
+```bash
+npx @katajs-framework/core init my-app                      # npm
+pnpm dlx --package=@katajs-framework/core kata init my-app  # pnpm
+```
+
+Duas armadilhas, e vale enunciar as duas porque falham de formas diferentes:
+
+- **`npx kata init` roda o código de outra pessoa.** O nome `kata` puro no npm
+  pertence a um pacote dormente sem relação com o framework — veja
+  [Nome do pacote vs. comando](/pt/guide/quickstart#instalação).
+- **`pnpm dlx @katajs-framework/core init` dá erro** com
+  `ERR_PNPM_DLX_MULTIPLE_BINS`. O pacote publica dois nomes de binário, `kata` e
+  `katajs`, apontando para um arquivo só; o npm resolve esse caso, o pnpm se recusa
+  a adivinhar — daí o `--package` mais o nome do binário.
+:::
 O `[dir]` opcional é criado se não existir e resolvido relativo a `--cwd`
 (padrão: o diretório atual). O `package.json` gerado recebe esse nome.
 
@@ -200,8 +221,9 @@ kata init → /path/to/my-app
 Next steps:
   …
 
-.mcp.json registers @katajs-framework/docs-mcp via `npx` — requires it to be
-published to npm first (see the Kata repo for current status).
+.mcp.json registers the published @katajs-framework/docs-mcp via `npx`,
+unpinned — your MCP client fetches the latest snapshot when it starts the
+server. Pin a version there to tie the docs to one core release.
 ```
 
 ### Idempotência

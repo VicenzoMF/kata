@@ -78,6 +78,21 @@ If you inline a schema in a `.route.ts`, or put a route in a misnamed file, the 
 key off the wrong suffix and the harness reports it. The layout is what makes the rules
 cheap and exact. See [The harness](/guide/harness) for the full rule set.
 
+::: warning Dropping `*.test.ts` means a route declared in a test has zero rule coverage
+The drop is deliberate — test files are not published surface — but it has a
+consequence worth stating, because one of our own recipes lands in it. The
+[error-boundary recipe](/cookbook/errors#testing-the-error-boundary-without-a-crash-route)
+tells you to call `defineRoute` **inside the test file**, and a route declared there
+is invisible to every rule: an inline `z.object(...)`, a scoped slot read without a
+provider, a missing `output` — all pass `kata verify` clean, including under
+`--strict-coverage`, which will not even report a suppression, because the file was
+dropped before any rule ran.
+
+That is the right trade-off for a throwaway route whose only job is to throw. It is
+the wrong place for logic you actually rely on: anything you want the harness to
+check belongs in a `.route.ts` or `.service.ts`, where it is checked.
+:::
+
 ::: warning One prefix per file
 `users.route.ts` is correct. `routes/users.ts`, `user-routes.ts`, or a
 `UsersController` are not — the suffix carries the meaning, and the harness matches on

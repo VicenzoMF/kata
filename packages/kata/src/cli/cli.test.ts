@@ -282,7 +282,7 @@ describe('formatResult()', () => {
     expect(text).not.toContain('pnpm install')
   })
 
-  it('warns that .mcp.json requires @katajs-framework/docs-mcp to be published', () => {
+  it('describes .mcp.json as registering the published docs-mcp, unpinned', () => {
     const text = formatResult({
       cwd: '/proj/my-app',
       dir: 'my-app',
@@ -291,8 +291,12 @@ describe('formatResult()', () => {
       packageManager: 'pnpm',
       files: [{ path: '.mcp.json', status: 'created' }],
     })
-    expect(text).toContain('.mcp.json registers @katajs-framework/docs-mcp')
-    expect(text).toContain('published to npm')
+    expect(text).toContain('.mcp.json registers the published @katajs-framework/docs-mcp')
+    expect(text).toContain('unpinned')
+    // Both packages have shipped since 0.3.1. A pre-release caveat here outlived
+    // the publish once already: issue #234 swept `docs/` for that wording, but
+    // this copy lives in the CLI source and was missed for three releases.
+    expect(text).not.toMatch(/not yet published|requires it to be\s*$|publish(ed)? to npm first/)
   })
 })
 

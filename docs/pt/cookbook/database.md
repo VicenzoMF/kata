@@ -149,6 +149,77 @@ describe('users.service', () => {
 })
 ```
 
+## 5. Resete o singleton entre testes no nível HTTP
+
+O falso acima funciona porque o *serviço* recebe `db` como parâmetro. Uma camada
+acima ele deixa de funcionar: um teste que dirige a app por `app.request(...)` — ou
+uma suíte `.hurl` contra um servidor vivo — passa pelo `createApp` real, então lê o
+singleton real. Singletons são ansiosos e valem para o processo inteiro, então as
+linhas que um teste escreveu continuam lá para o próximo, e a suíte passa a passar
+ou falhar conforme a ordem dos arquivos.
+
+Não existe costura de injeção por teste, e isso é de propósito
+([ADR-0004](/adr/0004-di-via-scoped-slots)): `c.get('db')` é monomórfico justamente
+porque nada pode trocá-lo por baixo. Então coloque a costura no próprio valor — um
+`reset` no `Db`, declarado como qualquer outro método:
+
+```ts
+// src/db.ts — estendendo o tipo do passo 1
+export type Db = {
+  findUser: (id: string) => Promise<User | null>
+  insertUser: (user: User) => Promise<void>
+  close: () => Promise<void>
+  // Costura de teste: devolve o store ao vazio. Um driver de verdade reverte a
+  // transação que a suíte abriu, ou faz um truncate — mesma assinatura nos dois casos.
+  reset: () => Promise<void>
+}
+
+export function makeDb(env: NodeJS.ProcessEnv): Db {
+  void env
+  const store = new Map<string, User>()
+  return {
+    findUser: async (id) => store.get(id) ?? null,
+    insertUser: async (user) => {
+      store.set(user.id, user)
+    },
+    close: async () => {},
+    reset: async () => {
+      store.clear()
+    },
+  }
+}
+```
+
+Chame pelo `k.resolve` — o acessor exclusivo de singletons, que alcança exatamente a
+instância que todo handler vai ler:
+
+```ts
+// src/modules/users/users.http.test.ts
+import { beforeEach, describe, expect, it } from 'vitest'
+
+import { createApp, k } from '../../context'
+import * as users from './users.route'
+
+const app = createApp({ modules: [users] })
+
+beforeEach(async () => {
+  await k.resolve('db').reset()
+})
+
+describe('GET /users', () => {
+  it('começa de um store vazio em todo teste', async () => {
+    const res = await app.request('/users')
+    expect(await res.json()).toEqual([])
+  })
+})
+```
+
+Declarar `reset` no `Db` de fato o deixa ao alcance do código de produção — esse é o
+preço de não haver costura de injeção. Mantê-lo no tipo, em vez de escondido atrás
+de um cast, é a versão honesta: fica visível em `db.ts`, é tipado, e as proibições de
+`kata/no-class` e de `any` continuam intactas. O que ele nunca pode virar é um
+segundo caminho de escrita que a produção realmente chama.
+
 ## Por que singleton, e não scoped
 
 | | `singleton(value)` | `scoped<T>()` |

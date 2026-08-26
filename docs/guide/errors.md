@@ -287,6 +287,29 @@ response your handler built, so a header or content type you set is preserved. T
 client narrows by status: `InferResponseType<call, 404>`. See
 [`defineRoute`](/reference/define-route) for the full `output` contract.
 
+::: danger The wrong schema behind an error status silently breaks that error
+Declaring a status opts it into validation, and `c.error(...)` always emits the
+unified `{ error, message }` envelope. So if the schema under a `4xx` key is anything
+else — the success DTO, copied one line up by accident — the envelope fails its own
+declared schema, and what the caller gets depends on the
+[mode](#output-validation-and-internal-output-shape-mismatch) rather than on your handler:
+
+```ts
+output: { 200: TodoSchema, 400: TodoSchema }   // ← 400 is not the envelope
+handler: (c) => c.error('invalid_filter', 'Unknown filter', { status: 400 }),
+```
+
+- **`strict`** (the default outside production) — your `400` is replaced by
+  `500 { "error": "internal_output_shape_mismatch", … }`. The domain error never
+  reaches the caller.
+- **`log`** (the default *in* production) — the malformed `400` ships to the caller
+  as written, and only a server-side log line records the mismatch.
+
+Neither mode is the behaviour you wanted, and the one that hides it is the one
+production runs. Put [`ErrorBodySchema`](/guide/routes-schemas#status-to-schema-map) —
+or a refinement of it — behind every declared `4xx`/`5xx`, and the mismatch becomes a
+compile-time concern instead of a runtime one.
+:::
 ## What's automatic vs. what you write
 
 | Situation | Status | Who produces it |
