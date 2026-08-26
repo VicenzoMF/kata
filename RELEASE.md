@@ -151,10 +151,26 @@ node -e "import('@katajs-framework/core').then(m => console.log(Object.keys(m)))
 ## CI release flow (recommended, optional)
 
 Publish on a `katajs-v*` tag so a release is never a laptop-only action. This is
-**not** wired yet — adding a workflow is an owner action (the harness blocks
-agent edits to `.github/workflows/`, and CI config is an L3 guardrail). Add the
-`NPM_TOKEN` repo secret (an npm **automation** token), then create
-`.github/workflows/release.yml`:
+**not** wired yet — adding the workflow file is an owner action (the harness
+blocks agent edits to `.github/workflows/`, and CI config is an L3 guardrail).
+
+Auth is **npm trusted publishing (OIDC)** — no stored token, so no rotation
+and no exposure to the January 2027 cutoff for 2FA-bypassing automation
+tokens. `@katajs-framework/core` couldn't use it for the very first release (a
+trusted publisher is configured against an existing package), but the package
+is live now, so this is the path from here on.
+
+One-time setup (owner, needs `npm login` — passkey-gated, real TTY):
+
+```sh
+# npm CLI >= 11.5.1 required (`npm -v` to check).
+npm trust github @katajs-framework/core \
+  --repo VicenzoMF/kata \
+  --file release.yml \
+  --allow-publish
+```
+
+Then add `.github/workflows/release.yml`:
 
 ```yaml
 name: release
@@ -163,7 +179,7 @@ on:
     tags: ['katajs-v*']
 permissions:
   contents: read
-  id-token: write          # required for npm provenance
+  id-token: write          # required for OIDC trusted publishing + provenance
 jobs:
   publish:
     runs-on: ubuntu-latest
@@ -172,7 +188,9 @@ jobs:
       - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          # Trusted publishing needs Node >=22.14.0, unlike the rest of the
+          # repo's Node 20 baseline (engines.node is ">=20", so this is fine).
+          node-version: 22
           registry-url: https://registry.npmjs.org
           cache: pnpm
       - run: pnpm install --frozen-lockfile
@@ -180,20 +198,13 @@ jobs:
       - run: pnpm --filter=@katajs-framework/core build
       - run: npm publish --access public --provenance
         working-directory: packages/kata
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 ```
 
-> **Deprecated auth path.** The `NPM_TOKEN` flow above is on borrowed time:
-> npm granular tokens configured to bypass 2FA lose the right to publish after
-> **January 2027**. Once `@katajs-framework/core` exists on the registry, replace it with
-> **trusted publishing (OIDC)** — no stored token at all. It could not be used
-> for the first release: a trusted publisher is configured in the package's
-> settings on npmjs.com, which requires the package to already exist.
-
-`--provenance` needs `id-token: write`, npm ≥ 9.5, and a public repo; drop it
-otherwise. For multi-package releases later, consider Changesets — overkill
-while `@katajs-framework/core` is the only published package.
+No `NODE_AUTH_TOKEN` / `NPM_TOKEN` secret — the `id-token: write` permission
+lets npm CLI mint an OIDC token against the trust relationship configured
+above. `--provenance` needs `id-token: write`, npm ≥ 9.5, and a public repo;
+drop it otherwise. For multi-package releases later, consider Changesets —
+overkill while there are only two published packages.
 
 ---
 
@@ -262,12 +273,22 @@ itself went wrong (wrong tag, stale `npm pack`, etc.), not the docs.
 ## CI release flow (recommended, optional)
 
 Publish on a `docs-mcp-v*` tag so a release is never a laptop-only action,
-mirroring core's release workflow above. This is **not** wired yet — adding a
-workflow is an owner action (the harness blocks agent edits to
-`.github/workflows/`, and CI config is an L3 guardrail). Reuse the same
-`NPM_TOKEN` repo secret as core (or migrate both to trusted publishing
-together — see the deprecation note under core's CI flow above), then create
-`.github/workflows/release-docs-mcp.yml`:
+mirroring core's release workflow above. This is **not** wired yet — adding
+the workflow file is an owner action (the harness blocks agent edits to
+`.github/workflows/`, and CI config is an L3 guardrail).
+
+Same OIDC trusted-publishing auth as core — see the rationale under core's CI
+flow above. One-time setup (owner, needs `npm login` — passkey-gated, real
+TTY):
+
+```sh
+npm trust github @katajs-framework/docs-mcp \
+  --repo VicenzoMF/kata \
+  --file release-docs-mcp.yml \
+  --allow-publish
+```
+
+Then create `.github/workflows/release-docs-mcp.yml`:
 
 ```yaml
 name: release-docs-mcp
@@ -276,7 +297,7 @@ on:
     tags: ['docs-mcp-v*']
 permissions:
   contents: read
-  id-token: write          # required for npm provenance
+  id-token: write          # required for OIDC trusted publishing + provenance
 jobs:
   publish:
     runs-on: ubuntu-latest
@@ -285,7 +306,9 @@ jobs:
       - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          # Trusted publishing needs Node >=22.14.0, unlike the rest of the
+          # repo's Node 20 baseline (engines.node is ">=20", so this is fine).
+          node-version: 22
           registry-url: https://registry.npmjs.org
           cache: pnpm
       - run: pnpm install --frozen-lockfile
@@ -295,13 +318,13 @@ jobs:
       - run: pnpm --filter=@katajs-framework/docs-mcp smoke-check
       - run: npm publish --access public --provenance
         working-directory: packages/docs-mcp
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
       - run: |
           VERSION="${GITHUB_REF_NAME#docs-mcp-v}"
           node scripts/smoke-check.mjs --pkg "@katajs-framework/docs-mcp@$VERSION"
         working-directory: packages/docs-mcp
 ```
+
+No `NODE_AUTH_TOKEN` / `NPM_TOKEN` secret needed, same as core.
 
 `check-publish-ready` running in CI is somewhat belt-and-suspenders (a
 tag-triggered checkout is already pinned to one commit), but it stays useful
