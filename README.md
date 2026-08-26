@@ -12,11 +12,13 @@ contract-complete: declared input and output schemas, validated at runtime.
 
 ## Status
 
-Pre-release (`0.0.0`). The core — `defineContext`, `defineRoute`,
-`defineMiddleware`, `createApp` — and a worked example ([`examples/hello`](examples/hello))
-are in place, including **end-to-end typed RPC clients** (`hc<typeof app>`, with a
-runnable [`examples/hello-client`](examples/hello-client)). The `kata verify` lint
-harness is in progress. Decisions live in [`docs/adr/`](docs/adr/).
+Published on npm as [`@katajs-framework/core`](https://www.npmjs.com/package/@katajs-framework/core).
+The core — `defineContext`, `defineRoute`, `defineMiddleware`, `createApp` — ships
+alongside two worked examples ([`examples/hello`](examples/hello),
+[`examples/shop`](examples/shop)), **end-to-end typed RPC clients**
+(`hc<typeof app>`, with a runnable [`examples/hello-client`](examples/hello-client)),
+the `kata init` / `kata new` / `kata verify` CLI, and the `kata verify` lint harness
+with its 13 rules. Decisions live in [`docs/adr/`](docs/adr/).
 
 ## Thesis (TL;DR)
 
@@ -54,9 +56,10 @@ npm install @katajs-framework/core hono zod @hono/node-server
 # or: pnpm add @katajs-framework/core hono zod @hono/node-server
 ```
 
-> **Pre-release:** Kata is not yet published to npm. Today the fastest path is to
-> clone this repo and run the worked example, which is what the walkthrough below
-> builds:
+> The npm package is **`@katajs-framework/core`** — the bare `kata` name on npm
+> belongs to an unrelated, dormant package. The CLI keeps the short `kata` command.
+> To read the finished code instead of typing it, the walkthrough below is also
+> checked in:
 >
 > ```bash
 > git clone https://github.com/VicenzoMF/kata.git
@@ -74,12 +77,19 @@ of the agent harness (`.claude` / `.codex` / `.agents` + `AGENTS.md` / `CLAUDE.m
 and a lefthook pre-commit:
 
 ```bash
-kata init my-app
+npx @katajs-framework/core init my-app   # the bin does not exist yet — go via the package
 cd my-app && pnpm install
-pnpm dev          # → http://localhost:3000/health
-kata verify       # fast deterministic checks
-pnpm test         # unit tests
+pnpm dev                # → http://localhost:3000/health
+pnpm exec kata verify   # fast deterministic checks
+pnpm test               # unit tests
 ```
+
+The first line has to name the package: `kata`'s bin only lands in
+`node_modules/.bin` once the scaffolded project is installed, and the bare `kata`
+name on npm is an unrelated package. pnpm users need
+`pnpm dlx --package=@katajs-framework/core kata init my-app` — pnpm refuses to pick
+between the `kata` and `katajs` bin names on its own. See
+[the CLI guide](https://vicenzomf.github.io/kata/guide/cli) for the full story.
 
 Add more modules with `kata new <domain>`. Use `kata init --minimal` to write
 only the harness into an existing project. The walkthrough below shows, by hand,
@@ -402,7 +412,7 @@ findable by glob. The canonical layout (full list in [`AGENTS.md`](AGENTS.md)):
 
 ```
 src/
-├── app.ts                # createApp({ context, modules })
+├── app.ts                # createApp({ modules })
 ├── context.ts            # defineContext({ ... })
 ├── middlewares/
 └── modules/<domain>/

@@ -149,6 +149,77 @@ describe('users.service', () => {
 })
 ```
 
+## 5. Reset the singleton between HTTP-level tests
+
+The fake above works because the *service* takes `db` as a parameter. One layer up
+it stops working: a test that drives the app through `app.request(...)` — or a
+`.hurl` suite against a live server — goes through the real `createApp`, so it reads
+the real singleton. Singletons are eager and process-wide, so rows written by one
+test are still there for the next, and the suite starts passing or failing on file
+order.
+
+There is no per-test injection seam, by design ([ADR-0004](../adr/0004-di-via-scoped-slots.md)):
+`c.get('db')` is monomorphic precisely because nothing can swap it underneath. So
+put the seam on the value instead — a `reset` on `Db` itself, declared like any
+other method:
+
+```ts
+// src/db.ts — extending the type from step 1
+export type Db = {
+  findUser: (id: string) => Promise<User | null>
+  insertUser: (user: User) => Promise<void>
+  close: () => Promise<void>
+  // Test seam: return the store to empty. A real driver rolls back the
+  // transaction the suite opened, or truncates — same signature either way.
+  reset: () => Promise<void>
+}
+
+export function makeDb(env: NodeJS.ProcessEnv): Db {
+  void env
+  const store = new Map<string, User>()
+  return {
+    findUser: async (id) => store.get(id) ?? null,
+    insertUser: async (user) => {
+      store.set(user.id, user)
+    },
+    close: async () => {},
+    reset: async () => {
+      store.clear()
+    },
+  }
+}
+```
+
+Call it through `k.resolve` — the singleton-only accessor, which reaches the very
+instance every handler will read:
+
+```ts
+// src/modules/users/users.http.test.ts
+import { beforeEach, describe, expect, it } from 'vitest'
+
+import { createApp, k } from '../../context'
+import * as users from './users.route'
+
+const app = createApp({ modules: [users] })
+
+beforeEach(async () => {
+  await k.resolve('db').reset()
+})
+
+describe('GET /users', () => {
+  it('starts from an empty store in every test', async () => {
+    const res = await app.request('/users')
+    expect(await res.json()).toEqual([])
+  })
+})
+```
+
+Declaring `reset` on `Db` does put it within reach of production code — that is the
+trade-off for having no injection seam. Keeping it on the type rather than
+hidden behind a cast is the honest version: it is visible in `db.ts`, it is typed,
+and the `kata/no-class` and `any` bans stay intact. What it must never become is a
+second write path that production actually calls.
+
 ## Why singleton, not scoped
 
 | | `singleton(value)` | `scoped<T>()` |

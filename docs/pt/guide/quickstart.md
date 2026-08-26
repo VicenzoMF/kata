@@ -29,7 +29,10 @@ npm install @katajs-framework/core hono zod @hono/node-server
 O framework é o **Kata**, mas seu pacote no npm é **`@katajs-framework/core`** — o nome `kata`
 puro no npm pertence a um pacote sem relação e parado. Então você **instala e
 importa `@katajs-framework/core`** (`import … from '@katajs-framework/core'`), enquanto a CLI mantém o comando
-curto **`kata`** (`kata init`, `kata verify`). `npx @katajs-framework/core …` também funciona, como alias.
+curto **`kata`** (`kata init`, `kata verify`). `npx @katajs-framework/core …` também
+funciona, como alias — mas o `pnpm dlx` precisa de
+`--package=@katajs-framework/core kata …`, porque o pacote publica dois nomes de
+binário e o pnpm não escolhe entre eles.
 :::
 
 ::: tip Rode o exemplo completo a partir do código-fonte

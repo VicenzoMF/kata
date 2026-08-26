@@ -296,6 +296,8 @@ type ErrorExtra = {
 (`c.json` e `c.error` são os construtores de resposta em `c`; o envelope que `c.error`
 emite é documentado em detalhes em [Erros](/pt/guide/errors).)
 
+### Validando um `Response`
+
 Retornar um `Response` pula o caminho de sucesso de valor simples — então o que acontece com seu
 corpo depende de qual forma de `output` você usou:
 
@@ -307,10 +309,63 @@ corpo depende de qual forma de `output` você usou:
 
 Veja [ADR-0011](/adr/0011-multi-status-output-schemas) para a semântica exata.
 
-Além dos construtores de resposta, o contexto entrega ao handler `c.get(key)` para suas
-dependências registradas (veja [Context & DI](/pt/guide/context-di)), `c.requestId` para
-o id de correlação, e `c.raw` — o contexto Hono subjacente, uma escape hatch para
-a rara coisa que o Kata não encapsula.
+## Respostas não-JSON: `raw()`
+
+Todos os exemplos até aqui respondem com JSON. Uma route que serve outra coisa — um
+export CSV, um arquivo de texto puro, um download — constrói o `Response` ela mesma,
+já que um return simples só produz JSON. Declare esse contrato com `raw()` em vez de
+um schema Zod:
+
+```ts
+import { raw } from '@katajs-framework/core'
+
+export const usersCsvRoute = defineRoute({
+  method: 'GET',
+  path: '/users.csv',
+  input: {},
+  output: raw('text/csv', UsersCsvSchema), // UsersCsvSchema = z.string()
+  handler: async () => {
+    const users = await listUsers()
+    return new Response(usersToCsv(users), { headers: { 'content-type': 'text/csv' } })
+  },
+})
+```
+
+`raw(contentType, schema)` declara duas coisas: o `content-type` da resposta e um
+schema para o corpo em **texto** (não JSON — o `schema.safeParse` roda contra a
+string crua). Só um `Response` satisfaz uma entrada `raw` — não existe equivalente
+de valor simples —, então o `RouteHandlerReturn` transforma qualquer outro retorno
+em erro de `tsc`.
+
+Em runtime, o Kata checa o status declarado do mesmo jeito que checa uma entrada
+JSON ([Validando um `Response`](#validando-um-response), acima), com uma diferença
+no que é checado e quando:
+
+- O **header `content-type`** é sempre comparado com o declarado (ignorando
+  parâmetros como `; charset=utf-8`) sempre que a
+  [validação de output](/pt/guide/errors) não estiver em `off` — é barato, só uma
+  leitura de header.
+- O **corpo em texto** é comparado com o `schema` apenas no modo `strict`. Checá-lo
+  exige um `response.clone().text()`, que carrega o corpo inteiro na memória — tudo
+  bem para uma resposta pequena em dev/CI, mas não é algo que o Kata vá fazer com um
+  download grande em `log` (o padrão de produção). Uma route com uma entrada `raw()`
+  emite um warning no startup quando o modo resolvido significa que o corpo dela
+  ficará sem validação, para que esse trade-off nunca seja silencioso.
+
+De um jeito ou de outro, um descasamento segue o mesmo
+[modo de validação de output](/pt/guide/errors) de um descasamento em JSON: `strict`
+troca a resposta pelo envelope `500 internal_output_shape_mismatch`, `log` registra
+e serve a resposta original mesmo assim, `off` pula as duas checagens por completo.
+
+O `raw()` também acerta o cliente RPC: o `hc<typeof app>` lê o `outputFormat` da
+entrada declarada, então a resposta do cliente para um endpoint `raw()` expõe um
+`.text()` tipado em vez de `.json()` — chamar `.json()` nela é erro de tipo, não
+surpresa em runtime.
+
+Além dos construtores de resposta, o contexto entrega ao handler `c.get(key)` para
+suas dependências registradas (veja [Context & DI](/pt/guide/context-di)),
+`c.requestId` para o id de correlação, e `c.raw` — o contexto Hono subjacente, uma
+escape hatch para a rara coisa que o Kata não encapsula.
 
 ## 204 No Content
 

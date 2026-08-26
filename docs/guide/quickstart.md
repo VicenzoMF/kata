@@ -29,7 +29,9 @@ npm install @katajs-framework/core hono zod @hono/node-server
 The framework is **Kata**, but its npm package is **`@katajs-framework/core`** — the bare `kata`
 name on npm belongs to an unrelated, dormant package. So you **install and import
 `@katajs-framework/core`** (`import … from '@katajs-framework/core'`), while the CLI keeps the short **`kata`**
-command (`kata init`, `kata verify`). `npx @katajs-framework/core …` also works, as an alias.
+command (`kata init`, `kata verify`). `npx @katajs-framework/core …` also works, as an
+alias — but `pnpm dlx` needs `--package=@katajs-framework/core kata …`, because the
+package ships two bin names and pnpm will not pick between them.
 :::
 
 ::: tip Run the worked example from source

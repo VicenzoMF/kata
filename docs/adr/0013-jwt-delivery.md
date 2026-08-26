@@ -108,7 +108,7 @@ All four are functions (ADR-0002). Types reference the existing `FieldIssue`
 
 ```ts
 import type { z } from 'zod'
-import type { FieldIssue, Middleware, MiddlewareContext, Registry } from 'kata'
+import type { FieldIssue, Middleware, MiddlewareContext, Registry } from '@katajs-framework/core'
 
 export type JwtAlgorithm =
   | 'HS256' | 'HS384' | 'HS512'
@@ -229,7 +229,7 @@ export const UserClaims = z.object({
 
 // src/middlewares/auth.ts
 import { defineMiddleware } from '../context'
-import { jwtAuth, guard } from 'kata/jwt'
+import { jwtAuth, guard } from '@katajs-framework/core/jwt'
 import { UserClaims } from '../modules/users/users.schema'
 
 export const requireUser = defineMiddleware({

@@ -28,7 +28,7 @@ shapes were considered:
 Kata adopts **Pattern C**.
 
 ```ts
-import { defineContext, singleton, scoped } from 'kata'
+import { defineContext, singleton, scoped } from '@katajs-framework/core'
 
 export const context = defineContext({
   db:       singleton(makeDB(env)),

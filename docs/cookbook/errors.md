@@ -193,6 +193,16 @@ test; it is never `serve()`d, so `/__test-only/boom` is never reachable outside
 (`packages/kata/src/context.test.ts`, `describe('global error boundary (#62)')`):
 a throwaway `defineContext({})` and a `/boom` route built inline in the test.
 
+::: warning This route is outside the harness
+`kata verify` drops `*.test.ts` before any rule runs
+([project layout](/guide/project-layout#why-findability-matters)), so the route
+above is checked by nothing: no `inline-schema`, no `scoped-slot-not-provided`, no
+`no-route-without-output-schema` — and `--strict-coverage` stays silent, because a
+dropped file produces no suppression to report. That is fine here, where the whole
+route is four lines that throw. Do not grow it into somewhere you park real logic to
+dodge the rules.
+:::
+
 ::: tip Prefer this over an injectable failing dependency
 If a route already depends on something registered via `defineContext` — a
 `db` singleton, a `mailer` — swapping it for a version that throws, in one

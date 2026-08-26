@@ -75,6 +75,21 @@ Se você fizer inline de um schema em um `.route.ts`, ou colocar uma route em um
 verificações se baseiam no sufixo errado e o harness reporta isso. A estrutura é o que torna as regras
 baratas e exatas. Veja [O harness](/pt/guide/harness) para o conjunto completo de regras.
 
+::: warning Descartar `*.test.ts` significa que uma route declarada num teste tem cobertura zero
+O descarte é deliberado — arquivo de teste não é superfície publicada — mas tem uma
+consequência que vale enunciar, porque uma receita nossa cai justamente nela. A
+[receita do error boundary](/pt/cookbook/errors#testando-o-error-boundary-sem-uma-route-de-crash)
+manda chamar `defineRoute` **dentro do arquivo de teste**, e uma route declarada ali
+é invisível para toda regra: um `z.object(...)` inline, um slot scoped lido sem
+provedor, um `output` faltando — tudo passa limpo no `kata verify`, inclusive sob
+`--strict-coverage`, que nem sequer reporta uma supressão, porque o arquivo foi
+descartado antes de qualquer regra rodar.
+
+Esse é o trade-off certo para uma route descartável cujo único trabalho é explodir.
+É o lugar errado para lógica na qual você realmente se apoia: o que você quer que o
+harness verifique pertence a um `.route.ts` ou `.service.ts`, onde ele é verificado.
+:::
+
 ::: warning Um prefixo por arquivo
 `users.route.ts` está correto. `routes/users.ts`, `user-routes.ts` ou um
 `UsersController` não estão — o sufixo carrega o significado, e o harness casa com

@@ -5,10 +5,24 @@ description: defineContext é o registry único de dependências. Declare single
 
 # Context & DI
 
-Kata não tem container de IoC, nem decorators, nem reflection. As dependências
-ficam em um único lugar: uma chamada a `defineContext`. Essa chamada é o registry
-único que o sistema de tipos e o harness de lint leem. Se uma dependência não for
-declarada ali, `c.get` não compila.
+## O problema que isso resolve
+
+Toda route precisa de coisas que ela mesma não construiu — uma conexão de banco,
+um logger, o usuário logado no momento. *Injeção de dependência* (DI) é só a
+disciplina de declarar essas coisas em um lugar só e deixar o framework entregá-las
+a cada route, em vez de cada route importar ou construir as suas por conta própria.
+
+A maioria dos frameworks faz isso com um *container de IoC*: um objeto de runtime
+onde você registra classes, e que então as constrói, descobre o que depende do quê
+e liga tudo enquanto a app sobe — normalmente movido a decorators e reflection.
+**O Kata não tem nada disso.** Sem container, sem decorators, sem reflection. O
+registry dele é um object literal simples, e a ligação é verificada pelo sistema de
+tipos em tempo de compilação, em vez de resolvida por um container em runtime.
+
+Esse registry é uma única chamada a `defineContext`. É o lugar único que tanto o
+sistema de tipos *quanto* o harness de lint leem para responder "quais dependências
+existem?". Se algo não estiver declarado ali, o `c.get` correspondente simplesmente
+não compila.
 
 ```ts
 import { defineContext, scoped, singleton } from '@katajs-framework/core'

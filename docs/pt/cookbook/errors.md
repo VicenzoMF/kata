@@ -193,6 +193,16 @@ passa por `serve()`, então `/__test-only/boom` nunca é alcançável fora do
 (`packages/kata/src/context.test.ts`, `describe('global error boundary (#62)')`):
 um `defineContext({})` descartável e uma route `/boom` construída inline no teste.
 
+::: warning Essa route está fora do harness
+O `kata verify` descarta `*.test.ts` antes de qualquer regra rodar
+([estrutura do projeto](/pt/guide/project-layout#por-que-a-localizabilidade-importa)), então a route acima não é
+verificada por nada: nem `inline-schema`, nem `scoped-slot-not-provided`, nem
+`no-route-without-output-schema` — e o `--strict-coverage` fica calado, porque um
+arquivo descartado não gera supressão a reportar. Aqui tudo bem: a route inteira são
+quatro linhas que lançam. Não deixe isso virar o lugar onde você estaciona lógica de
+verdade para escapar das regras.
+:::
+
 ::: tip Prefira isso a uma dependência falha injetável
 Se uma route já depende de algo registrado via `defineContext` — um singleton
 `db`, um `mailer` — trocá-lo por uma versão que lança, em um teste específico,

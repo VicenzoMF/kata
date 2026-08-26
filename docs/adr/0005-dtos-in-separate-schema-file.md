@@ -52,7 +52,7 @@ export type CreateUserInput = z.infer<typeof CreateUserInputSchema>
 
 ```ts
 // src/modules/users/users.route.ts
-import { defineRoute } from 'kata'
+import { defineRoute } from '@katajs-framework/core'
 import { z } from 'zod'
 import { UserSchema, CreateUserInputSchema } from './users.schema'
 
