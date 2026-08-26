@@ -204,6 +204,69 @@ boundary itself; reach for a failing-dependency mock when you're testing one
 handler's specific failure mode instead.
 :::
 
+## Testing the error boundary over real HTTP (Hurl/curl)
+
+**Problem:** the section above solves the Vitest case, but an E2E suite that
+drives the app over **real HTTP** — Hurl, curl, Playwright, anything
+out-of-process — can't reuse it. `createApp({ modules: [{ crashRoute }] })` in
+`error-boundary.test.ts` builds a real `Hono` app object, but the test never
+calls `serve()` on it: nothing binds a port, so there is no `http://localhost`
+for a `.hurl` file (or any other external tool) to send a request to. The
+route only exists for the duration of `app.request(...)`, in-process, inside
+`vitest run`.
+
+There is no way around this that keeps the crash route unreachable: an
+out-of-process tool can only hit a route that is part of the server
+`main.ts` actually boots — i.e. something in the real `modules` array. Making
+the `500`/`internal_error` envelope exercisable from real HTTP therefore
+requires, unavoidably, a route that throws and *is* reachable in production.
+
+**Solution:** accept that trade-off explicitly, once, instead of leaving each
+consumer to reinvent it — and contain it in a diagnostics-flavored module
+rather than scattering it across the app. `examples/hello` does this with a
+`GET /boom` route in its existing
+[`diag`](https://github.com/VicenzoMF/kata/blob/main/examples/hello/src/modules/diag/diag.route.ts)
+module (already wired into `main.ts`'s `modules: [users, auth, echo, diag]`
+array alongside the request-id and CSV-export diagnostics routes):
+
+```ts
+// examples/hello/src/modules/diag/diag.route.ts
+export const boomRoute = defineRoute({
+  method: 'GET',
+  path: '/boom',
+  input: {},
+  output: BoomOutputSchema, // never actually returned — the handler always throws
+  handler: () => {
+    throw new Error('forced failure — diag.boom is a standing crash route for real-HTTP E2E coverage')
+  },
+})
+```
+
+Asserted end to end in
+[`diag.hurl`](https://github.com/VicenzoMF/kata/blob/main/examples/hello/src/modules/diag/diag.hurl)
+against the actually-listening server (`pnpm --filter=hello start`, then
+`pnpm --filter=hello hurl`):
+
+```hurl
+GET http://localhost:3000/boom
+HTTP 500
+[Asserts]
+jsonpath "$.error" == "internal_error"
+jsonpath "$.message" == "Internal server error"
+```
+
+**This is a standing, production-reachable "crash the server on purpose"
+endpoint** — the exact thing the previous section's Vitest-only route was
+built to avoid. That's a deliberate, accepted trade-off for real-HTTP E2E
+coverage, not an oversight: keep it to a single unconditional throw with no
+business logic, isolate it in a diagnostics-style module (so it reads as
+infrastructure, not a feature), and don't be surprised when a security scan or
+a teammate flags `GET /boom` — that's the cost of this coverage, paid
+knowingly. If that cost is unacceptable for your deployment, gate the route
+behind an environment check (e.g. only register it when `NODE_ENV !==
+'production'`) and run the real-HTTP assertion against a non-production build
+instead.
+
 ## What's automatic vs. what you write
 
 | Situation | Status | Who produces it |

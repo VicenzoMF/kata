@@ -204,6 +204,72 @@ error boundary em si; use um mock de dependência falha quando estiver testando
 o modo de falha específico de um handler.
 :::
 
+## Testando o error boundary sobre HTTP real (Hurl/curl)
+
+**Problema:** a seção acima resolve o caso do Vitest, mas uma suíte E2E que
+exercita a app sobre **HTTP real** — Hurl, curl, Playwright, qualquer
+ferramenta fora do processo — não consegue reaproveitá-la. `createApp({
+modules: [{ crashRoute }] })` em `error-boundary.test.ts` constrói um objeto
+de app `Hono` de verdade, mas o teste nunca chama `serve()` sobre ele: nada
+abre uma porta, então não existe um `http://localhost` para um arquivo
+`.hurl` (ou qualquer outra ferramenta externa) enviar uma requisição. A route
+só existe durante a chamada a `app.request(...)`, em processo, dentro do
+`vitest run`.
+
+Não há como contornar isso mantendo a route de crash inalcançável: uma
+ferramenta fora do processo só consegue acessar uma route que faça parte do
+servidor que o `main.ts` de fato inicializa — ou seja, algo no array `modules`
+real. Tornar o envelope `500`/`internal_error` exercitável a partir de HTTP
+real exige, portanto, inevitavelmente, uma route que lança e que *é*
+alcançável em produção.
+
+**Solução:** aceitar esse trade-off explicitamente, uma vez, em vez de deixar
+cada consumidor reinventá-lo — e contê-lo em um module com cara de
+diagnóstico, em vez de espalhá-lo pela app. O `examples/hello` faz isso com
+uma route `GET /boom` no seu module
+[`diag`](https://github.com/VicenzoMF/kata/blob/main/examples/hello/src/modules/diag/diag.route.ts)
+já existente (já ligado ao array `modules: [users, auth, echo, diag]` do
+`main.ts`, ao lado das routes de diagnóstico de request-id e export CSV):
+
+```ts
+// examples/hello/src/modules/diag/diag.route.ts
+export const boomRoute = defineRoute({
+  method: 'GET',
+  path: '/boom',
+  input: {},
+  output: BoomOutputSchema, // nunca é de fato retornado — o handler sempre lança
+  handler: () => {
+    throw new Error('forced failure — diag.boom is a standing crash route for real-HTTP E2E coverage')
+  },
+})
+```
+
+Verificada de ponta a ponta em
+[`diag.hurl`](https://github.com/VicenzoMF/kata/blob/main/examples/hello/src/modules/diag/diag.hurl)
+contra o servidor de fato em execução (`pnpm --filter=hello start`, depois
+`pnpm --filter=hello hurl`):
+
+```hurl
+GET http://localhost:3000/boom
+HTTP 500
+[Asserts]
+jsonpath "$.error" == "internal_error"
+jsonpath "$.message" == "Internal server error"
+```
+
+**Isso é um endpoint permanente de "derrubar o servidor de propósito",
+acessível em produção** — exatamente o que a route só-de-teste da seção
+anterior foi construída para evitar. Isso é um trade-off deliberado e aceito
+em troca de cobertura E2E sobre HTTP real, não um descuido: mantenha-o como um
+único throw incondicional, sem lógica de negócio, isole-o em um module com
+cara de diagnóstico (para que se leia como infraestrutura, não como
+funcionalidade), e não se surpreenda quando uma varredura de segurança ou um
+colega sinalizar `GET /boom` — esse é o custo dessa cobertura, pago
+conscientemente. Se esse custo for inaceitável para o seu deployment, proteja
+a route atrás de uma checagem de ambiente (por exemplo, só a registre quando
+`NODE_ENV !== 'production'`) e rode a verificação de HTTP real contra um build
+que não seja de produção.
+
 ## O que é automático vs. o que você escreve
 
 | Situação | Status | Quem produz |

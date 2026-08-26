@@ -76,3 +76,20 @@ HTTP 204
 [Asserts]
 header "Access-Control-Allow-Origin" == "*"
 header "Access-Control-Allow-Methods" == "GET"
+
+
+# 7. GET /boom — a standing, production-reachable crash route (issue #297):
+#    the real-HTTP counterpart to error-boundary.test.ts's in-test-file-only
+#    route (which never binds a port and so can't be hit from Hurl). This
+#    route's sole job is to throw, so Kata's global error boundary catches it
+#    and serialises the unified `internal_error` envelope over an actual
+#    listening server — see "Testing the error boundary over real HTTP" in
+#    cookbook/errors.md for why this trade-off is accepted.
+GET http://localhost:3000/boom
+HTTP 500
+[Asserts]
+header "Content-Type" contains "application/json"
+jsonpath "$.error" == "internal_error"
+jsonpath "$.message" == "Internal server error"
+header "X-Request-Id" matches "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+header "X-Content-Type-Options" == "nosniff"

@@ -2,7 +2,7 @@ import { raw } from '@katajs-framework/core'
 
 import { defineRoute } from '../../context'
 
-import { ExportCsvOutputSchema, RequestIdResponseSchema } from './diag.schema'
+import { BoomOutputSchema, ExportCsvOutputSchema, RequestIdResponseSchema } from './diag.schema'
 
 /**
  * Surfaces the per-request correlation id (issue #63) that the runtime places on
@@ -44,4 +44,35 @@ export const exportCsvRoute = defineRoute({
         'content-disposition': 'attachment; filename="export.csv"',
       },
     }),
+})
+
+/**
+ * A standing, production-reachable crash endpoint — by design (issue #297).
+ *
+ * `error-boundary.test.ts` covers Kata's global error boundary with a route
+ * defined *only inside the test file*, so it never binds a port and is
+ * unreachable from an out-of-process tool. That's the right call for a Vitest
+ * assertion, but it can't satisfy an E2E suite over real HTTP (Hurl, curl,
+ * Playwright, …): those tools can only hit a route that's actually part of
+ * the server `main.ts` boots, i.e. something in the real `modules` array.
+ *
+ * There is no way to get "a path that forces a 500, reachable from real HTTP"
+ * without that path being reachable from real HTTP — including in
+ * production. This route accepts that trade-off explicitly instead of
+ * leaving it to be rediscovered: it lives in the `diag` module (already
+ * diagnostics-flavored, already wired into `main.ts`), does nothing but
+ * throw, and is asserted end to end in `diag.hurl`. See
+ * "Testing the error boundary over real HTTP" in `cookbook/errors.md` for the
+ * full reasoning.
+ */
+export const boomRoute = defineRoute({
+  method: 'GET',
+  path: '/boom',
+  input: {},
+  output: BoomOutputSchema,
+  handler: () => {
+    throw new Error(
+      'forced failure — diag.boom is a standing crash route for real-HTTP E2E coverage',
+    )
+  },
 })
