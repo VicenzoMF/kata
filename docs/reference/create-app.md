@@ -92,8 +92,9 @@ request id — through it. It is a no-op when no usable `logger` is registered; 
 const app = createApp({ modules: [users], requestLogging: false })
 ```
 
-The request id is also echoed on the `x-request-id` response header
-(`REQUEST_ID_HEADER`).
+Independent of `requestLogging`, the request id is unconditionally echoed on
+the `x-request-id` response header (`REQUEST_ID_HEADER`) — see
+[Request id](/reference/middleware#request-id).
 
 #### What makes a logger "usable"
 
