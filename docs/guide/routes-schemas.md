@@ -61,6 +61,36 @@ a `POST /echo` and nothing else. `use` defaults to `[]` when you omit it; any
 app-level middleware registered on `createApp` runs *before* this route's own `use:`
 chain (see [App middleware](/guide/app-middleware)).
 
+## Path matching and precedence
+
+Routes match in **registration order**, not by specificity. `createApp` walks
+`modules` in array order, and within each module it walks the route file's
+exports in object-key order; each route is registered onto the underlying Hono
+router in that exact sequence, and Hono matches in registration order — a
+static segment does **not** win over `:param` just because it is more specific
+([Hono routing priority](https://hono.dev/docs/api/routing#routing-priority)).
+
+That means this ordering is a bug waiting to happen:
+
+```ts
+export const getTeamRoute = defineRoute({ method: 'GET', path: '/teams/:id', /* ... */ })
+export const getMyTeamRoute = defineRoute({ method: 'GET', path: '/teams/me', /* ... */ })
+```
+
+A request to `GET /teams/me` matches `getTeamRoute` first — `:id` binds to the
+literal string `"me"` — so `getMyTeamRoute` never runs. The same rule applies
+across modules: the `modules` array order in `createApp({ modules })` decides
+which module's routes register first, so a `GET /teams/:id` added later by an
+unrelated module can silently hijack `/teams/me`.
+
+The fix is to register the more specific static route **first**, in the same
+module:
+
+```ts
+export const getMyTeamRoute = defineRoute({ method: 'GET', path: '/teams/me', /* ... */ })
+export const getTeamRoute = defineRoute({ method: 'GET', path: '/teams/:id', /* ... */ })
+```
+
 ## `input` — the four sections
 
 An HTTP request does not arrive as one blob. Its data lives in four different
@@ -235,6 +265,12 @@ returns the plain value, Kata validates and serialises it, and that is the whole
 contract. There is no escape hatch to a `Response` here — see
 [Validating a `Response`](#validating-a-response) below for why, and reach for the
 map form the moment you need another status.
+
+Any named Zod schema is a valid entry, including a list — `output: TodoListSchema`
+above is exactly `z.array(TodoSchema)`, given a name and declared in
+`<domain>.schema.ts` like every other DTO ([ADR-0005](/adr/0005-dtos-in-separate-schema-file)).
+`output` never distinguishes an object schema from an array schema; it just
+validates the handler's return value against whatever schema you hand it.
 
 ### Status-to-schema map
 

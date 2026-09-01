@@ -234,7 +234,9 @@ Cada pasta `<domain>/` é autocontida, com uma responsabilidade por arquivo:
   em nenhum outro lugar ([`defineRoute`](/pt/reference/define-route), ADR-0005). Uma route importa seus
   schemas `input` / `output` desse arquivo.
 - **`<domain>.service.ts`** — [funções puras](/pt/guide/services). Sem imports de framework,
-  sem `c`. Trivial de testar unitariamente em isolamento.
+  sem `c`. Trivial de testar unitariamente em isolamento. Um service reporta
+  falha [retornando um resultado, não uma resposta](/pt/guide/services#retorne-resultados-nao-respostas)
+  — a route mapeia esse resultado para o wire.
 - **`<domain>.route.ts`** — apenas chamadas de `defineRoute`. O handler valida `c.input`,
   chama services e retorna um valor (verificado contra `output`) ou `c.json(...)` /
   `c.error(...)`. Veja [Routes & schemas](/pt/guide/routes-schemas).

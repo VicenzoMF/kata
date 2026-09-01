@@ -217,6 +217,33 @@ defineRoute({
 ```
 :::
 
+::: warning A ordem do `use:` decide qual checagem roda primeiro
+`use:` faz short-circuit na ordem do array — o primeiro middleware a retornar
+um `Response` vence, e tudo depois dele (incluindo o resto do `use:`, a
+validação de input e o handler) é pulado. Coloque `bodyLimit` antes de um
+middleware de auth e uma requisição *não autenticada* superdimensionada
+responde `413`, não `401`:
+
+```ts
+defineRoute({
+  method: 'POST',
+  path: '/upload',
+  use: [bodyLimit({ maxSize: 256 * 1024 }), requireAuth], // 413 vence de 401
+  input: { body: UploadBody },
+  output: UploadResult,
+  handler: (c) => /* ... */,
+})
+```
+
+Um body de 300 KiB sem credenciais nunca chega ao `requireAuth` — o `bodyLimit`
+o rejeita primeiro. Inverta a ordem para autenticar antes de impor o limite de
+tamanho. Nenhuma das ordens é "errada" por si só; deixar isso por inferência é
+que é. Escolha uma de propósito e saiba o que um chamador não autenticado
+aprende com a resposta de qualquer forma — veja
+[Middleware](/pt/guide/middleware#compondo-middleware-sobre-uma-rota) para a
+regra geral de short-circuit.
+:::
+
 ## Por que precisam de um wrapper
 
 Esses três são middlewares comuns do Hono adaptados ao modelo de resposta do

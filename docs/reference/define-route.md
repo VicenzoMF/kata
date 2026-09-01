@@ -55,7 +55,7 @@ client, and `c.input` is typed exactly from `input`.
 | Field     | Type                       | Required | Notes |
 |-----------|----------------------------|----------|-------|
 | `method`  | `HttpMethod`               | yes      | `'GET' \| 'POST' \| 'PUT' \| 'PATCH' \| 'DELETE'` |
-| `path`    | `string`                   | yes      | A Hono path string, e.g. `'/users/:id'` |
+| `path`    | `string`                   | yes      | A Hono path string, e.g. `'/users/:id'`. Routes match in registration order, not by specificity — see [Path matching and precedence](/guide/routes-schemas#path-matching-and-precedence). |
 | `input`   | `InputSchemas`             | yes      | `{ params?, query?, body?, headers? }`; `{}` is valid |
 | `output`  | `OutputSpec`               | yes      | A single Zod schema or a status→schema map |
 | `use`     | `readonly Middleware<R>[]` | no       | Defaults to `[]`; runs before the handler |
@@ -319,6 +319,33 @@ fields (`address.zip`, `tags[0]`). An *empty or absent* body parses against
 a required one fails → `422`). A body that is **non-empty but not valid JSON** is
 different: Kata rejects it with `400` `validation_failed`
 (`message: "Malformed JSON body"`) before the schema runs.
+
+A `query` failure is reported the same way, under `issues.query` — this is what an
+invalid `z.enum(...)` value produces for
+`GET /todos?status=archived` against `z.object({ status: z.enum(['open', 'done']) })`:
+
+```json
+{
+  "error": "validation_failed",
+  "message": "Request input validation failed",
+  "issues": {
+    "query": [
+      {
+        "path": "status",
+        "code": "invalid_enum_value",
+        "message": "Invalid enum value. Expected 'open' | 'done', received 'archived'"
+      }
+    ]
+  }
+}
+```
+
+Automatic schema validation always answers `422` — the only automatic `400` is a
+malformed (non-JSON) body, above. This is **not configurable**: nothing in
+`defineRoute` or `createApp` changes the automatic `422`, and only your own
+`c.error(...)` can produce a `400`. If a contract needs `400` for what is really a
+schema failure, loosen the `input` schema so it always parses, then check the
+shape by hand in the handler and return `c.error(..., { status: 400 })` yourself.
 
 ### Output — after the handler
 

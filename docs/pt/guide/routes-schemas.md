@@ -61,6 +61,37 @@ um `POST /echo` e nada mais. `use` assume `[]` quando você o omite; qualquer
 middleware de nível de app registrado em `createApp` roda *antes* da cadeia `use:`
 da própria rota (veja [Middleware de app](/pt/guide/app-middleware)).
 
+## Path matching e precedência
+
+Rotas casam em **ordem de registro**, não por especificidade. `createApp`
+percorre `modules` na ordem do array, e dentro de cada módulo percorre os
+exports do arquivo de rota na ordem das chaves do objeto; cada rota é
+registrada no router Hono subjacente nessa sequência exata, e o Hono casa na
+ordem de registro — um segmento estático **não** vence `:param` só por ser mais
+específico ([prioridade de roteamento do Hono](https://hono.dev/docs/api/routing#routing-priority)).
+
+Isso significa que esta ordenação é um bug esperando para acontecer:
+
+```ts
+export const getTeamRoute = defineRoute({ method: 'GET', path: '/teams/:id', /* ... */ })
+export const getMyTeamRoute = defineRoute({ method: 'GET', path: '/teams/me', /* ... */ })
+```
+
+Uma requisição a `GET /teams/me` casa com `getTeamRoute` primeiro — `:id` se
+liga à string literal `"me"` — então `getMyTeamRoute` nunca roda. A mesma regra
+vale entre módulos: a ordem do array `modules` em `createApp({ modules })`
+decide qual módulo registra suas rotas primeiro, então um `GET /teams/:id`
+adicionado depois por um módulo não relacionado pode sequestrar `/teams/me`
+silenciosamente.
+
+A correção é registrar a rota estática mais específica **primeiro**, no mesmo
+módulo:
+
+```ts
+export const getMyTeamRoute = defineRoute({ method: 'GET', path: '/teams/me', /* ... */ })
+export const getTeamRoute = defineRoute({ method: 'GET', path: '/teams/:id', /* ... */ })
+```
+
 ## `input` — as quatro seções
 
 Uma requisição HTTP não chega como uma coisa só. Seus dados vivem em quatro lugares
@@ -230,6 +261,13 @@ export const createUserRoute = defineRoute({
   handler: async (c) => createUser(c.input.body),
 })
 ```
+
+Qualquer schema Zod nomeado é uma entrada válida, inclusive uma lista —
+`output: TodoListSchema` acima é exatamente `z.array(TodoSchema)`, com um nome e
+declarado em `<domain>.schema.ts` como qualquer outro DTO
+([ADR-0005](/adr/0005-dtos-in-separate-schema-file)). `output` nunca distingue
+um schema de objeto de um schema de array; ele apenas valida o valor retornado
+pelo handler contra o schema que você fornecer.
 
 ### Map de status para schema
 

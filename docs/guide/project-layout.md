@@ -231,7 +231,9 @@ Each `<domain>/` folder is self-contained, with one responsibility per file:
   nowhere else ([`defineRoute`](/reference/define-route), ADR-0005). A route imports its
   `input` / `output` schemas from this file.
 - **`<domain>.service.ts`** — [pure functions](/guide/services). No framework imports,
-  no `c`. Trivial to unit-test in isolation.
+  no `c`. Trivial to unit-test in isolation. A service reports failure by
+  [returning a result, not a response](/guide/services#return-results-not-responses)
+  — the route maps that result onto the wire.
 - **`<domain>.route.ts`** — `defineRoute` calls only. The handler validates `c.input`,
   calls services, and returns a value (checked against `output`) or `c.json(...)` /
   `c.error(...)`. See [Routes & schemas](/guide/routes-schemas).
