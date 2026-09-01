@@ -350,18 +350,25 @@ Authorization: Bearer not-a-real-jwt
 
 A autenticação prova _quem_ você é; a autorização decide _o que você pode fazer_.
 Um guard lê um scoped slot que ele **não** provê e rejeita com um **403** quando
-seu predicado diz não. Sua lista `provides` é vazia, então conecte-o com
-`provides: [] as const`. A ordem no array `use:` é o contrato: o guard precisa vir
-**depois** do middleware que preenche o slot.
+seu predicado diz não. `requireRole`, `requireClaim` e `guard` retornam todos um
+handler puro — não um `Middleware<R>` — então, exatamente como o [`guard`](#guard)
+abaixo, quem chama envolve com `defineMiddleware({ provides: [] as const, handler })`.
+A ordem no array `use:` é o contrato: o guard precisa vir **depois** do middleware
+que preenche o slot.
 
 ```ts
 // em uma route — requireUser PRECISA vir antes do guard
 import { requireRole } from '@katajs-framework/core/jwt'
 
+const requireAdmin = defineMiddleware({
+  provides: [] as const,
+  handler: requireRole<AppRegistry>('admin'),
+})
+
 export const adminRoute = defineRoute({
   method: 'GET',
   path: '/admin/metrics',
-  use: [requireUser, requireRole('admin')], // 401 se não autenticado, 403 se não for admin
+  use: [requireUser, requireAdmin], // 401 se não autenticado, 403 se não for admin
   input: {},
   output: MetricsSchema,
   handler: async (c) => collectMetrics(),
