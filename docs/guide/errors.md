@@ -107,7 +107,8 @@ is what an invalid `z.enum(...)` value produces — the commonest `query` shape 
       {
         "path": "status",
         "code": "invalid_enum_value",
-        "message": "Invalid enum value. Expected 'open' | 'done', received 'archived'"
+        "message": "Invalid enum value. Expected 'open' | 'done', received 'archived'",
+        "received": "archived"
       }
     ]
   }
@@ -137,8 +138,8 @@ type FieldIssue = {
   path: string       // dot/bracket path: "email", "user.profile.age", "items[1].qty"
   message: string    // Zod's human-readable message
   code: string       // Zod issue code: "too_small", "invalid_type", "invalid_string", …
-  expected?: unknown // present only when the Zod issue carries it (type errors)
-  received?: unknown // present only when the Zod issue carries it (type errors)
+  expected?: unknown // present when the Zod issue carries it (e.g. invalid_type, invalid_enum_value)
+  received?: unknown // present when the Zod issue carries it (e.g. invalid_type, invalid_enum_value)
 }
 ```
 
@@ -146,8 +147,8 @@ Rules to keep straight:
 
 - `path` uses dot notation for nested objects and `[n]` for array indices. A
   root-level error has an empty `path: ""`.
-- `expected` / `received` appear **only** when the underlying Zod issue carries them
-  (i.e. `invalid_type`) and are omitted otherwise.
+- `expected` / `received` appear when the underlying Zod issue carries them (e.g.
+  `invalid_type`, `invalid_enum_value`) and are omitted otherwise.
 - Issues are reported in source order. When more than one section is invalid (e.g.
   both `params` and `body`), each gets its own key under `issues`.
 

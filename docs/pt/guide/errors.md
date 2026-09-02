@@ -105,7 +105,8 @@ comum de `query` — para `GET /todos?status=archived` contra
       {
         "path": "status",
         "code": "invalid_enum_value",
-        "message": "Invalid enum value. Expected 'open' | 'done', received 'archived'"
+        "message": "Invalid enum value. Expected 'open' | 'done', received 'archived'",
+        "received": "archived"
       }
     ]
   }
@@ -135,8 +136,8 @@ type FieldIssue = {
   path: string       // caminho com ponto/colchete: "email", "user.profile.age", "items[1].qty"
   message: string    // mensagem legível por humanos do Zod
   code: string       // código de issue do Zod: "too_small", "invalid_type", "invalid_string", …
-  expected?: unknown // presente apenas quando a issue do Zod a carrega (erros de tipo)
-  received?: unknown // presente apenas quando a issue do Zod a carrega (erros de tipo)
+  expected?: unknown // presente quando a issue do Zod a carrega (ex.: invalid_type, invalid_enum_value)
+  received?: unknown // presente quando a issue do Zod a carrega (ex.: invalid_type, invalid_enum_value)
 }
 ```
 
@@ -144,8 +145,8 @@ Regras para deixar claras:
 
 - `path` usa notação de ponto para objetos aninhados e `[n]` para índices de
   array. Um erro no nível raiz tem um `path: ""` vazio.
-- `expected` / `received` aparecem **apenas** quando a issue do Zod subjacente os
-  carrega (isto é, `invalid_type`) e são omitidos caso contrário.
+- `expected` / `received` aparecem quando a issue do Zod subjacente os carrega
+  (ex.: `invalid_type`, `invalid_enum_value`) e são omitidos caso contrário.
 - As issues são reportadas na ordem do código-fonte. Quando mais de uma seção é
   inválida (por exemplo, tanto `params` quanto `body`), cada uma recebe sua
   própria chave sob `issues`.

@@ -333,7 +333,8 @@ invalid `z.enum(...)` value produces for
       {
         "path": "status",
         "code": "invalid_enum_value",
-        "message": "Invalid enum value. Expected 'open' | 'done', received 'archived'"
+        "message": "Invalid enum value. Expected 'open' | 'done', received 'archived'",
+        "received": "archived"
       }
     ]
   }
