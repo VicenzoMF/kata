@@ -313,7 +313,8 @@ issues.
 ```
 
 Each field issue is `{ path, message, code }`, with optional `expected` /
-`received` for type mismatches. `path` uses dot/bracket notation for nested
+`received` when the Zod issue carries them (e.g. `invalid_type`,
+`invalid_enum_value`). `path` uses dot/bracket notation for nested
 fields (`address.zip`, `tags[0]`). An *empty or absent* body parses against
 `undefined`, so the `body` schema decides the outcome (an optional body passes;
 a required one fails → `422`). A body that is **non-empty but not valid JSON** is
