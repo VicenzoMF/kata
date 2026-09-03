@@ -240,6 +240,10 @@ A Kata entrega três guard handlers em `@katajs-framework/core/jwt`:
 - `requireClaim(key, expected | predicate)` — permite somente quando um claim corresponde.
 - `guard({ authorize })` — a forma geral; forneça qualquer predicado sobre o valor do slot.
 
+Os três retornam um handler puro, não um `Middleware<R>` — quem chama envolve
+com `defineMiddleware({ provides: [] as const, handler })`, exatamente como o
+exemplo de `guard` abaixo.
+
 Cada um carrega um `role`/claim no slot, então estenda seus claims (e `User`) com
 o campo no qual você faz o guard:
 
@@ -257,10 +261,15 @@ export const UserClaimsSchema = z.object({
 // em uma rota — requireUser PRECISA vir antes do guard
 import { requireRole } from '@katajs-framework/core/jwt'
 
+const requireAdmin = defineMiddleware({
+  provides: [] as const,
+  handler: requireRole<AppRegistry>('admin'),
+})
+
 export const adminRoute = defineRoute({
   method: 'GET',
   path: '/admin/metrics',
-  use: [requireUser, requireRole('admin')], // 401 se não autenticado, 403 se não for admin
+  use: [requireUser, requireAdmin], // 401 se não autenticado, 403 se não for admin
   input: {},
   output: MetricsSchema,
   handler: async (c) => collectMetrics(),

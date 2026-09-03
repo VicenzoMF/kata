@@ -323,10 +323,15 @@ requireRole<R extends Registry, const S extends ScopedKeys<R> = 'currentUser'>(
 Açúcar sobre `guard`. Permite somente quando o `role` do valor do slot é (um dos)
 `role`. Lê o slot padrão `currentUser` (sobrescreva via `options.slot`, inferido
 da mesma forma que o de `guard`) e rejeita com o envelope 403 `forbidden` padrão.
+Retorna um handler puro, assim como `guard` — envolva com `defineMiddleware({
+provides: [] as const, handler })`.
 
 ```ts
-use: [requireUser, requireRole('admin')]
-use: [requireUser, requireRole(['admin', 'editor'])]
+// um único role
+handler: requireRole<AppRegistry>('admin')
+
+// múltiplos roles
+handler: requireRole<AppRegistry>(['admin', 'editor'])
 ```
 
 ### `requireClaim`
