@@ -216,11 +216,9 @@ export type AppRegistry = typeof k.registry
 
 ```ts
 // src/modules/orders/orders.route.ts
-import { z } from 'zod'
-
 import { defineRoute } from '../../context'
 import { requireUser } from '../../middlewares/auth'
-import { OrderSchema } from './orders.schema'
+import { OrderListSchema } from './orders.schema'
 import { listOrders } from './orders.service'
 
 export const list = defineRoute({
@@ -228,7 +226,7 @@ export const list = defineRoute({
   path: '/orders',
   use: [requireUser], // preenche o slot scoped `currentUser`
   input: {},
-  output: z.array(OrderSchema),
+  output: OrderListSchema, // z.array(OrderSchema), declarado em orders.schema.ts
   handler: (c) => {
     const store = c.get('store') // Store — singleton, sempre disponível
     const user = c.get('currentUser') // CurrentUser — provido por requireUser

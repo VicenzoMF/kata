@@ -190,15 +190,18 @@ export function makeDb(env: NodeJS.ProcessEnv): Db {
 }
 ```
 
-Chame pelo `k.resolve` — o acessor exclusivo de singletons, que alcança exatamente a
-instância que todo handler vai ler:
+Chame pelo `k.resolve` — o acessor exclusivo de singletons, que alcança
+exatamente a instância que todo handler vai ler. Essa suíte dirige o app
+através de `app.request(...)` em vez de testar um módulo isoladamente, então
+ela pertence à raiz de `src/` — não dentro de `src/modules/users/` — conforme
+[Suítes de teste entre módulos e em nível de processo](/pt/guide/project-layout#suites-de-teste-entre-modulos-e-em-nivel-de-processo):
 
 ```ts
-// src/modules/users/users.http.test.ts
+// src/users.http.test.ts
 import { beforeEach, describe, expect, it } from 'vitest'
 
-import { createApp, k } from '../../context'
-import * as users from './users.route'
+import { createApp, k } from './context'
+import * as users from './modules/users/users.route'
 
 const app = createApp({ modules: [users] })
 

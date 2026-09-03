@@ -213,6 +213,32 @@ defineRoute({
 ```
 :::
 
+::: warning `use:` order decides which check runs first
+`use:` short-circuits in array order — the first middleware to return a
+`Response` wins, and everything after it (including the rest of `use:`, input
+validation, and the handler) is skipped. Put `bodyLimit` before an auth
+middleware and an oversized *unauthenticated* request answers `413`, not
+`401`:
+
+```ts
+defineRoute({
+  method: 'POST',
+  path: '/upload',
+  use: [bodyLimit({ maxSize: 256 * 1024 }), requireAuth], // 413 beats 401
+  input: { body: UploadBody },
+  output: UploadResult,
+  handler: (c) => /* ... */,
+})
+```
+
+A 300 KiB body with no credentials never reaches `requireAuth` — `bodyLimit`
+rejects it first. Swap the order to authenticate before enforcing the size cap.
+Neither order is "wrong" on its own; leaving it to inference is. Pick one on
+purpose and know what an unauthenticated caller learns from the response
+either way — see [Middleware](/guide/middleware#composing-middleware-onto-a-route)
+for the general short-circuit rule.
+:::
+
 ## Why they need a wrapper
 
 These three are ordinary Hono middlewares adapted to kata's response model. kata

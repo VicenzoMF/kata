@@ -94,6 +94,41 @@ are Zod's):
 }
 ```
 
+A `query` failure looks the same, just keyed under `query` instead of `body`. This
+is what an invalid `z.enum(...)` value produces — the commonest `query` shape — for
+`GET /todos?status=archived` against `z.object({ status: z.enum(['open', 'done']) })`:
+
+```json
+{
+  "error": "validation_failed",
+  "message": "Request input validation failed",
+  "issues": {
+    "query": [
+      {
+        "path": "status",
+        "code": "invalid_enum_value",
+        "message": "Invalid enum value. Expected 'open' | 'done', received 'archived'",
+        "received": "archived"
+      }
+    ]
+  }
+}
+```
+
+::: warning The `422` is fixed, and it is not configurable
+Automatic schema validation — any `input` section that fails `safeParse` — always
+answers `422`. The only automatic `400` is a malformed (non-JSON) body; see
+[Gotchas](#gotchas). Your own `c.error(...)` is the only thing that can produce a
+`400`, and there is no option, hook, or config anywhere in `defineRoute` or
+`createApp` that changes the automatic `422`.
+
+If a contract you're implementing demands `400` for what is really a schema
+failure, the way out is to loosen the `input` schema so it always parses, then
+check the shape by hand in the handler and return `c.error(..., { status: 400 })`
+yourself — trading the automatic check for a manual one that controls its own
+status.
+:::
+
 ### The `FieldIssue` shape
 
 Every entry under `issues` is a `FieldIssue`:
@@ -103,8 +138,8 @@ type FieldIssue = {
   path: string       // dot/bracket path: "email", "user.profile.age", "items[1].qty"
   message: string    // Zod's human-readable message
   code: string       // Zod issue code: "too_small", "invalid_type", "invalid_string", …
-  expected?: unknown // present only when the Zod issue carries it (type errors)
-  received?: unknown // present only when the Zod issue carries it (type errors)
+  expected?: unknown // present when the Zod issue carries it (e.g. invalid_type, invalid_enum_value)
+  received?: unknown // present when the Zod issue carries it (e.g. invalid_type, invalid_enum_value)
 }
 ```
 
@@ -112,8 +147,8 @@ Rules to keep straight:
 
 - `path` uses dot notation for nested objects and `[n]` for array indices. A
   root-level error has an empty `path: ""`.
-- `expected` / `received` appear **only** when the underlying Zod issue carries them
-  (i.e. `invalid_type`) and are omitted otherwise.
+- `expected` / `received` appear when the underlying Zod issue carries them (e.g.
+  `invalid_type`, `invalid_enum_value`) and are omitted otherwise.
 - Issues are reported in source order. When more than one section is invalid (e.g.
   both `params` and `body`), each gets its own key under `issues`.
 

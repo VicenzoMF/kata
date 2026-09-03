@@ -191,14 +191,17 @@ export function makeDb(env: NodeJS.ProcessEnv): Db {
 ```
 
 Call it through `k.resolve` — the singleton-only accessor, which reaches the very
-instance every handler will read:
+instance every handler will read. This suite drives the app through
+`app.request(...)` rather than testing one module in isolation, so it belongs at
+the `src/` root — not inside `src/modules/users/` — per
+[Cross-module and process-level test suites](/guide/project-layout#cross-module-and-process-level-test-suites):
 
 ```ts
-// src/modules/users/users.http.test.ts
+// src/users.http.test.ts
 import { beforeEach, describe, expect, it } from 'vitest'
 
-import { createApp, k } from '../../context'
-import * as users from './users.route'
+import { createApp, k } from './context'
+import * as users from './modules/users/users.route'
 
 const app = createApp({ modules: [users] })
 

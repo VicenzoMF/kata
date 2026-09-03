@@ -55,7 +55,7 @@ cliente RPC tipado, e `c.input` é tipado exatamente a partir de `input`.
 | Campo     | Tipo                       | Obrigatório | Notas |
 |-----------|----------------------------|-------------|-------|
 | `method`  | `HttpMethod`               | sim         | `'GET' \| 'POST' \| 'PUT' \| 'PATCH' \| 'DELETE'` |
-| `path`    | `string`                   | sim         | Uma string de path do Hono, ex. `'/users/:id'` |
+| `path`    | `string`                   | sim         | Uma string de path do Hono, ex. `'/users/:id'`. Rotas casam em ordem de registro, não por especificidade — veja [Path matching e precedência](/pt/guide/routes-schemas#path-matching-e-precedencia). |
 | `input`   | `InputSchemas`             | sim         | `{ params?, query?, body?, headers? }`; `{}` é válido |
 | `output`  | `OutputSpec`               | sim         | Um único schema Zod ou um mapa status→schema |
 | `use`     | `readonly Middleware<R>[]` | não         | Padrão `[]`; executa antes do handler |
@@ -313,12 +313,42 @@ de campo.
 ```
 
 Cada issue de campo é `{ path, message, code }`, com `expected` /
-`received` opcionais para incompatibilidades de tipo. `path` usa notação de ponto/colchete para campos
+`received` opcionais quando a issue do Zod os carrega (ex.: `invalid_type`,
+`invalid_enum_value`). `path` usa notação de ponto/colchete para campos
 aninhados (`address.zip`, `tags[0]`). Um body *vazio ou ausente* é parseado contra
 `undefined`, então o schema `body` decide o desfecho (um body opcional passa; um
 obrigatório falha → `422`). Um body que é **não-vazio mas não é JSON válido** é
 diferente: o Kata o rejeita com `400` `validation_failed`
 (`message: "Malformed JSON body"`) antes do schema rodar.
+
+Uma falha de `query` é reportada da mesma forma, sob `issues.query` — é o que um
+valor inválido de `z.enum(...)` produz para
+`GET /todos?status=archived` contra `z.object({ status: z.enum(['open', 'done']) })`:
+
+```json
+{
+  "error": "validation_failed",
+  "message": "Request input validation failed",
+  "issues": {
+    "query": [
+      {
+        "path": "status",
+        "code": "invalid_enum_value",
+        "message": "Invalid enum value. Expected 'open' | 'done', received 'archived'",
+        "received": "archived"
+      }
+    ]
+  }
+}
+```
+
+A validação automática de schema sempre responde `422` — o único `400`
+automático é um body malformado (não-JSON), acima. Isso **não é configurável**:
+nada em `defineRoute` ou `createApp` muda o `422` automático, e só o seu
+próprio `c.error(...)` pode produzir um `400`. Se um contrato exige `400` para o
+que na verdade é uma falha de schema, a saída é afrouxar o schema de `input`
+para que ele sempre faça parse, então checar o formato manualmente no handler e
+retornar `c.error(..., { status: 400 })` você mesmo.
 
 ### Output — depois do handler
 

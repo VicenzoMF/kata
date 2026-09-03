@@ -91,6 +91,42 @@ do Zod):
 }
 ```
 
+Uma falha de `query` tem o mesmo formato, só indexada por `query` em vez de
+`body`. É o que um valor inválido de `z.enum(...)` produz — o formato mais
+comum de `query` — para `GET /todos?status=archived` contra
+`z.object({ status: z.enum(['open', 'done']) })`:
+
+```json
+{
+  "error": "validation_failed",
+  "message": "Request input validation failed",
+  "issues": {
+    "query": [
+      {
+        "path": "status",
+        "code": "invalid_enum_value",
+        "message": "Invalid enum value. Expected 'open' | 'done', received 'archived'",
+        "received": "archived"
+      }
+    ]
+  }
+}
+```
+
+::: warning O `422` é fixo, e não é configurável
+A validação automática de schema — qualquer seção de `input` que falhe no
+`safeParse` — sempre responde `422`. O único `400` automático é um body
+malformado (não-JSON); veja [Pegadinhas](#pegadinhas). Seu próprio
+`c.error(...)` é a única coisa que pode produzir um `400`, e não existe opção,
+hook ou config em `defineRoute` ou `createApp` que mude o `422` automático.
+
+Se um contrato que você está implementando exige `400` para o que na verdade é
+uma falha de schema, a saída é afrouxar o schema de `input` para que ele sempre
+faça parse, então checar o formato manualmente no handler e retornar
+`c.error(..., { status: 400 })` você mesmo — trocando a checagem automática por
+uma manual que controla seu próprio status.
+:::
+
 ### O formato `FieldIssue`
 
 Toda entrada sob `issues` é um `FieldIssue`:
@@ -100,8 +136,8 @@ type FieldIssue = {
   path: string       // caminho com ponto/colchete: "email", "user.profile.age", "items[1].qty"
   message: string    // mensagem legível por humanos do Zod
   code: string       // código de issue do Zod: "too_small", "invalid_type", "invalid_string", …
-  expected?: unknown // presente apenas quando a issue do Zod a carrega (erros de tipo)
-  received?: unknown // presente apenas quando a issue do Zod a carrega (erros de tipo)
+  expected?: unknown // presente quando a issue do Zod a carrega (ex.: invalid_type, invalid_enum_value)
+  received?: unknown // presente quando a issue do Zod a carrega (ex.: invalid_type, invalid_enum_value)
 }
 ```
 
@@ -109,8 +145,8 @@ Regras para deixar claras:
 
 - `path` usa notação de ponto para objetos aninhados e `[n]` para índices de
   array. Um erro no nível raiz tem um `path: ""` vazio.
-- `expected` / `received` aparecem **apenas** quando a issue do Zod subjacente os
-  carrega (isto é, `invalid_type`) e são omitidos caso contrário.
+- `expected` / `received` aparecem quando a issue do Zod subjacente os carrega
+  (ex.: `invalid_type`, `invalid_enum_value`) e são omitidos caso contrário.
 - As issues são reportadas na ordem do código-fonte. Quando mais de uma seção é
   inválida (por exemplo, tanto `params` quanto `body`), cada uma recebe sua
   própria chave sob `issues`.
