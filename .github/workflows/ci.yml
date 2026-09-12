@@ -50,10 +50,25 @@ jobs:
         # the `kata` bin, so the `kata verify` entry resolves. Iterates every
         # example app (hello, shop, ...); a non-zero exit fails the build. No
         # pipe so verify's exit code propagates to the `|| exit 1` guard.
+        #
+        # `--strict-coverage` (#206) also fails when a rule could not *prove* a
+        # check and suppressed itself — an unresolvable middleware in a chain, an
+        # indeterminate context registry. Without it a coverage gap and a passing
+        # check share an exit code, which is how a single `cors()` in
+        # `createApp({ middlewares })` switched `kata/scoped-slot-not-provided`
+        # off project-wide while the report still printed a green checkmark.
         run: |
           for app in examples/*/; do
-            pnpm exec kata verify "$app" || exit 1
+            pnpm exec kata verify "$app" --strict-coverage || exit 1
           done
+
+      - name: katajs provides.json is up to date
+        # `kata verify` resolves first-party middlewares (`cors()`, `bodyLimit()`)
+        # through the manifest katajs generates from its own sources at build
+        # time — which the install step above already ran. A diff here means the
+        # committed copy is stale, and a stale manifest silently weakens the
+        # checks of every app that installs the package (#206).
+        run: git diff --exit-code packages/kata/provides.json
 
       - name: Install hurl
         run: |
