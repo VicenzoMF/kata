@@ -24,6 +24,10 @@ pre-commit:
       # it runs project-wide rather than over staged files. Checks every Kata
       # example app; a non-zero exit fails the commit. No pipe: verify's exit
       # code must propagate to the `|| exit 1` guard.
-      run: for app in examples/*/; do pnpm exec kata verify "$app" || exit 1; done
+      #
+      # `--strict-coverage` (#206) also fails on a check a rule could not prove
+      # — an unresolvable middleware in a chain — so a chain that becomes
+      # unverifiable is caught here rather than passing as if it were checked.
+      run: for app in examples/*/; do pnpm exec kata verify "$app" --strict-coverage || exit 1; done
 
 # Personal overrides go in lefthook-local.yml (gitignored).
